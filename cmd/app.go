@@ -98,6 +98,16 @@ func maxExit(a, b int) int {
 	return b
 }
 
+// renderReport renders a report: the compact Summary by default, or the full
+// verbose Report with --verbose.
+func renderReport(r *render.Renderer, report *model.Report, opts *options) {
+	if opts.verbose {
+		r.Report(report)
+	} else {
+		r.Summary(report)
+	}
+}
+
 func runPort(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, opts *options, port int32) int {
 	plat := platform.New()
 	insp := inspector.New(plat)
@@ -115,7 +125,7 @@ func runPort(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, opt
 			if opts.jsonOut {
 				_ = render.JSON(stdout, report)
 			} else {
-				r.Report(report)
+				renderReport(r, report, opts)
 			}
 			return exitcode.PortNotFound
 		}
@@ -140,11 +150,11 @@ func runPort(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, opt
 
 	switch {
 	case opts.kill:
-		r.Report(report)
+		renderReport(r, report, opts)
 		fmt.Fprintln(stdout)
 		return runKill(ctx, mgr, report, opts)
 	case opts.restart:
-		r.Report(report)
+		renderReport(r, report, opts)
 		fmt.Fprintln(stdout)
 		return runRestart(ctx, mgr, report)
 	case opts.open:
@@ -159,7 +169,7 @@ func runPort(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, opt
 		if len(opts.ports) == 1 && isTerminal(stdout) && isTerminalReader(stdin) {
 			return runInteractive(ctx, plat, mgr, r, report, stdin, stdout, opts)
 		}
-		r.Report(report)
+		renderReport(r, report, opts)
 		return exitcode.Success
 	}
 }

@@ -8,10 +8,19 @@ examples. Run `portlens --help` for the full flag reference.
 ## Inspecting a port — `portlens <port>`
 
 The core command. Point it at any port to learn who owns it, where it came from,
-what it belongs to, how it's exposed, and what actions are safe.
+what it belongs to, how it's exposed, and what actions are safe. By default it
+shows a **compact summary** of the important facts; add `--verbose` (or `-v`)
+for the full detailed report.
 
 ```bash
 $ portlens 3000
+PORT 3000
+Status     LISTENING
+Address    127.0.0.1:3000
+Process    node (pid 48231)
+Command    pnpm dev
+Project    orbit-backend (Node.js)
+Exposure   LOW RISK
 ```
 
 ```text

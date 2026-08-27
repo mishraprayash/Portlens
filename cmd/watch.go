@@ -126,7 +126,7 @@ func renderWatchTick(ctx context.Context, stdout, stderr io.Writer, opts *option
 			s[watchPortKey(p)] = "error"
 			continue
 		}
-		r.Report(report)
+		renderReport(r, report, opts)
 		if report.Process != nil {
 			s[watchPortKey(p)] = fmt.Sprintf("up:%d:%s", report.Process.PID, report.Process.Name)
 		} else {

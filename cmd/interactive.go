@@ -27,7 +27,9 @@ func runInteractive(
 	stdout io.Writer,
 	opts *options,
 ) int {
-	r.Report(report)
+	// The interactive loop still offers full detail via keys; the default
+	// landing view stays compact unless --verbose is given.
+	renderReport(r, report, opts)
 
 	f, ok := stdin.(*os.File)
 	if !ok {

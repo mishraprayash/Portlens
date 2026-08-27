@@ -16,7 +16,8 @@ USAGE
   may be given; each is inspected in turn.
 
 COMMANDS / FLAGS
-  portlens <port>...                  Inspect port(s) (interactive when a single port on a terminal)
+  portlens <port>...                  Inspect port(s) — compact summary by default
+  portlens <port>... --verbose        Full detailed report (-v)
   portlens <port>... --tree           Show the complete process hierarchy
   portlens <port>... --connections    Show network connections, grouped and summarized
   portlens <port>... --json           Machine-readable JSON output (array for multiple ports)
@@ -34,7 +35,6 @@ COMMANDS / FLAGS
   portlens config                     Manage named port groups (@name)
   portlens --version                  Print the version
   portlens --help                     Show this help
-
 LISTING FLAGS
   --sort <key>      Sort listing by: port, process, project, runtime
   --filter <text>   Filter listing by a case-insensitive substring

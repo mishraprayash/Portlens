@@ -19,6 +19,12 @@ All notable changes to PortLens are documented here. The format is based on
 - Named port groups via `portlens config add|list|show|remove|path`, usable as
   `portlens @<group>`, stored in a local JSON config file.
 
+### Changed
+
+- `portlens <port>` now shows a compact summary by default; use `--verbose`
+  (or `-v`) for the full detailed report. `-v` is no longer a `--version`
+  alias (`--version` remains).
+
 ## [0.1.0] - 2026-08-27
 
 Initial release.

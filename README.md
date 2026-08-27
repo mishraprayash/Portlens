@@ -142,7 +142,8 @@ PORT   PROCESS       PROJECT          RUNTIME     ADDRESS          STATUS
 ## 4. Command reference
 
 ```
-portlens <port>...                 Inspect port(s) (interactive when a single port on a terminal)
+portlens <port>...                 Inspect port(s) — compact summary by default
+portlens <port>... --verbose       Full detailed report (-v)
 portlens 4000-4010                 Inspect a range of ports
 portlens @dev                      Inspect a named group from your config
 portlens                           List interesting listening ports
@@ -171,6 +172,7 @@ Watch flags: `--interval <secs>` (default 1), `--notify` (desktop notification
 on state change; requires `--watch`).
 
 General flags: `--protocol <tcp|udp>`, `--yes`/`-y` (skip confirmations),
+`--verbose`/`-v` (full detailed report instead of the compact summary),
 `--no-color`, `--no-record` (skip history recording).
 
 ## 4.1 Usage & use cases

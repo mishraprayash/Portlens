@@ -49,6 +49,8 @@ type options struct {
 	interval int
 	notify   bool
 
+	verbose bool
+
 	yes      bool
 	noRecord bool
 	noColor  bool
@@ -133,13 +135,14 @@ func parseArgs(args []string) (*options, error) {
 	fs.BoolVar(&opts.watch, "watch", false, "")
 	fs.BoolVar(&opts.watch, "w", false, "")
 	fs.BoolVar(&opts.notify, "notify", false, "")
+	fs.BoolVar(&opts.verbose, "verbose", false, "")
+	fs.BoolVar(&opts.verbose, "v", false, "")
 	fs.IntVar(&opts.interval, "interval", 0, "")
 	fs.IntVar(&opts.pid, "pid", 0, "")
 	fs.StringVar(&opts.name, "name", "", "")
 	fs.BoolVar(&opts.help, "help", false, "")
 	fs.BoolVar(&opts.help, "h", false, "")
 	fs.BoolVar(&opts.showVer, "version", false, "")
-	fs.BoolVar(&opts.showVer, "v", false, "")
 	fs.StringVar(&opts.protocol, "protocol", "", "")
 	fs.StringVar(&opts.sortBy, "sort", "port", "")
 	fs.StringVar(&opts.filter, "filter", "", "")
