@@ -255,8 +255,9 @@ See [docs/architecture.md](docs/architecture.md) for details.
 
 ```bash
 make build          # build to ./bin/portlens
-make test           # run all tests (unit + integration)
-make vet            # go vet
+make lint           # gofmt check + go vet
+make test           # run all tests (unit + integration, no cache)
+make check          # lint + test — the same gate CI runs
 make fmt            # gofmt
 make cross          # verify macOS/Linux cross-compilation
 ```
@@ -282,6 +283,23 @@ toolchains and recent macOS releases. The `Makefile` sets this automatically.
   script name rather than the raw command line.
 - **Shell completions** — bash/zsh/fish completion scripts.
 
-## 10. License
+## 10. Contributing
+
+Contributions are welcome. Please read
+[CONTRIBUTING.md](CONTRIBUTING.md) first — it covers the project principles,
+the layered architecture, code conventions, and how a feature maps to the
+codebase. We also have a [Code of Conduct](CODE_OF_CONDUCT.md) and a
+[Security policy](SECURITY.md).
+
+The short version:
+
+```bash
+make check          # gofmt check + go vet + full test suite
+```
+
+Open an issue before starting, keep changes focused with tests, update
+`CHANGELOG.md` under `[Unreleased]`, and make sure CI passes.
+
+## 11. License
 
 MIT — see [LICENSE](LICENSE).
