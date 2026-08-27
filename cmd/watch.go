@@ -95,8 +95,7 @@ func runWatch(ctx context.Context, stdout, stderr io.Writer, opts *options) int 
 // unrecoverable inspection error it reports to stderr and returns a non-nil
 // error so the caller can skip change detection for that tick.
 func renderWatchTick(ctx context.Context, stdout, stderr io.Writer, opts *options) (watchSnap, error) {
-	plat := platform.New()
-	insp := inspector.New(plat)
+	insp := newInspector(opts)
 	r := render.New(stdout, !opts.noColor)
 	s := watchSnap{}
 

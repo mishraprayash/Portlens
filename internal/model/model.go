@@ -97,6 +97,17 @@ func (p ProcessInfo) Runtime(now time.Time) string {
 	return FormatDuration(d)
 }
 
+// Container describes a container that owns or publishes a port. Every field
+// is a fact obtained from the container runtime; nothing here is guessed.
+type Container struct {
+	ID             string `json:"id,omitempty"`
+	Name           string `json:"name,omitempty"`   // e.g. "api-1"
+	Image          string `json:"image,omitempty"`  // e.g. "nginx:alpine"
+	Status         string `json:"status,omitempty"` // e.g. "running", "exited"
+	ComposeProject string `json:"compose_project,omitempty"`
+	ComposeService string `json:"compose_service,omitempty"`
+}
+
 // ProcessTree is a node in a process hierarchy.
 type ProcessTree struct {
 	Process  ProcessInfo    `json:"process"`
@@ -149,6 +160,7 @@ type Report struct {
 	Status    string         `json:"status"` // listening, not_listening, unknown
 	Address   string         `json:"address"`
 	Process   *ProcessInfo   `json:"process,omitempty"`
+	Container *Container     `json:"container,omitempty"`
 	Ancestors []*ProcessInfo `json:"ancestors,omitempty"`
 	Children  []*ProcessInfo `json:"children,omitempty"`
 	// Descendants holds the full descendant tree. It is used only for the
@@ -176,14 +188,15 @@ type NetworkInfo struct {
 
 // PortEntry is a single row in the "interesting ports" listing.
 type PortEntry struct {
-	Port     int32    `json:"port"`
-	Protocol Protocol `json:"protocol"`
-	Process  string   `json:"process,omitempty"`
-	PID      int32    `json:"pid,omitempty"`
-	Project  string   `json:"project,omitempty"`
-	Runtime  string   `json:"runtime,omitempty"`
-	Address  string   `json:"address"`
-	Status   string   `json:"status"`
+	Port      int32      `json:"port"`
+	Protocol  Protocol   `json:"protocol"`
+	Process   string     `json:"process,omitempty"`
+	PID       int32      `json:"pid,omitempty"`
+	Container *Container `json:"container,omitempty"`
+	Project   string     `json:"project,omitempty"`
+	Runtime   string     `json:"runtime,omitempty"`
+	Address   string     `json:"address"`
+	Status    string     `json:"status"`
 }
 
 // HistoryEntry is a single observation of a port over time.

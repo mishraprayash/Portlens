@@ -25,9 +25,11 @@ func (i *Inspector) SearchByName(ctx context.Context, query string) ([]model.Por
 		return nil, err
 	}
 	infos := i.processInfos(ctx, listeners)
-	return i.buildEntries(ctx, listeners, infos, func(p *model.ProcessInfo) bool {
+	entries := i.buildEntries(ctx, listeners, infos, func(p *model.ProcessInfo) bool {
 		return matcher.matches(p)
-	}), nil
+	})
+	i.attachContainers(ctx, entries)
+	return entries, nil
 }
 
 // SearchByPID returns the listening ports owned by the given PID or by any of
@@ -59,9 +61,11 @@ func (i *Inspector) SearchByPID(ctx context.Context, pid int32) ([]model.PortEnt
 		ancestors[owner] = hit
 		return hit
 	}
-	return i.buildEntries(ctx, listeners, infos, func(p *model.ProcessInfo) bool {
+	entries := i.buildEntries(ctx, listeners, infos, func(p *model.ProcessInfo) bool {
 		return p != nil && contains(p.PID)
-	}), nil
+	})
+	i.attachContainers(ctx, entries)
+	return entries, nil
 }
 
 // processInfos resolves process metadata for each unique listener PID.

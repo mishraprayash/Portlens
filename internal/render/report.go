@@ -31,6 +31,9 @@ func (r *Renderer) Report(report *model.Report) {
 	if report.Process != nil {
 		r.renderProcess(report)
 	}
+	if report.Container != nil {
+		r.renderContainer(report.Container)
+	}
 	if report.Project != nil && (report.Project.Detected || report.Project.Runtime != "" || report.Project.GitRepo != "") {
 		r.renderProject(report.Project)
 	}
@@ -80,6 +83,34 @@ func (r *Renderer) renderProcess(report *model.Report) {
 		}
 		r.writeln(r.kv(rows))
 	})
+}
+
+func (r *Renderer) renderContainer(c *model.Container) {
+	r.section("CONTAINER", func() {
+		rows := [][2]string{
+			{"Name", c.Name},
+			{"ID", shortID(c.ID)},
+			{"Image", c.Image},
+		}
+		if c.Status != "" {
+			rows = append(rows, [2]string{"Status", c.Status})
+		}
+		if c.ComposeProject != "" {
+			rows = append(rows, [2]string{"Compose Project", c.ComposeProject})
+		}
+		if c.ComposeService != "" {
+			rows = append(rows, [2]string{"Compose Service", c.ComposeService})
+		}
+		r.writeln(r.kv(rows))
+	})
+}
+
+// shortID trims a container ID to its leading 12 characters for readability.
+func shortID(id string) string {
+	if len(id) > 12 {
+		return id[:12]
+	}
+	return id
 }
 
 func (r *Renderer) renderProject(p *model.ProjectInfo) {

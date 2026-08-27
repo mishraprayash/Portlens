@@ -261,6 +261,16 @@ func TestFormatPorts(t *testing.T) {
 	}
 }
 
+func TestParseArgsNoDocker(t *testing.T) {
+	opts, err := parseArgs([]string{"3000", "--no-docker"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !opts.noDocker {
+		t.Error("expected --no-docker to be set")
+	}
+}
+
 func TestParseArgsForceRequiresKill(t *testing.T) {
 	if _, err := parseArgs([]string{"3000", "--force"}); err == nil {
 		t.Error("expected error for --force without --kill")

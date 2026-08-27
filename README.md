@@ -8,11 +8,12 @@
 > to? What else is connected to it? Is it exposed beyond localhost? What happens
 > if I terminate it? Can PortLens safely restart or open it?
 
-PortLens inspects a local TCP/UDP port, resolves the owning process, walks its
-process hierarchy, detects the project/runtime/framework it belongs to,
-summarizes its network connections, flags exposure risks, and offers safe
-actions (graceful kill, restart, open in browser, copy to clipboard) — all
-without ever transmitting data off your machine.
+PortLens inspects a local TCP/UDP port, resolves the owning process (or the
+container that publishes it), walks its process hierarchy, detects the
+project/runtime/framework it belongs to, summarizes its network connections,
+flags exposure risks, and offers safe actions (graceful kill, restart, open in
+browser, copy to clipboard) — all without ever transmitting data off your
+machine.
 
 ---
 
@@ -133,10 +134,10 @@ With no port, PortLens lists the interesting listening ports:
 
 ```bash
 $ portlens
-PORT   PROCESS       PROJECT          RUNTIME     ADDRESS          STATUS
-3000   node          orbit-backend    Node.js     127.0.0.1        LISTEN
-5432   postgres      brew             PostgreSQL   127.0.0.1        LISTEN
-6379   redis-server  brew             Redis        127.0.0.1        LISTEN
+PORT   PROCESS       CONTAINER   PROJECT          RUNTIME     ADDRESS          STATUS
+3000   node          -           orbit-backend    Node.js     127.0.0.1        LISTEN
+5432   postgres      -           brew             PostgreSQL  127.0.0.1        LISTEN
+6379   docker-proxy  redis-1      -                -           127.0.0.1        LISTEN
 ```
 
 ## 4. Command reference
@@ -173,7 +174,8 @@ on state change; requires `--watch`).
 
 General flags: `--protocol <tcp|udp>`, `--yes`/`-y` (skip confirmations),
 `--verbose`/`-v` (full detailed report instead of the compact summary),
-`--no-color`, `--no-record` (skip history recording).
+`--no-color`, `--no-record` (skip history recording), `--no-docker` (skip
+container detection).
 
 ## 4.1 Usage & use cases
 
@@ -181,6 +183,37 @@ For step-by-step examples and a use case for **every** feature — inspection,
 listing, tree, connections, JSON, kill/force-kill, restart, open, history,
 clipboard, interactive keys, exit codes, and UDP — see the
 [Usage guide & use cases](docs/usage.md).
+
+## 4.2 Docker & container awareness
+
+When a port is published by a container (Docker Desktop, Docker Engine, or a
+Compose stack), PortLens shows the container alongside the process:
+
+```
+PORT 8080
+───────────────
+Status      LISTENING
+Protocol    TCP
+Address     127.0.0.1:8080
+Process     docker-proxy (pid 48231)
+Container   api-1 (nginx:alpine, api)
+Exposure    WARNING
+```
+
+- **Detection** — the listing gains a `CONTAINER` column and the full report a
+  `CONTAINER` section (name, ID, image, compose project/service, status).
+  Linux resolves the owning process's cgroup first (a kernel fact that needs no
+  daemon); everywhere, a single query to the local Docker daemon (over its unix
+  socket, honoring `DOCKER_HOST`) maps host ports to containers.
+- **Container-aware actions** — `--kill` and `--restart` on a containerized
+  port stop/restart the **container**, not the host-side process. On macOS the
+  host-side process is the Docker VM, which must never be signaled — so this is
+  both more correct and safer.
+- **Graceful degradation** — when no Docker daemon is reachable, container
+  detection is skipped silently; nothing breaks. Disable it explicitly with
+  `--no-docker`.
+- **Local-first** — only the local daemon socket is ever queried. Nothing
+  leaves your machine.
 
 ## 5. Supported operating systems
 

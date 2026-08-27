@@ -49,6 +49,7 @@ GENERAL FLAGS
   --yes, -y         Skip interactive confirmations
   --no-color        Disable colored output
   --no-record       Do not record this inspection to local history
+  --no-docker       Do not query the Docker daemon for container ownership
 
 EXIT CODES
   0  success                1  general error       2  invalid arguments

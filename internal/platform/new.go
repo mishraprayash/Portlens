@@ -12,5 +12,6 @@ func New() *Platform {
 		Tree:       newProcessTreeProvider(),
 		Clipboard:  newClipboardProvider(),
 		Controller: newProcessController(),
+		Containers: newContainerProvider(),
 	}
 }

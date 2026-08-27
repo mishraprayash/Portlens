@@ -17,9 +17,18 @@ import (
 	"github.com/portlens/portlens/internal/render"
 )
 
-func runListing(stdout, stderr io.Writer, opts *options) int {
+// newInspector builds an inspector honoring the --no-docker escape hatch: when
+// set, container detection is disabled entirely.
+func newInspector(opts *options) *inspector.Inspector {
 	plat := platform.New()
-	insp := inspector.New(plat)
+	if opts != nil && opts.noDocker {
+		plat.Containers = nil
+	}
+	return inspector.New(plat)
+}
+
+func runListing(stdout, stderr io.Writer, opts *options) int {
+	insp := newInspector(opts)
 	ctx := context.Background()
 
 	entries, err := insp.List(ctx)
@@ -56,8 +65,7 @@ func runPorts(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, op
 // runPortsJSON inspects every port up front so that all reports can be emitted
 // as a single JSON array on stdout.
 func runPortsJSON(ctx context.Context, stdout, stderr io.Writer, opts *options) int {
-	plat := platform.New()
-	insp := inspector.New(plat)
+	insp := newInspector(opts)
 	proto := protocolFrom(opts)
 
 	reports := make([]*model.Report, 0, len(opts.ports))
@@ -109,8 +117,7 @@ func renderReport(r *render.Renderer, report *model.Report, opts *options) {
 }
 
 func runPort(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, opts *options, port int32) int {
-	plat := platform.New()
-	insp := inspector.New(plat)
+	insp := newInspector(opts)
 
 	proto := protocolFrom(opts)
 
@@ -146,7 +153,7 @@ func runPort(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, opt
 	}
 
 	confirm := newConfirm(stdout, stdin, opts.yes)
-	mgr := actions.NewManager(plat, stdout, confirm)
+	mgr := actions.NewManager(insp.Platform, stdout, confirm)
 
 	switch {
 	case opts.kill:
@@ -167,7 +174,7 @@ func runPort(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, opt
 		return exitcode.Success
 	default:
 		if len(opts.ports) == 1 && isTerminal(stdout) && isTerminalReader(stdin) {
-			return runInteractive(ctx, plat, mgr, r, report, stdin, stdout, opts)
+			return runInteractive(ctx, insp.Platform, mgr, r, report, stdin, stdout, opts)
 		}
 		renderReport(r, report, opts)
 		return exitcode.Success

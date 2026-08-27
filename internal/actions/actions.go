@@ -62,11 +62,20 @@ func TreePIDs(tree *model.ProcessTree) []int32 {
 	return out
 }
 
-// Kill terminates the process owning the report's port. When force is false it
-// sends SIGTERM to the whole tree, waits for the owner to exit, and reports the
-// outcome. When force is true it sends SIGKILL immediately without prompting.
+// Kill terminates the process owning the report's port. When the port belongs
+// to a container, the container is stopped instead of its host-side process
+// (on macOS the host-side "process" is the Docker VM, which must never be
+// signaled). When force is false it sends SIGTERM to the whole tree, waits for
+// the owner to exit, and reports the outcome. When force is true it sends
+// SIGKILL immediately without prompting.
 func (m *Manager) Kill(ctx context.Context, report *model.Report, force bool) error {
-	if report == nil || report.Process == nil {
+	if report == nil {
+		return fmt.Errorf("no report to act on")
+	}
+	if c := m.lookupContainer(ctx, report); c != nil {
+		return m.killContainer(ctx, c, force)
+	}
+	if report.Process == nil {
 		return fmt.Errorf("no owning process to terminate")
 	}
 	pids := []int32{report.Process.PID}
@@ -144,6 +153,70 @@ func RestartCommand(report *model.Report) (string, error) {
 		return "", ErrRestartUnavailable
 	}
 	return cmd, nil
+}
+
+// lookupContainer resolves the container owning a report's port, preferring the
+// already-attached container and falling back to a fresh runtime lookup so
+// actions never act on stale data.
+func (m *Manager) lookupContainer(ctx context.Context, report *model.Report) *model.Container {
+	if report == nil || m.Platform.Containers == nil {
+		return nil
+	}
+	if report.Container != nil {
+		return report.Container
+	}
+	if report.Process != nil {
+		if c, err := m.Platform.Containers.FindByPID(ctx, report.Process.PID); err == nil && c != nil {
+			return c
+		}
+	}
+	if c, err := m.Platform.Containers.FindByPort(ctx, uint16(report.Port), report.Protocol); err == nil {
+		return c
+	}
+	return nil
+}
+
+// killContainer stops (or force-stops) a container. A graceful stop always
+// confirms first; a force stop mirrors the process force-kill semantics and
+// does not prompt.
+func (m *Manager) killContainer(ctx context.Context, c *model.Container, force bool) error {
+	name := containerActionName(c)
+	if force {
+		fmt.Fprintf(m.Out, "Force-stopping container %s\n", name)
+		if err := m.Platform.Containers.Kill(ctx, c.ID); err != nil {
+			return fmt.Errorf("force-stop container %s: %w", name, err)
+		}
+		fmt.Fprintf(m.Out, "Container %s force-stopped\n", name)
+		return nil
+	}
+	fmt.Fprintf(m.Out, "Stopping container %s\n", name)
+	if m.Confirm != nil {
+		ok, err := m.Confirm(fmt.Sprintf("Stop container %s? [y/N] ", name))
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("aborted by user")
+		}
+	}
+	if err := m.Platform.Containers.Stop(ctx, c.ID, 10*time.Second); err != nil {
+		return fmt.Errorf("stop container %s: %w", name, err)
+	}
+	fmt.Fprintf(m.Out, "Container %s stopped\n", name)
+	return nil
+}
+
+// containerActionName renders a container name for messages, using the runtime
+// name when available and a short ID otherwise.
+func containerActionName(c *model.Container) string {
+	if c.Name != "" {
+		return c.Name
+	}
+	id := c.ID
+	if len(id) > 12 {
+		id = id[:12]
+	}
+	return id
 }
 
 // Copy sends text to the system clipboard.

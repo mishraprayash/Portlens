@@ -12,6 +12,7 @@ deterministic and designed for shell scripts and AI agents.
   "status": "listening",   // "listening" | "not_listening"
   "address": "127.0.0.1",  // bind address of the primary listener
   "process": { ... },      // omitempty — owning process
+  "container": { ... },    // omitempty — owning container (docker), if any
   "ancestors": [ ... ],    // omitempty — chain, oldest first
   "children": [ ... ],     // omitempty — direct children
   "project": { ... },      // omitempty — detected project metadata
@@ -42,6 +43,23 @@ deterministic and designed for shell scripts and AI agents.
   "is_target": true
 }
 ```
+
+## `container`
+
+```jsonc
+{
+  "id": "8dfafdbc3a40b8b4f7c4a6f5e6b1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9",
+  "name": "api-1",
+  "image": "nginx:alpine",
+  "status": "running",
+  "compose_project": "orbit",
+  "compose_service": "api"
+}
+```
+
+`id` may be a short ID when only a cgroup-derived ID is available and the
+daemon is unreachable. All fields are facts reported by the container runtime
+(never guesses). Absent when the port is not owned by a container.
 
 ## `project`
 

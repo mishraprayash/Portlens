@@ -8,6 +8,12 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Added
 
+- Docker/container awareness: reports and listings show the container that
+  owns or publishes a port (name, image, compose project/service), and
+  `--kill`/`--restart` target the container instead of its host-side process
+  (on macOS this avoids ever signaling the Docker VM). Detection uses the
+  local Docker daemon over its unix socket; on Linux the owning process's
+  cgroup is used first. Disable with `--no-docker`.
 - Multiple ports, port ranges (`3000-3010`), and `--all` in a single invocation;
   `--json` emits a JSON array when more than one port is inspected.
 - Inverse lookup with `--pid <pid>` (includes descendants) and

@@ -26,8 +26,8 @@ func (r *Renderer) List(entries []model.PortEntry, opts ListOptions) {
 	if opts.Filter != "" {
 		f := strings.ToLower(opts.Filter)
 		entries = filterEntries(entries, func(e model.PortEntry) bool {
-			hay := strings.ToLower(fmt.Sprintf("%d %s %s %s %s %s",
-				e.Port, e.Process, e.Project, e.Runtime, e.Address, e.Status))
+			hay := strings.ToLower(fmt.Sprintf("%d %s %s %s %s %s %s",
+				e.Port, e.Process, e.Project, e.Runtime, e.Address, e.Status, containerFilterText(e.Container)))
 			return strings.Contains(hay, f)
 		})
 	}
@@ -39,7 +39,18 @@ func (r *Renderer) List(entries []model.PortEntry, opts ListOptions) {
 		return
 	}
 
+	hasContainer := false
+	for _, e := range entries {
+		if e.Container != nil {
+			hasContainer = true
+			break
+		}
+	}
+
 	headers := []string{"PORT", "PROCESS", "PROJECT", "RUNTIME", "ADDRESS", "STATUS"}
+	if hasContainer {
+		headers = []string{"PORT", "PROCESS", "CONTAINER", "PROJECT", "RUNTIME", "ADDRESS", "STATUS"}
+	}
 	cols := [][]string{}
 	for _, e := range entries {
 		rt := e.Runtime
@@ -57,16 +68,39 @@ func (r *Renderer) List(entries []model.PortEntry, opts ListOptions) {
 		if proj == "" {
 			proj = "-"
 		}
-		cols = append(cols, []string{
+		row := []string{
 			fmt.Sprintf("%d", e.Port),
 			proc,
-			proj,
-			rt,
-			formatAddr(e.Address, uint16(e.Port)),
-			e.Status,
-		})
+		}
+		if hasContainer {
+			row = append(row, listContainerCell(e.Container))
+		}
+		row = append(row, proj, rt, formatAddr(e.Address, uint16(e.Port)), e.Status)
+		cols = append(cols, row)
 	}
 	r.writeln(r.table(headers, cols))
+}
+
+// listContainerCell renders a container for the listing table: "api-1" when
+// known, otherwise a short ID, or "-" when there is no container.
+func listContainerCell(c *model.Container) string {
+	if c == nil {
+		return "-"
+	}
+	if c.Name != "" {
+		return c.Name
+	}
+	if c.ID != "" {
+		return shortID(c.ID)
+	}
+	return "-"
+}
+
+func containerFilterText(c *model.Container) string {
+	if c == nil {
+		return ""
+	}
+	return c.Name + " " + c.Image + " " + c.ComposeProject + " " + c.ComposeService
 }
 
 func filterEntries(in []model.PortEntry, keep func(model.PortEntry) bool) []model.PortEntry {

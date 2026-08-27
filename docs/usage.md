@@ -261,6 +261,56 @@ The process was not launched from an interactive shell in a way PortLens can rep
 
 ---
 
+## Docker & container awareness
+
+When a port is published by a container (Docker Desktop, Docker Engine, or a
+Compose stack), PortLens detects it and shows the container next to the
+process:
+
+```bash
+$ portlens 8080
+PORT 8080
+Status      LISTENING
+Protocol    TCP
+Address     127.0.0.1:8080
+Process     docker-proxy (pid 48231)
+Container   api-1 (nginx:alpine, api)
+Exposure    WARNING
+```
+
+The verbose report adds a `CONTAINER` section with the container name, ID,
+image, status, and compose project/service, and the listing gains a `CONTAINER`
+column (the column appears only when at least one port belongs to a container):
+
+```bash
+$ portlens
+PORT   PROCESS       CONTAINER   PROJECT   RUNTIME   ADDRESS        STATUS
+6379   docker-proxy  redis-1      -         -         127.0.0.1      LISTEN
+```
+
+**Container-aware kill & restart.** `--kill` and `--restart` act on the
+**container** rather than the host-side process:
+
+```bash
+$ portlens 8080 --kill
+Stopping container api-1
+Stop container api-1? [y/N] y
+Container api-1 stopped
+```
+
+This is more correct **and** safer: on macOS the host-side process behind a
+container port is the Docker VM itself, which must never be signaled. The
+graceful kill still confirms first; `--kill --force` stops the container with
+SIGKILL without prompting.
+
+**How detection works.** On Linux, the owning process's cgroup is consulted
+first (a kernel fact — no daemon round-trip). In every case, one query to the
+local Docker daemon (over its unix socket, honoring `DOCKER_HOST`) maps the
+host port to a container. When no daemon is reachable, detection is skipped
+silently — nothing breaks. Disable it explicitly with `--no-docker`.
+
+---
+
 ## Opening in a browser — `portlens <port> --open`
 
 ```bash

@@ -59,6 +59,7 @@ func (i *Inspector) Inspect(ctx context.Context, port int32, protocol model.Prot
 			fmt.Sprintf("Port %d is bound to %s:%d", port, displayAddr(primary.Address), port))
 		report.Inferences = append(report.Inferences,
 			"Owner could not be determined (may require elevated privileges)")
+		i.attachContainer(ctx, report)
 		return report, nil
 	}
 
@@ -105,7 +106,41 @@ func (i *Inspector) Inspect(ctx context.Context, port int32, protocol model.Prot
 	// Interpretation.
 	i.interpret(report)
 
+	// Container ownership (best-effort; silently skipped when no runtime).
+	i.attachContainer(ctx, report)
+
 	return report, nil
+}
+
+// attachContainer fills report.Container when the owning process or the port
+// maps to a container. It prefers a cgroup-based PID lookup (a kernel fact)
+// and falls back to asking the container runtime which container publishes the
+// port. Detection failures degrade to nil, never to a wrong answer.
+func (i *Inspector) attachContainer(ctx context.Context, report *model.Report) {
+	if i.Platform.Containers == nil {
+		return
+	}
+	var c *model.Container
+	if report.Process != nil {
+		if found, err := i.Platform.Containers.FindByPID(ctx, report.Process.PID); err == nil && found != nil {
+			c = found
+		}
+	}
+	if c == nil || c.Name == "" {
+		if found, err := i.Platform.Containers.FindByPort(ctx, uint16(report.Port), report.Protocol); err == nil && found != nil {
+			c = found
+		}
+	}
+	if c == nil {
+		return
+	}
+	report.Container = c
+	name := c.Name
+	if name == "" {
+		name = c.ID
+	}
+	report.Facts = append(report.Facts,
+		fmt.Sprintf("Runs inside container %s (%s)", name, c.Image))
 }
 
 // choosePrimary prefers TCP over UDP and picks the first entry otherwise.
@@ -154,7 +189,30 @@ func (i *Inspector) List(ctx context.Context) ([]model.PortEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	return i.buildEntries(ctx, listeners, i.processInfos(ctx, listeners), nil), nil
+	entries := i.buildEntries(ctx, listeners, i.processInfos(ctx, listeners), nil)
+	i.attachContainers(ctx, entries)
+	return entries, nil
+}
+
+// attachContainers fills the Container field of every entry in a single
+// runtime query, so large listings never trigger one request per port.
+func (i *Inspector) attachContainers(ctx context.Context, entries []model.PortEntry) {
+	if i.Platform.Containers == nil || len(entries) == 0 {
+		return
+	}
+	ports := make([]uint16, 0, len(entries))
+	for _, e := range entries {
+		ports = append(ports, uint16(e.Port))
+	}
+	byPort, err := i.Platform.Containers.FindByPorts(ctx, ports, model.ProtocolTCP)
+	if err != nil {
+		return
+	}
+	for idx := range entries {
+		if c := byPort[uint16(entries[idx].Port)]; c != nil {
+			entries[idx].Container = c
+		}
+	}
 }
 
 func isLoopback(addr string) bool {

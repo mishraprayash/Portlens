@@ -39,6 +39,9 @@ func (r *Renderer) Summary(report *model.Report) {
 			rows = append(rows, [2]string{"Command", p.Command})
 		}
 	}
+	if c := report.Container; c != nil {
+		rows = append(rows, [2]string{"Container", containerLabel(c)})
+	}
 	if report.Project != nil && (report.Project.Detected || report.Project.Name != "" || report.Project.Runtime != "") {
 		label := report.Project.Name
 		rt := report.Project.Runtime

@@ -12,9 +12,7 @@ import (
 
 	"github.com/portlens/portlens/internal/config"
 	"github.com/portlens/portlens/internal/exitcode"
-	"github.com/portlens/portlens/internal/inspector"
 	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/platform"
 	"github.com/portlens/portlens/internal/version"
 )
 
@@ -54,6 +52,7 @@ type options struct {
 	yes      bool
 	noRecord bool
 	noColor  bool
+	noDocker bool
 	help     bool
 	showVer  bool
 }
@@ -130,6 +129,7 @@ func parseArgs(args []string) (*options, error) {
 	fs.BoolVar(&opts.yes, "y", false, "")
 	fs.BoolVar(&opts.noRecord, "no-record", false, "")
 	fs.BoolVar(&opts.noColor, "no-color", false, "")
+	fs.BoolVar(&opts.noDocker, "no-docker", false, "")
 	fs.BoolVar(&opts.onlyTCP, "tcp", false, "")
 	fs.BoolVar(&opts.all, "all", false, "")
 	fs.BoolVar(&opts.watch, "watch", false, "")
@@ -335,8 +335,7 @@ func resolveDynamicPorts(stdout, stderr io.Writer, opts *options) int {
 		fmt.Fprintf(stderr, "portlens: cannot combine explicit ports with --all/--pid/--name\n")
 		return exitcode.InvalidArguments
 	}
-	plat := platform.New()
-	insp := inspector.New(plat)
+	insp := newInspector(opts)
 	ctx := context.Background()
 	var entries []model.PortEntry
 	var err error

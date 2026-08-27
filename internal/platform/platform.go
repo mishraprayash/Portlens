@@ -11,6 +11,7 @@ package platform
 
 import (
 	"context"
+	"time"
 
 	"github.com/portlens/portlens/internal/model"
 )
@@ -82,6 +83,34 @@ type ProcessController interface {
 	IsAlive(ctx context.Context, pid int32) bool
 }
 
+// ContainerProvider identifies and controls containers. Detection is
+// best-effort: when no container runtime is reachable, the Find* methods
+// return nil with no error so callers can degrade gracefully. A nil result
+// never means "this is not a container"; it means "not determined".
+type ContainerProvider interface {
+	// FindByPort returns the container publishing a host port, or nil when no
+	// container publishes it.
+	FindByPort(ctx context.Context, port uint16, protocol model.Protocol) (*model.Container, error)
+
+	// FindByPorts returns the containers publishing any of the given host
+	// ports, keyed by port. It performs a single runtime query.
+	FindByPorts(ctx context.Context, ports []uint16, protocol model.Protocol) (map[uint16]*model.Container, error)
+
+	// FindByPID returns the container a host process runs inside, or nil when
+	// the process is not inside a container (or it cannot be determined).
+	FindByPID(ctx context.Context, pid int32) (*model.Container, error)
+
+	// Stop gracefully stops a container (SIGTERM to its init process), waiting
+	// up to timeout seconds for it to exit.
+	Stop(ctx context.Context, containerID string, timeout time.Duration) error
+
+	// Kill force-stops a container (SIGKILL to its init process).
+	Kill(ctx context.Context, containerID string) error
+
+	// Restart restarts a container, waiting up to timeout seconds.
+	Restart(ctx context.Context, containerID string, timeout time.Duration) error
+}
+
 // Platform bundles the OS-specific providers into a single handle.
 type Platform struct {
 	Ports      PortResolver
@@ -90,4 +119,5 @@ type Platform struct {
 	Tree       ProcessTreeProvider
 	Clipboard  ClipboardProvider
 	Controller ProcessController
+	Containers ContainerProvider
 }
