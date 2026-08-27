@@ -12,7 +12,8 @@ USAGE
   portlens [port ...] [flags]
 
   With no port, PortLens lists the interesting listening ports on this host.
-  Multiple ports may be given; each is inspected in turn.
+  Multiple ports, port ranges (e.g. 4000-4010), and named groups (e.g. @dev)
+  may be given; each is inspected in turn.
 
 COMMANDS / FLAGS
   portlens <port>...                  Inspect port(s) (interactive when a single port on a terminal)
@@ -24,6 +25,13 @@ COMMANDS / FLAGS
   portlens <port>... --restart        Restart the process if the launch command is known
   portlens <port>... --history        Show previously observed activity on each port
   portlens <port>... --open           Open the service in your browser
+  portlens --all                      Act on every listening port (e.g. --all --kill)
+  portlens --pid <pid>                Find the listening ports owned by a process
+  portlens --name <query>             Find ports by process name/command (case-insensitive;
+                                      wrap in /.../ to use a regex)
+  portlens <port>... --watch          Re-render every --interval seconds until Ctrl-C
+  portlens <port>... --watch --notify Notify (macOS/Linux) when a port goes up, down, or changes
+  portlens config                     Manage named port groups (@name)
   portlens --version                  Print the version
   portlens --help                     Show this help
 
@@ -31,6 +39,10 @@ LISTING FLAGS
   --sort <key>      Sort listing by: port, process, project, runtime
   --filter <text>   Filter listing by a case-insensitive substring
   --tcp             Only show TCP listeners
+
+WATCH FLAGS
+  --interval <secs>  Poll interval for --watch (default 1)
+  --notify           Post a desktop notification on state change (requires --watch)
 
 GENERAL FLAGS
   --protocol <p>    Restrict inspection to tcp or udp

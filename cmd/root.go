@@ -10,11 +10,19 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/portlens/portlens/internal/config"
 	"github.com/portlens/portlens/internal/exitcode"
+	"github.com/portlens/portlens/internal/inspector"
+	"github.com/portlens/portlens/internal/model"
+	"github.com/portlens/portlens/internal/platform"
 	"github.com/portlens/portlens/internal/version"
 )
 
 var errHelp = errors.New("help requested")
+
+// maxPortsPerInvocation bounds how many ports a single range may expand to, so
+// a typo like "1-99999" cannot trigger a pathological amount of work.
+const maxPortsPerInvocation = 1024
 
 type options struct {
 	ports    []int32
@@ -33,6 +41,14 @@ type options struct {
 	filter  string
 	onlyTCP bool
 
+	all  bool
+	pid  int
+	name string
+
+	watch    bool
+	interval int
+	notify   bool
+
 	yes      bool
 	noRecord bool
 	noColor  bool
@@ -42,7 +58,18 @@ type options struct {
 
 // Execute runs the CLI and returns a process exit code.
 func Execute(args []string, stdout, stderr io.Writer, stdin io.Reader) int {
-	opts, err := parseArgs(args)
+	if len(args) > 0 && args[0] == "config" {
+		return runConfig(args[1:], stdout, stderr)
+	}
+
+	expanded, err := expandGroups(args, configGroupLookup)
+	if err != nil {
+		fmt.Fprintf(stderr, "portlens: %v\n", err)
+		fmt.Fprintf(stderr, "Manage groups with: portlens config add <name> <port> [port ...]\n")
+		return exitcode.InvalidArguments
+	}
+
+	opts, err := parseArgs(expanded)
 	if err == errHelp {
 		printUsage(stdout)
 		return exitcode.Success
@@ -59,6 +86,17 @@ func Execute(args []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	if opts.showVer {
 		fmt.Fprintf(stdout, "portlens %s\n", version.Version)
 		return exitcode.Success
+	}
+
+	// Dynamic port sources resolve at runtime: --all, --pid, and --name.
+	if opts.all || opts.pid > 0 || opts.name != "" {
+		if code := resolveDynamicPorts(stdout, stderr, opts); code != exitcode.Success {
+			return code
+		}
+	}
+
+	if opts.watch {
+		return runWatch(context.Background(), stdout, stderr, opts)
 	}
 
 	if len(opts.ports) == 0 {
@@ -91,6 +129,13 @@ func parseArgs(args []string) (*options, error) {
 	fs.BoolVar(&opts.noRecord, "no-record", false, "")
 	fs.BoolVar(&opts.noColor, "no-color", false, "")
 	fs.BoolVar(&opts.onlyTCP, "tcp", false, "")
+	fs.BoolVar(&opts.all, "all", false, "")
+	fs.BoolVar(&opts.watch, "watch", false, "")
+	fs.BoolVar(&opts.watch, "w", false, "")
+	fs.BoolVar(&opts.notify, "notify", false, "")
+	fs.IntVar(&opts.interval, "interval", 0, "")
+	fs.IntVar(&opts.pid, "pid", 0, "")
+	fs.StringVar(&opts.name, "name", "", "")
 	fs.BoolVar(&opts.help, "help", false, "")
 	fs.BoolVar(&opts.help, "h", false, "")
 	fs.BoolVar(&opts.showVer, "version", false, "")
@@ -107,13 +152,40 @@ func parseArgs(args []string) (*options, error) {
 		return nil, err
 	}
 
+	// Record which flags were explicitly supplied so zero values can be
+	// distinguished from "not provided" during validation.
+	provided := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { provided[f.Name] = true })
+
+	if provided["pid"] && opts.pid <= 0 {
+		return nil, fmt.Errorf("--pid must be a positive process ID")
+	}
+	if provided["name"] && strings.TrimSpace(opts.name) == "" {
+		return nil, fmt.Errorf("--name must not be empty")
+	}
+	if provided["interval"] && opts.interval <= 0 {
+		return nil, fmt.Errorf("--interval must be a positive number of seconds")
+	}
+	if opts.interval > 0 && !opts.watch {
+		return nil, fmt.Errorf("--interval requires --watch")
+	}
+	if opts.notify && !opts.watch {
+		return nil, fmt.Errorf("--notify requires --watch")
+	}
+
 	rest := reordered.positional
+	if len(rest) > 0 && (opts.all || opts.pid > 0 || opts.name != "") {
+		return nil, fmt.Errorf("cannot combine explicit ports with --all, --pid, or --name")
+	}
 	for _, arg := range rest {
-		p, err := strconv.Atoi(arg)
-		if err != nil || p < 1 || p > 65535 {
-			return nil, fmt.Errorf("invalid port %q (must be 1-65535)", arg)
+		if strings.HasPrefix(arg, "@") {
+			return nil, fmt.Errorf("unknown port group %q", arg)
 		}
-		opts.ports = append(opts.ports, int32(p))
+		ports, err := parsePortArg(arg)
+		if err != nil {
+			return nil, err
+		}
+		opts.ports = append(opts.ports, ports...)
 	}
 	opts.ports = dedupePorts(opts.ports)
 
@@ -131,6 +203,29 @@ func parseArgs(args []string) (*options, error) {
 	return opts, nil
 }
 
+// parsePortArg parses a single port or a port range: "3000", "3000-3010", or
+// "3000:3010". Ranges are bounded by maxPortsPerInvocation.
+func parsePortArg(s string) ([]int32, error) {
+	loStr, hiStr := s, s
+	if i := strings.IndexAny(s, "-:"); i >= 0 {
+		loStr, hiStr = s[:i], s[i+1:]
+	}
+	lo, errLo := strconv.Atoi(loStr)
+	hi, errHi := strconv.Atoi(hiStr)
+	if errLo != nil || errHi != nil || lo < 1 || hi > 65535 || lo > hi {
+		return nil, fmt.Errorf("invalid port %q (must be 1-65535 or a range like 3000-3010)", s)
+	}
+	n := hi - lo + 1
+	if n > maxPortsPerInvocation {
+		return nil, fmt.Errorf("port range %q expands to %d ports (max %d)", s, n, maxPortsPerInvocation)
+	}
+	out := make([]int32, 0, n)
+	for p := lo; p <= hi; p++ {
+		out = append(out, int32(p))
+	}
+	return out, nil
+}
+
 // reorderArgs separates flags from positional arguments so that flags may
 // appear before or after the port (e.g. "portlens 3000 --tree").
 type argSplit struct {
@@ -139,7 +234,7 @@ type argSplit struct {
 }
 
 var valueFlags = map[string]bool{
-	"protocol": true, "sort": true, "filter": true,
+	"protocol": true, "sort": true, "filter": true, "name": true, "pid": true, "interval": true,
 }
 
 func reorderArgs(args []string) argSplit {
@@ -181,4 +276,101 @@ func dedupePorts(ports []int32) []int32 {
 		out = append(out, p)
 	}
 	return out
+}
+
+// groupLookup resolves a named port group to its ports.
+type groupLookup func(name string) ([]int32, error)
+
+// configGroupLookup resolves groups from the user configuration file.
+func configGroupLookup(name string) ([]int32, error) {
+	c, err := config.Load()
+	if err != nil {
+		return nil, err
+	}
+	ports, ok := c.Ports(name)
+	if !ok {
+		return nil, fmt.Errorf("group %q not found", name)
+	}
+	return ports, nil
+}
+
+// expandGroups replaces positional `@group` references with the group's ports
+// while leaving flags and their values untouched. A non-existent group is an
+// error.
+func expandGroups(args []string, lookup groupLookup) ([]string, error) {
+	var out []string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if strings.HasPrefix(a, "@") && len(a) > 1 {
+			ports, err := lookup(a[1:])
+			if err != nil {
+				return nil, fmt.Errorf("unknown port group %q", a)
+			}
+			for _, p := range ports {
+				out = append(out, strconv.Itoa(int(p)))
+			}
+			continue
+		}
+		out = append(out, a)
+		// Pull value flags along so their values are not mistaken for groups.
+		name := strings.TrimLeft(a, "-")
+		if eq := strings.IndexByte(name, '='); eq >= 0 {
+			name = name[:eq]
+		}
+		if valueFlags[name] && !strings.Contains(a, "=") && i+1 < len(args) {
+			out = append(out, args[i+1])
+			i++
+		}
+	}
+	return out, nil
+}
+
+// resolveDynamicPorts fills opts.ports from --all, --pid, or --name. It returns
+// exitcode.Success on success or a nonzero exit code on failure.
+func resolveDynamicPorts(stdout, stderr io.Writer, opts *options) int {
+	if len(opts.ports) > 0 {
+		fmt.Fprintf(stderr, "portlens: cannot combine explicit ports with --all/--pid/--name\n")
+		return exitcode.InvalidArguments
+	}
+	plat := platform.New()
+	insp := inspector.New(plat)
+	ctx := context.Background()
+	var entries []model.PortEntry
+	var err error
+	switch {
+	case opts.pid > 0:
+		entries, err = insp.SearchByPID(ctx, int32(opts.pid))
+	case opts.name != "":
+		entries, err = insp.SearchByName(ctx, opts.name)
+	default:
+		entries, err = insp.List(ctx)
+	}
+	if err != nil {
+		fmt.Fprintf(stderr, "portlens: %v\n", err)
+		return mapError(err)
+	}
+	if len(entries) == 0 {
+		fmt.Fprintf(stderr, "portlens: no %s\n", describeTarget(opts))
+		return exitcode.PortNotFound
+	}
+	for _, e := range entries {
+		opts.ports = append(opts.ports, e.Port)
+	}
+	opts.ports = dedupePorts(opts.ports)
+	return exitcode.Success
+}
+
+// describeTarget returns a human-readable description of the port source for
+// error messages and watch-mode headers.
+func describeTarget(opts *options) string {
+	switch {
+	case opts.pid > 0:
+		return fmt.Sprintf("listening port owned by process %d", opts.pid)
+	case opts.name != "":
+		return fmt.Sprintf("listening port owned by a process matching %q", opts.name)
+	case opts.all:
+		return "listening port"
+	default:
+		return "matching listening port"
+	}
 }

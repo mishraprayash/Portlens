@@ -142,22 +142,33 @@ PORT   PROCESS       PROJECT          RUNTIME     ADDRESS          STATUS
 ## 4. Command reference
 
 ```
-portlens <port>                 Inspect a port (interactive on a terminal)
-portlens                        List interesting listening ports
-portlens <port> --tree          Show the complete process hierarchy
-portlens <port> --connections   Show network connections, grouped & summarized
-portlens <port> --json          Machine-readable JSON output
-portlens <port> --kill          Gracefully terminate the owning process (SIGTERM)
-portlens <port> --kill --force  Force termination (SIGKILL)
-portlens <port> --restart       Restart the process if the launch command is known
-portlens <port> --history       Show previously observed activity on this port
-portlens <port> --open          Open the service in your browser
-portlens --version              Print the version
-portlens --help                 Show help
+portlens <port>...                 Inspect port(s) (interactive when a single port on a terminal)
+portlens 4000-4010                 Inspect a range of ports
+portlens @dev                      Inspect a named group from your config
+portlens                           List interesting listening ports
+portlens <port>... --tree          Show the complete process hierarchy
+portlens <port>... --connections   Show network connections, grouped & summarized
+portlens <port>... --json          Machine-readable JSON output (array for multiple ports)
+portlens <port>... --kill          Gracefully terminate the owning process(es) (SIGTERM)
+portlens <port>... --kill --force  Force termination (SIGKILL)
+portlens <port>... --restart       Restart the process if the launch command is known
+portlens <port>... --history       Show previously observed activity on this port
+portlens <port>... --open          Open the service in your browser
+portlens --all                     Act on every listening port (e.g. --all --kill)
+portlens --pid <pid>               Find the listening ports owned by a process (incl. descendants)
+portlens --name <query>            Find ports by process name/command (regex with /.../)
+portlens <port>... --watch         Re-render every --interval seconds until Ctrl-C
+portlens <port>... --watch --notify  Notify when a port goes up, down, or changes
+portlens config                    Manage named port groups (@name)
+portlens --version                 Print the version
+portlens --help                    Show help
 ```
 
 Listing flags: `--sort <port|process|project|runtime>`, `--filter <text>`,
 `--tcp`.
+
+Watch flags: `--interval <secs>` (default 1), `--notify` (desktop notification
+on state change; requires `--watch`).
 
 General flags: `--protocol <tcp|udp>`, `--yes`/`-y` (skip confirmations),
 `--no-color`, `--no-record` (skip history recording).

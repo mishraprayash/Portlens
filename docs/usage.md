@@ -379,3 +379,94 @@ reported as `BOUND` (there is no UDP listen state). `--protocol` accepts
 
 **Use case — CI or non-interactive tooling.** Combine `--json --no-color` for
 clean, parseable output.
+
+---
+
+## Port ranges & `--all`
+
+Multiple ports, ranges, and named groups can be mixed in one invocation:
+
+```bash
+$ portlens 3000 4000 5000            # a few ports
+$ portlens 3000-3010                 # a range
+$ portlens 4000-4010 --kill --yes    # kill everything in a range
+$ portlens @dev                      # a group from your config
+$ portlens --all --kill --force      # stop every listening process
+```
+
+**Use case — "free a block of ports."** During development you often occupy a
+contiguous block (a Next.js app, its API, and a socket service). `portlens
+4100-4105 --kill --yes` clears them in one shot. Ranges are bounded to 1024
+ports so a typo like `1-99999` fails fast instead of scanning the whole range.
+
+---
+
+## Finding ports by process — `--pid` and `--name`
+
+Instead of guessing a port, start from the process:
+
+```bash
+$ portlens --pid 48231               # all ports owned by PID 48231 (incl. descendants)
+$ portlens --name python             # ports owned by processes matching "python"
+$ portlens --name "/next|vite/"      # regex match on name/command/exe
+$ portlens --name postgres --kill --yes
+```
+
+**Use case — "which process owns these ports?"** A supervisor (like `node`, a
+dev server, or a container runtime) often spawns children that actually bind.
+`--pid` matches the given process *or any of its descendants*; `--name` matches
+case-insensitively against the process name, full command line, and executable
+path. Wrap the query in `/.../` to use a regular expression. The resulting ports
+behave exactly like a multi-port invocation, so every flag (`--kill`,
+`--restart`, `--json`, ...) works.
+
+---
+
+## Watch mode — `--watch` and `--notify`
+
+```bash
+$ portlens 3000 --watch                    # re-render every second
+$ portlens 3000 --watch --interval 2       # poll every 2 seconds
+$ portlens --watch                         # watch the full listing
+$ portlens 3000 --watch --notify           # notify on up/down/change
+```
+
+On a terminal, each tick redraws in place. Piped output reprints each snapshot
+with a timestamp. Press `Ctrl-C` (or send `SIGTERM`) to exit cleanly.
+
+**Use case — "is my server up yet?"** `portlens 3000 --watch` live-refreshes so
+you can see the exact moment the process binds, starts serving, or crashes.
+With `--notify`, macOS (`osascript`) and Linux (`notify-send`) post a desktop
+notification the instant a watched port comes up, goes down, or changes owner —
+no need to keep staring at the terminal.
+
+---
+
+## Named port groups — `portlens config`
+
+Grouped ports save you from typing the same list repeatedly. Groups live in a
+small JSON file (`portlens config path`), which on macOS is
+`~/Library/Application Support/portlens/config.json`.
+
+```bash
+$ portlens config add dev 3000 4000-4010 5000
+Saved group @dev: 3000, 4000-4010, 5000
+
+$ portlens config list
+Port groups (/Users/you/Library/Application Support/portlens/config.json):
+  @dev   3000, 4000-4010, 5000
+
+$ portlens config show dev
+3000, 4000-4010, 5000
+
+$ portlens config remove dev
+$ portlens config path
+/Users/you/Library/Application Support/portlens/config.json
+```
+
+Then reference a group anywhere a port is expected:
+
+```bash
+$ portlens @dev                 # inspect the whole group
+$ portlens @dev --kill --yes    # stop them all
+```

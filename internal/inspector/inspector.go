@@ -154,38 +154,7 @@ func (i *Inspector) List(ctx context.Context) ([]model.PortEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	seen := map[string]bool{}
-	var out []model.PortEntry
-	for _, l := range listeners {
-		key := l.Key()
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-
-		entry := model.PortEntry{
-			Port:     int32(l.Port),
-			Protocol: l.Protocol,
-			Address:  l.Address,
-			Status:   l.State,
-			PID:      l.PID,
-		}
-		if l.PID > 0 {
-			if p, err := i.Platform.Processes.Info(ctx, l.PID); err == nil {
-				entry.Process = p.Name
-				if proj := i.Projects.Detect(ctx, p.CWD); proj != nil {
-					entry.Project = proj.Name
-				}
-				if rt := detect.DetectRuntime(p); rt != "" {
-					entry.Runtime = rt
-				}
-			}
-		} else if l.Process != "" {
-			entry.Process = l.Process
-		}
-		out = append(out, entry)
-	}
-	return out, nil
+	return i.buildEntries(ctx, listeners, i.processInfos(ctx, listeners), nil), nil
 }
 
 func isLoopback(addr string) bool {

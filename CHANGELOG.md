@@ -6,6 +6,19 @@ All notable changes to PortLens are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Multiple ports, port ranges (`3000-3010`), and `--all` in a single invocation;
+  `--json` emits a JSON array when more than one port is inspected.
+- Inverse lookup with `--pid <pid>` (includes descendants) and
+  `--name <query>` (case-insensitive substring, or `/regex/`) so you can find
+  and act on ports starting from a process.
+- `--watch` (with `--interval`) live-rendering of a port or the full listing.
+- `--notify` desktop notifications (macOS via `osascript`, Linux via
+  `notify-send`) when a watched port goes up, goes down, or changes owner.
+- Named port groups via `portlens config add|list|show|remove|path`, usable as
+  `portlens @<group>`, stored in a local JSON config file.
+
 ## [0.1.0] - 2026-08-27
 
 Initial release.

@@ -8,13 +8,13 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"sync"
 	"time"
 
 	_ "modernc.org/sqlite"
 
+	"github.com/portlens/portlens/internal/config"
 	"github.com/portlens/portlens/internal/model"
 )
 
@@ -145,27 +145,10 @@ func DefaultPath() string {
 	return filepath.Join(DataDir(), "history.db")
 }
 
-// DataDir returns the platform-appropriate data directory for PortLens,
-// respecting XDG_DATA_HOME on Linux.
+// DataDir returns the platform-appropriate data directory for PortLens. It is
+// a thin wrapper around config.Dir so every component agrees on one location.
 func DataDir() string {
-	if xdg := os.Getenv("XDG_DATA_HOME"); xdg != "" {
-		return filepath.Join(xdg, "portlens")
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "."
-	}
-	switch runtime.GOOS {
-	case "darwin":
-		return filepath.Join(home, "Library", "Application Support", "portlens")
-	case "windows":
-		if local := os.Getenv("LOCALAPPDATA"); local != "" {
-			return filepath.Join(local, "portlens")
-		}
-		return filepath.Join(home, ".portlens")
-	default:
-		return filepath.Join(home, ".local", "share", "portlens")
-	}
+	return config.Dir()
 }
 
 func nullableInt64(v int32) any {
