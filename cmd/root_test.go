@@ -30,7 +30,7 @@ func TestParseArgsFlagsAfterPort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if opts.port != 3000 || !opts.tree || !opts.noColor {
+	if !reflect.DeepEqual(opts.ports, []int32{3000}) || !opts.tree || !opts.noColor {
 		t.Errorf("opts = %+v", opts)
 	}
 }
@@ -42,8 +42,50 @@ func TestParseArgsInvalidPort(t *testing.T) {
 	if _, err := parseArgs([]string{"70000"}); err == nil {
 		t.Error("expected error for out-of-range port")
 	}
-	if _, err := parseArgs([]string{"3000", "3001"}); err == nil {
-		t.Error("expected error for too many arguments")
+}
+
+func TestParseArgsMultiplePorts(t *testing.T) {
+	opts, err := parseArgs([]string{"3000", "4000", "5000", "--tree"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(opts.ports, []int32{3000, 4000, 5000}) {
+		t.Errorf("ports = %v, want [3000 4000 5000]", opts.ports)
+	}
+	if !opts.tree {
+		t.Error("expected --tree")
+	}
+}
+
+func TestParseArgsMultiplePortsFlagsBetween(t *testing.T) {
+	opts, err := parseArgs([]string{"3000", "--protocol", "udp", "4000"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(opts.ports, []int32{3000, 4000}) {
+		t.Errorf("ports = %v, want [3000 4000]", opts.ports)
+	}
+	if opts.protocol != "udp" {
+		t.Errorf("protocol = %q, want udp", opts.protocol)
+	}
+}
+
+func TestParseArgsDedupePorts(t *testing.T) {
+	opts, err := parseArgs([]string{"3000", "3000", "4000"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(opts.ports, []int32{3000, 4000}) {
+		t.Errorf("ports = %v, want [3000 4000]", opts.ports)
+	}
+}
+
+func TestDedupePorts(t *testing.T) {
+	in := []int32{8080, 3000, 8080, 4000, 3000}
+	got := dedupePorts(in)
+	want := []int32{8080, 3000, 4000}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("dedupePorts(%v) = %v, want %v", in, got, want)
 	}
 }
 

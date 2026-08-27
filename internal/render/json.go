@@ -26,3 +26,15 @@ func JSONList(w io.Writer, entries []model.PortEntry) error {
 	}
 	return enc.Encode(entries)
 }
+
+// JSONReports writes multiple inspection reports as a JSON array. It is used
+// when several ports are inspected in a single invocation.
+func JSONReports(w io.Writer, reports []*model.Report) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	enc.SetEscapeHTML(false)
+	if reports == nil {
+		reports = []*model.Report{}
+	}
+	return enc.Encode(reports)
+}

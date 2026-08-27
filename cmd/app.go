@@ -36,23 +36,79 @@ func runListing(stdout, stderr io.Writer, opts *options) int {
 	return exitcode.Success
 }
 
-func runPort(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, opts *options) int {
+// runPorts dispatches to runPort for each requested port and returns the most
+// severe exit code seen. A single port preserves the original behavior,
+// including interactive mode.
+func runPorts(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, opts *options) int {
+	if opts.jsonOut && len(opts.ports) > 1 {
+		return runPortsJSON(ctx, stdout, stderr, opts)
+	}
+
+	worst := exitcode.Success
+	for _, p := range opts.ports {
+		if code := runPort(ctx, stdout, stderr, stdin, opts, p); code > worst {
+			worst = code
+		}
+	}
+	return worst
+}
+
+// runPortsJSON inspects every port up front so that all reports can be emitted
+// as a single JSON array on stdout.
+func runPortsJSON(ctx context.Context, stdout, stderr io.Writer, opts *options) int {
+	plat := platform.New()
+	insp := inspector.New(plat)
+	proto := protocolFrom(opts)
+
+	reports := make([]*model.Report, 0, len(opts.ports))
+	worst := exitcode.Success
+	for _, p := range opts.ports {
+		report, err := insp.Inspect(ctx, p, proto)
+		if err != nil {
+			if errors.Is(err, inspector.ErrPortNotFound) {
+				reports = append(reports, report)
+				worst = maxExit(worst, exitcode.PortNotFound)
+				continue
+			}
+			fmt.Fprintf(stderr, "portlens: %v\n", err)
+			worst = maxExit(worst, mapError(err))
+			continue
+		}
+		reports = append(reports, report)
+	}
+	_ = render.JSONReports(stdout, reports)
+	return worst
+}
+
+// protocolFrom maps the --protocol flag to a model.Protocol.
+func protocolFrom(opts *options) model.Protocol {
+	switch opts.protocol {
+	case "udp", "udp4", "udp6":
+		return model.ProtocolUDP
+	default:
+		return model.ProtocolTCP
+	}
+}
+
+// maxExit returns the more severe exit code (higher numeric value wins).
+func maxExit(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func runPort(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, opts *options, port int32) int {
 	plat := platform.New()
 	insp := inspector.New(plat)
 
-	var proto model.Protocol
-	switch opts.protocol {
-	case "udp", "udp4", "udp6":
-		proto = model.ProtocolUDP
-	case "tcp", "tcp4", "tcp6", "":
-		proto = model.ProtocolTCP
-	}
+	proto := protocolFrom(opts)
 
 	if opts.history {
-		return runHistory(stdout, stderr, opts)
+		return runHistory(stdout, stderr, opts, port)
 	}
 
-	report, err := insp.Inspect(ctx, opts.port, proto)
+	report, err := insp.Inspect(ctx, port, proto)
 	if err != nil {
 		if errors.Is(err, inspector.ErrPortNotFound) {
 			r := render.New(stdout, !opts.noColor)
@@ -100,7 +156,7 @@ func runPort(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, opt
 		r.Connections(report)
 		return exitcode.Success
 	default:
-		if isTerminal(stdout) && isTerminalReader(stdin) {
+		if len(opts.ports) == 1 && isTerminal(stdout) && isTerminalReader(stdin) {
 			return runInteractive(ctx, plat, mgr, r, report, stdin, stdout, opts)
 		}
 		r.Report(report)
@@ -143,7 +199,7 @@ func runOpen(ctx context.Context, mgr *actions.Manager, report *model.Report) in
 	return exitcode.Success
 }
 
-func runHistory(stdout, stderr io.Writer, opts *options) int {
+func runHistory(stdout, stderr io.Writer, opts *options, port int32) int {
 	store, err := history.New()
 	if err != nil {
 		fmt.Fprintf(stderr, "portlens: unable to open history: %v\n", err)
@@ -151,13 +207,13 @@ func runHistory(stdout, stderr io.Writer, opts *options) int {
 	}
 	defer store.Close()
 
-	entries, err := store.Query(context.Background(), opts.port, 20)
+	entries, err := store.Query(context.Background(), port, 20)
 	if err != nil {
 		fmt.Fprintf(stderr, "portlens: %v\n", err)
 		return exitcode.GeneralError
 	}
 	r := render.New(stdout, !opts.noColor)
-	r.History(opts.port, entries)
+	r.History(port, entries)
 	return exitcode.Success
 }
 

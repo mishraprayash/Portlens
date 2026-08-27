@@ -17,7 +17,7 @@ import (
 var errHelp = errors.New("help requested")
 
 type options struct {
-	port     int32
+	ports    []int32
 	protocol string
 
 	tree        bool
@@ -61,10 +61,10 @@ func Execute(args []string, stdout, stderr io.Writer, stdin io.Reader) int {
 		return exitcode.Success
 	}
 
-	if opts.port == 0 {
+	if len(opts.ports) == 0 {
 		return runListing(stdout, stderr, opts)
 	}
-	return runPort(context.Background(), stdout, stderr, stdin, opts)
+	return runPorts(context.Background(), stdout, stderr, stdin, opts)
 }
 
 func parseArgs(args []string) (*options, error) {
@@ -108,16 +108,14 @@ func parseArgs(args []string) (*options, error) {
 	}
 
 	rest := reordered.positional
-	if len(rest) > 1 {
-		return nil, fmt.Errorf("too many arguments: %q", strings.Join(rest, " "))
-	}
-	if len(rest) == 1 {
-		p, err := strconv.Atoi(rest[0])
+	for _, arg := range rest {
+		p, err := strconv.Atoi(arg)
 		if err != nil || p < 1 || p > 65535 {
-			return nil, fmt.Errorf("invalid port %q (must be 1-65535)", rest[0])
+			return nil, fmt.Errorf("invalid port %q (must be 1-65535)", arg)
 		}
-		opts.port = int32(p)
+		opts.ports = append(opts.ports, int32(p))
 	}
+	opts.ports = dedupePorts(opts.ports)
 
 	switch strings.ToLower(opts.protocol) {
 	case "", "tcp", "tcp4", "tcp6":
@@ -167,6 +165,20 @@ func reorderArgs(args []string) argSplit {
 			continue
 		}
 		out.positional = append(out.positional, a)
+	}
+	return out
+}
+
+// dedupePorts removes duplicate ports while preserving first-seen order.
+func dedupePorts(ports []int32) []int32 {
+	seen := make(map[int32]bool, len(ports))
+	out := make([]int32, 0, len(ports))
+	for _, p := range ports {
+		if seen[p] {
+			continue
+		}
+		seen[p] = true
+		out = append(out, p)
 	}
 	return out
 }

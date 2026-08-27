@@ -9,22 +9,23 @@ func printUsage(w io.Writer) {
 	fmt.Fprint(w, `PortLens — local port intelligence & process management
 
 USAGE
-  portlens [port] [flags]
+  portlens [port ...] [flags]
 
   With no port, PortLens lists the interesting listening ports on this host.
+  Multiple ports may be given; each is inspected in turn.
 
 COMMANDS / FLAGS
-  portlens <port>                 Inspect a port (interactive when on a terminal)
-  portlens <port> --tree          Show the complete process hierarchy
-  portlens <port> --connections   Show network connections, grouped and summarized
-  portlens <port> --json          Machine-readable JSON output
-  portlens <port> --kill          Gracefully terminate the owning process (SIGTERM)
-  portlens <port> --kill --force  Force termination (SIGKILL)
-  portlens <port> --restart       Restart the process if the launch command is known
-  portlens <port> --history       Show previously observed activity on this port
-  portlens <port> --open          Open the service in your browser
-  portlens --version              Print the version
-  portlens --help                 Show this help
+  portlens <port>...                  Inspect port(s) (interactive when a single port on a terminal)
+  portlens <port>... --tree           Show the complete process hierarchy
+  portlens <port>... --connections    Show network connections, grouped and summarized
+  portlens <port>... --json           Machine-readable JSON output (array for multiple ports)
+  portlens <port>... --kill           Gracefully terminate the owning process(es) (SIGTERM)
+  portlens <port>... --kill --force   Force termination (SIGKILL)
+  portlens <port>... --restart        Restart the process if the launch command is known
+  portlens <port>... --history        Show previously observed activity on each port
+  portlens <port>... --open           Open the service in your browser
+  portlens --version                  Print the version
+  portlens --help                     Show this help
 
 LISTING FLAGS
   --sort <key>      Sort listing by: port, process, project, runtime
