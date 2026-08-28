@@ -26,6 +26,8 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Added
 
+- **HTTP health & HTML title probing (`--probe` / `-p`)**: Lightweight HTTP probing with a 300ms timeout extracts HTTP status, response latency, Server header, and HTML `<title>` to immediately identify the web application running behind generic process names.
+- **Process Memory RSS display**: Surfaced native process memory usage (formatted as human-friendly RSS units e.g. `128 MB`, `1.4 GB`) in both compact summary and full verbose reports.
 - **`portlens free <port...>` conflict resolution subcommand**: Terminate processes (and containers) occupying one or more ports or port ranges, wait for the socket release, and confirm the port is freed.
 - **`portlens next [start]` available port discovery subcommand**: Find the lowest unused and bindable listening port (defaults to 3000, or a user-specified starting port) for scripting and automation.
 - **Podman & rootless container runtime awareness**: Expanded container detection beyond Docker to Podman, supporting `CONTAINER_HOST` environment variables, system/rootful sockets (`/run/podman/podman.sock`), user rootless sockets (`$XDG_RUNTIME_DIR/podman/podman.sock`, `/run/user/<uid>/podman/podman.sock`), macOS Podman machine sockets, and cgroup v2 systemd/libpod scopes.

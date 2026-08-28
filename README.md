@@ -189,6 +189,7 @@ on state change; requires `--watch`).
 
 General flags: `--protocol <tcp|udp>`, `--yes`/`-y` (skip confirmations),
 `--verbose`/`-v` (full detailed report instead of the compact summary),
+`--probe`/`-p` (probe HTTP endpoint for status, HTML title, and Server header),
 `--debug`/`-d` (structured diagnostic logging to stderr; also honors `PORTLENS_DEBUG=1`),
 `--log <path>` (capture any command's stdout to a file; plain text, disables
 interactive mode, incompatible with `--watch`), `--no-color`, `--no-record`

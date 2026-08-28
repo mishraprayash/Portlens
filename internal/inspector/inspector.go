@@ -32,9 +32,10 @@ const (
 
 // Inspector performs port and process inspection.
 type Inspector struct {
-	Platform *platform.Platform
-	Projects detect.ProjectDetector
-	Now      func() time.Time
+	Platform    *platform.Platform
+	Projects    detect.ProjectDetector
+	Now         func() time.Time
+	EnableProbe bool
 }
 
 // New builds an Inspector with the given platform and default detectors.
@@ -139,6 +140,20 @@ func (i *Inspector) InspectDepth(ctx context.Context, port int32, protocol model
 	// Interpretation (deep only; Facts/Inferences are not shown in the summary).
 	if depth == DepthFull {
 		i.interpret(report)
+	}
+
+	// Lightweight HTTP service probing when enabled or during deep inspection
+	if (i.EnableProbe || depth == DepthFull) && primary.Protocol.Normalize() == model.ProtocolTCP {
+		if probe := detect.ProbeHTTP(ctx, primary.Address, uint16(port)); probe != nil {
+			report.HTTPProbe = probe
+			report.Facts = append(report.Facts, fmt.Sprintf("HTTP probe returned %s in %s", probe.Status, model.FormatDuration(probe.Latency)))
+			if probe.Title != "" {
+				report.Facts = append(report.Facts, fmt.Sprintf("HTML page title: %q", probe.Title))
+			}
+			if probe.Server != "" {
+				report.Facts = append(report.Facts, fmt.Sprintf("HTTP Server header: %q", probe.Server))
+			}
+		}
 	}
 
 	// Container ownership (best-effort; silently skipped when no runtime).

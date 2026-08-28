@@ -29,7 +29,11 @@ func newInspector(opts *options) *inspector.Inspector {
 	if opts != nil && opts.noDocker {
 		plat.Containers = nil
 	}
-	return inspector.New(plat)
+	insp := inspector.New(plat)
+	if opts != nil && opts.probe {
+		insp.EnableProbe = true
+	}
+	return insp
 }
 
 func runListing(stdout, stderr io.Writer, opts *options) int {

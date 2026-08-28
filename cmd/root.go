@@ -56,6 +56,7 @@ type options struct {
 
 	verbose bool
 	debug   bool
+	probe   bool
 
 	yes      bool
 	noRecord bool
@@ -183,6 +184,8 @@ func parseArgs(args []string) (*options, error) {
 	fs.BoolVar(&opts.verbose, "v", false, "")
 	fs.BoolVar(&opts.debug, "debug", false, "")
 	fs.BoolVar(&opts.debug, "d", false, "")
+	fs.BoolVar(&opts.probe, "probe", false, "")
+	fs.BoolVar(&opts.probe, "p", false, "")
 	fs.IntVar(&opts.interval, "interval", 0, "")
 	fs.IntVar(&opts.pid, "pid", 0, "")
 	fs.StringVar(&opts.name, "name", "", "")

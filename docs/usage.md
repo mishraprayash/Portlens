@@ -461,6 +461,7 @@ reported as `BOUND` (there is no UDP listen state). `--protocol` accepts
 | `--force` / `-f`  | With `--kill`: force SIGKILL, skip confirmation |
 | `--no-color`      | Plain output (no ANSI escapes)                  |
 | `--no-record`     | Do not record this inspection to history        |
+| `--probe` / `-p`  | Probe HTTP endpoint for status, title, & server |
 | `--debug` / `-d`  | Structured diagnostic debug logging to stderr   |
 | `--protocol`      | Restrict to `tcp` or `udp`                      |
 
