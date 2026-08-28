@@ -53,7 +53,7 @@ func socketInodeMap() map[uint64]int32 {
 		}
 		for _, fd := range fds {
 			link, err := os.Readlink(filepath.Join(fdDir, fd.Name()))
-			if err != nil || !strings.HasPrefix(link, "socket:[") {
+			if err != nil || !strings.HasPrefix(link, "socket:[") || !strings.HasSuffix(link, "]") || len(link) <= len("socket:[]") {
 				continue
 			}
 			inode, err := strconv.ParseUint(link[len("socket:["):len(link)-1], 10, 64)

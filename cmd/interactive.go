@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"syscall"
 
 	"golang.org/x/term"
 
@@ -62,11 +63,19 @@ func runInteractive(
 		case 'n':
 			r.Connections(deepInteractiveReport(ctx, insp, report))
 		case 'k':
+			if report.Process != nil && !insp.Platform.Processes.Exists(ctx, report.Process.PID) {
+				fmt.Fprintf(stdout, "Process %d is no longer running\n", report.Process.PID)
+				return exitcode.Success
+			}
 			if err := mgr.Kill(ctx, report, false); err != nil {
 				fmt.Fprintf(stdout, "kill failed: %v\n", err)
 			}
 			return exitcode.Success
 		case 'f':
+			if report.Process != nil && !insp.Platform.Processes.Exists(ctx, report.Process.PID) {
+				fmt.Fprintf(stdout, "Process %d is no longer running\n", report.Process.PID)
+				return exitcode.Success
+			}
 			if err := mgr.Kill(ctx, report, true); err != nil {
 				fmt.Fprintf(stdout, "force kill failed: %v\n", err)
 			}
@@ -132,5 +141,20 @@ func readRawKey(f *os.File) (byte, error) {
 	if _, err := f.Read(buf); err != nil {
 		return 0, err
 	}
+	// If the user triggered an escape sequence (e.g. arrow keys \x1b[A), drain
+	// trailing bytes so they don't leak into the terminal session after raw mode ends.
+	if buf[0] == '\x1b' {
+		drainEscape(f)
+	}
 	return buf[0], nil
+}
+
+func drainEscape(f *os.File) {
+	fd := int(f.Fd())
+	if err := syscall.SetNonblock(fd, true); err != nil {
+		return
+	}
+	defer func() { _ = syscall.SetNonblock(fd, false) }()
+	buf := make([]byte, 32)
+	_, _ = f.Read(buf)
 }

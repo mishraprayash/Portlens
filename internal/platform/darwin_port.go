@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/portlens/portlens/internal/model"
 )
@@ -22,6 +23,11 @@ func newNetworkInspector() NetworkInspector { return darwinNetworkInspector{} }
 
 // runLsof executes lsof with the given arguments and returns stdout.
 func runLsof(ctx context.Context, args ...string) (string, error) {
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+	}
 	cmd := exec.CommandContext(ctx, "lsof", args...)
 	out, err := cmd.Output()
 	if err != nil {
@@ -127,62 +133,54 @@ func listenerFromRecord(rec lsofField, addr string, port uint16, proto model.Pro
 }
 
 func (d darwinNetworkInspector) Connections(ctx context.Context, pid int32) ([]model.Connection, error) {
+	data, err := runLsof(ctx, "-nP", "-a", "-p", strconv.Itoa(int(pid)), "-iTCP", "-iUDP", "-FpctnT")
+	if err != nil {
+		return nil, err
+	}
 	var out []model.Connection
-	for _, proto := range []model.Protocol{model.ProtocolTCP, model.ProtocolUDP} {
-		arg := "-iTCP"
-		if proto == model.ProtocolUDP {
-			arg = "-iUDP"
+	for _, rec := range parseLsofFields(data) {
+		if !strings.Contains(rec.name, "->") {
+			continue
 		}
-		data, err := runLsof(ctx, "-nP", "-a", "-p", strconv.Itoa(int(pid)), arg, "-FpctnT")
-		if err != nil {
-			return nil, err
+		parts := strings.SplitN(rec.name, "->", 2)
+		localAddr, localPort, ok1 := parseSockName(parts[0])
+		remoteAddr, remotePort, ok2 := parseSockName(parts[1])
+		if !ok1 || !ok2 {
+			continue
 		}
-		for _, rec := range parseLsofFields(data) {
-			if !strings.Contains(rec.name, "->") {
-				continue
-			}
-			parts := strings.SplitN(rec.name, "->", 2)
-			localAddr, localPort, ok1 := parseSockName(parts[0])
-			remoteAddr, remotePort, ok2 := parseSockName(parts[1])
-			if !ok1 || !ok2 {
-				continue
-			}
-			state := rec.state
-			if state == "" {
-				state = "ESTABLISHED"
-			}
-			out = append(out, model.Connection{
-				PID:        pid,
-				Protocol:   proto,
-				LocalAddr:  normalizeAddr(localAddr, rec.family),
-				LocalPort:  localPort,
-				RemoteAddr: normalizeAddr(remoteAddr, rec.family),
-				RemotePort: remotePort,
-				State:      state,
-			})
+		proto := model.ProtocolUDP
+		state := rec.state
+		if state != "" {
+			proto = model.ProtocolTCP
+		} else {
+			state = "ESTABLISHED"
 		}
+		out = append(out, model.Connection{
+			PID:        pid,
+			Protocol:   proto,
+			LocalAddr:  normalizeAddr(localAddr, rec.family),
+			LocalPort:  localPort,
+			RemoteAddr: normalizeAddr(remoteAddr, rec.family),
+			RemotePort: remotePort,
+			State:      state,
+		})
 	}
 	return out, nil
 }
 
 func (d darwinNetworkInspector) ListenersForPID(ctx context.Context, pid int32) ([]model.Listener, error) {
-	data, err := runLsof(ctx, "-nP", "-a", "-p", strconv.Itoa(int(pid)), "-iTCP", "-sTCP:LISTEN", "-Fpctn")
+	data, err := runLsof(ctx, "-nP", "-a", "-p", strconv.Itoa(int(pid)), "-iTCP", "-sTCP:LISTEN", "-iUDP", "-FpctnT")
 	if err != nil {
 		return nil, err
 	}
 	var out []model.Listener
 	for _, rec := range parseLsofFields(data) {
 		if addr, port, ok := parseSockName(rec.name); ok {
-			out = append(out, listenerFromRecord(rec, addr, port, model.ProtocolTCP))
-		}
-	}
-	udp, err := runLsof(ctx, "-nP", "-a", "-p", strconv.Itoa(int(pid)), "-iUDP", "-Fpctn")
-	if err != nil {
-		return nil, err
-	}
-	for _, rec := range parseLsofFields(udp) {
-		if addr, port, ok := parseSockName(rec.name); ok {
-			out = append(out, listenerFromRecord(rec, addr, port, model.ProtocolUDP))
+			proto := model.ProtocolUDP
+			if rec.state != "" {
+				proto = model.ProtocolTCP
+			}
+			out = append(out, listenerFromRecord(rec, addr, port, proto))
 		}
 	}
 	return out, nil

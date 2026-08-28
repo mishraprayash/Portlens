@@ -39,9 +39,8 @@ func runWatch(ctx context.Context, stdout, stderr io.Writer, opts *options) int 
 	}
 	interactive := isTerminal(stdout)
 
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-	defer signal.Stop(sig)
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	defer ticker.Stop()
@@ -49,18 +48,30 @@ func runWatch(ctx context.Context, stdout, stderr io.Writer, opts *options) int 
 	var prev watchSnap
 	first := true
 	for {
+		if ctx.Err() != nil {
+			if interactive {
+				fmt.Fprintln(stdout)
+			}
+			return exitcode.Success
+		}
 		if interactive {
 			clearScreen(stdout)
 		}
 		fmt.Fprintf(stdout, "%s — updated %s\n\n", watchTargetLabel(opts), time.Now().Format("15:04:05"))
 
 		cur, err := renderWatchTick(ctx, stdout, stderr, opts)
+		if ctx.Err() != nil {
+			if interactive {
+				fmt.Fprintln(stdout)
+			}
+			return exitcode.Success
+		}
 		if err != nil {
 			// Transient failure: keep the previous snapshot so a single bad
 			// tick does not report every target as down.
 			first = false
 			select {
-			case <-sig:
+			case <-ctx.Done():
 				if interactive {
 					fmt.Fprintln(stdout)
 				}
@@ -79,7 +90,7 @@ func runWatch(ctx context.Context, stdout, stderr io.Writer, opts *options) int 
 		first = false
 
 		select {
-		case <-sig:
+		case <-ctx.Done():
 			if interactive {
 				fmt.Fprintln(stdout)
 			}
