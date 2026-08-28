@@ -24,6 +24,7 @@ func defaultSubcommandRegistry() *SubcommandRegistry {
 	r.Register(&configSubcommand{})
 	r.Register(&freeSubcommand{})
 	r.Register(&nextSubcommand{})
+	r.Register(&completionSubcommand{})
 	return r
 }
 

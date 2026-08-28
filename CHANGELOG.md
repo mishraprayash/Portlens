@@ -26,6 +26,7 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Added
 
+- **Shell autocompletion generator (`portlens completion <bash|zsh|fish>`)**: Generates dynamic shell autocompletion for bash, zsh, and fish that completes subcommands, flags, and currently active listening ports with their process names.
 - **HTTP health & HTML title probing (`--probe` / `-p`)**: Lightweight HTTP probing with a 300ms timeout extracts HTTP status, response latency, Server header, and HTML `<title>` to immediately identify the web application running behind generic process names.
 - **Process Memory RSS display**: Surfaced native process memory usage (formatted as human-friendly RSS units e.g. `128 MB`, `1.4 GB`) in both compact summary and full verbose reports.
 - **`portlens free <port...>` conflict resolution subcommand**: Terminate processes (and containers) occupying one or more ports or port ranges, wait for the socket release, and confirm the port is freed.

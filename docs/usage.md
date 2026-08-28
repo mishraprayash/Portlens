@@ -625,8 +625,6 @@ If the port is already unoccupied, PortLens cleanly reports `Port <port> is alre
 
 ## Finding the next free port — `portlens next [start]`
 
-Find the lowest available and bindable port starting from a given number:
-
 ```bash
 $ portlens next                          # defaults to 3000
 3000
@@ -636,4 +634,30 @@ $ portlens next 8000                     # find free port >= 8000
 
 $ PORT=$(portlens next 3000) npm start   # pipe directly into dev scripts
 ```
+
+---
+
+## Shell autocompletion — `portlens completion <shell>`
+
+PortLens supports dynamic shell autocompletion that completes flags, subcommands,
+and **currently listening ports** in real-time.
+
+```bash
+# Zsh (add to ~/.zshrc)
+eval "$(portlens completion zsh)"
+
+# Bash (add to ~/.bashrc)
+eval "$(portlens completion bash)"
+
+# Fish (add to ~/.config/fish/config.fish)
+portlens completion fish | source
+```
+
+Once enabled, pressing `<TAB>` suggests active ports along with process names:
+
+```bash
+$ portlens 3<TAB>
+3000  (node - next-app)    3001  (python - api)
+```
+
 

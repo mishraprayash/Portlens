@@ -77,6 +77,12 @@ func Execute(args []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	}
 	initLogger(debug, stderr)
 
+	for _, a := range args {
+		if a == "--_complete_ports" {
+			return runCompletePorts(stdout)
+		}
+	}
+
 	reg := defaultSubcommandRegistry()
 	if subCmd, subArgs, preFlags := extractSubcommand(args, reg); subCmd != nil {
 		for i := 0; i < len(preFlags); i++ {
