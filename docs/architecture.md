@@ -18,7 +18,7 @@ build-tagged files; the rest of the codebase is OS-independent.
 │   orchestrates providers → model.Report (+ risk)          │
 ├──────────────────────────┬──────────────────────────────┤
 │ internal/detect/         │ internal/history/             │
-│   project/runtime/       │   SQLite history store        │
+│   project/runtime/       │   owner-only JSONL log        │
 │   framework detection    │                               │
 ├──────────────────────────┴──────────────────────────────┤
 │ internal/model/                                          │
@@ -30,7 +30,8 @@ build-tagged files; the rest of the codebase is OS-independent.
 │   ClipboardProvider     ProcessController                │
 │   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
 │   │ darwin_*.go  │  │ linux_*.go   │  │ windows_*.go │  │
-│   │ lsof, pbcopy │  │ /proc, xclip │  │ (planned)    │  │
+│   │ sysctl+proc, │  │ /proc, xclip │  │ (planned)    │  │
+│   │ lsof fallback│  │              │  │               │  │
 │   └──────────────┘  └──────────────┘  └──────────────┘  │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -40,18 +41,21 @@ build-tagged files; the rest of the codebase is OS-independent.
 `internal/platform/platform.go` declares the interfaces. Concrete
 implementations live in files with build constraints:
 
-| Interface             | macOS                        | Linux                          |
-|-----------------------|------------------------------|--------------------------------|
-| `PortResolver`        | `lsof -nP -iTCP -sTCP:LISTEN` | parse `/proc/net/tcp{,6}`       |
-| `NetworkInspector`    | `lsof -a -p PID -i -F...`    | `/proc/<pid>/fd` → inode map   |
-| `ProcessInspector`    | gopsutil (sysctl)            | gopsutil (/proc)               |
-| `ProcessTreeProvider` | gopsutil (parent/children)   | gopsutil (parent/children)     |
-| `ClipboardProvider`   | `pbcopy`                     | `wl-copy`/`xclip`/`xsel`       |
-| `ProcessController`   | `syscall.Kill`               | `syscall.Kill`                 |
+| Interface             | macOS                                  | Linux                          |
+|-----------------------|----------------------------------------|--------------------------------|
+| `PortResolver`        | `lsof` (native lookup considered; see [performance.md](performance.md)) | parse `/proc/net/tcp{,6}` |
+| `NetworkInspector`    | `lsof -a -p PID -i -F...`              | `/proc/<pid>/fd` → inode map   |
+| `ProcessInspector`    | sysctl + libproc (native, no commands) | `/proc` (native, no commands)  |
+| `ProcessTreeProvider` | sysctl `kern.proc.all` (one snapshot)  | one `/proc` scan                |
+| `ClipboardProvider`   | `pbcopy`                               | `wl-copy`/`xclip`/`xsel`       |
+| `ProcessController`   | `syscall.Kill`                         | `syscall.Kill`                 |
 
-`ProcessInspector`, `ProcessTreeProvider`, and `ProcessController` are shared
-(`process.go`) because gopsutil already abstracts the OS for process metadata.
-Port/network and clipboard providers are OS-specific.
+Process metadata is read natively on both platforms — `sysctl` and libproc
+(`proc_pidpath`/`proc_pidinfo`) on macOS, `/proc` on Linux — with no external
+commands. The process tree is built from a single native snapshot per
+invocation. The only fast-path external command on macOS is `lsof` for port
+resolution; see [performance.md](performance.md) for the security analysis of
+replacing it.
 
 The pure parsing helpers (`lsof.go`, `procnet.go`) live outside the build-tagged
 files so they can be unit-tested on any platform.
@@ -75,7 +79,9 @@ files so they can be unit-tested on any platform.
   trust observations and treat guesses skeptically.
 - **cgo-free** — builds with `CGO_ENABLED=0`, giving static binaries and easy
   cross-compilation.
-- **Native-first, command fallback** — macOS uses `lsof` (isolated behind the
-  interface); Linux reads `/proc` directly with no external commands.
+- **Native-first, command fallback** — macOS reads process metadata natively
+  via sysctl and libproc, and uses `lsof` only for port resolution (isolated
+  behind the interface); Linux reads `/proc` directly with no external
+  commands.
 - **Deterministic JSON** — the JSON schema is stable and documented; see
   [json-schema.md](json-schema.md).

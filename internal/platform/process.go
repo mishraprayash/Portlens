@@ -5,112 +5,12 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
-
-	"github.com/shirou/gopsutil/v4/process"
-
-	"github.com/portlens/portlens/internal/model"
 )
-
-// gopsutilProcessInspector inspects processes via gopsutil, which itself uses
-// native system APIs (sysctl on macOS, /proc on Linux). This implementation is
-// shared across platforms because gopsutil already provides the OS abstraction
-// for process metadata.
-type gopsutilProcessInspector struct{}
 
 // syscallProcessController sends signals via syscall.Kill.
 type syscallProcessController struct{}
 
-func newProcessInspector() ProcessInspector   { return gopsutilProcessInspector{} }
 func newProcessController() ProcessController { return syscallProcessController{} }
-
-func (gopsutilProcessInspector) Info(_ context.Context, pid int32) (*model.ProcessInfo, error) {
-	p, err := process.NewProcess(pid)
-	if err != nil {
-		return nil, ErrProcessNotFound
-	}
-	return infoFromProcess(p)
-}
-
-// InfoBasic fetches only the fields the fast path displays and deliberately
-// skips the calls that are expensive on some platforms — notably CreateTime
-// and Status, which gopsutil implements by spawning `ps` on macOS. This keeps
-// `portlens <port>` free of hidden external processes.
-func (gopsutilProcessInspector) InfoBasic(ctx context.Context, pid int32) (*model.ProcessInfo, error) {
-	p, err := process.NewProcess(pid)
-	if err != nil {
-		return nil, ErrProcessNotFound
-	}
-	info := &model.ProcessInfo{PID: p.Pid}
-	if name, err := p.Name(); err == nil {
-		info.Name = name
-	}
-	if exe, err := p.Exe(); err == nil {
-		info.Exe = exe
-	}
-	if cmdline, err := p.CmdlineSlice(); err == nil {
-		info.Cmdline = cmdline
-		info.Command = commandFromCmdline(cmdline, info.Name)
-	} else if cmdline, err := p.Cmdline(); err == nil && cmdline != "" {
-		info.Command = cmdline
-	}
-	if cwd, err := p.Cwd(); err == nil {
-		info.CWD = cwd
-	}
-	if ppid, err := p.Ppid(); err == nil {
-		info.PPID = ppid
-	}
-	return info, nil
-}
-
-func infoFromProcess(p *process.Process) (*model.ProcessInfo, error) {
-	info := &model.ProcessInfo{PID: p.Pid}
-
-	if name, err := p.Name(); err == nil {
-		info.Name = name
-	}
-	if exe, err := p.Exe(); err == nil {
-		info.Exe = exe
-	}
-	if cmdline, err := p.CmdlineSlice(); err == nil {
-		info.Cmdline = cmdline
-		info.Command = commandFromCmdline(cmdline, info.Name)
-	} else if cmdline, err := p.Cmdline(); err == nil && cmdline != "" {
-		info.Command = cmdline
-	}
-	if cwd, err := p.Cwd(); err == nil {
-		info.CWD = cwd
-	}
-	if ppid, err := p.Ppid(); err == nil {
-		info.PPID = ppid
-	}
-	if ct, err := p.CreateTime(); err == nil {
-		info.StartTime = time.UnixMilli(ct)
-	}
-	if u, err := p.Username(); err == nil {
-		info.User = u
-	}
-	if term, err := p.Terminal(); err == nil {
-		info.Terminal = term
-	}
-	if mem, err := p.MemoryInfo(); err == nil {
-		info.MemoryBytes = mem.RSS
-	}
-	if status, err := p.Status(); err == nil {
-		for _, s := range status {
-			if strings.EqualFold(s, "z") || strings.EqualFold(s, "zombie") {
-				info.IsZombie = true
-				break
-			}
-		}
-	}
-	// CPU percentage is expensive (requires two samples) and best-effort only.
-	return info, nil
-}
-
-func (gopsutilProcessInspector) Exists(_ context.Context, pid int32) bool {
-	return isProcessAlive(pid)
-}
 
 func (syscallProcessController) Signal(_ context.Context, pid int32, sig Signal) error {
 	var s syscall.Signal
@@ -138,23 +38,6 @@ func (syscallProcessController) Signal(_ context.Context, pid int32, sig Signal)
 
 func (syscallProcessController) IsAlive(_ context.Context, pid int32) bool {
 	return isProcessAlive(pid)
-}
-
-// isProcessAlive reports whether a PID is still a live process. Zombie
-// processes (which linger after exiting until reaped) are considered dead.
-func isProcessAlive(pid int32) bool {
-	p, err := process.NewProcess(pid)
-	if err != nil {
-		return false
-	}
-	if status, err := p.Status(); err == nil {
-		for _, s := range status {
-			if strings.EqualFold(s, "z") || strings.EqualFold(s, "zombie") {
-				return false
-			}
-		}
-	}
-	return true
 }
 
 // commandFromCmdline renders a human-friendly command line: the executable path

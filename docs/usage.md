@@ -375,7 +375,8 @@ Status    seen
 ```
 
 **Use case — "what was running on 3000 last week?"** History records every
-inspection (PID, process, project, command) in a local SQLite database.
+inspection (PID, process, project, command) in a local owner-only (0600) JSONL
+log.
 
 **Use case — "track a service changing over time."** Spot that the launch
 command changed from `npm run dev` to `pnpm dev`.

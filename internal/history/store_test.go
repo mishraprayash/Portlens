@@ -2,6 +2,7 @@ package history
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -10,7 +11,7 @@ import (
 )
 
 func TestRecordAndQuery(t *testing.T) {
-	store, err := NewAt(filepath.Join(t.TempDir(), "history.db"))
+	store, err := NewAt(filepath.Join(t.TempDir(), "history.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +49,7 @@ func TestRecordAndQuery(t *testing.T) {
 }
 
 func TestQueryEmptyPort(t *testing.T) {
-	store, err := NewAt(filepath.Join(t.TempDir(), "history.db"))
+	store, err := NewAt(filepath.Join(t.TempDir(), "history.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +65,7 @@ func TestQueryEmptyPort(t *testing.T) {
 }
 
 func TestRecordMultipleOrdered(t *testing.T) {
-	store, err := NewAt(filepath.Join(t.TempDir(), "history.db"))
+	store, err := NewAt(filepath.Join(t.TempDir(), "history.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,5 +94,58 @@ func TestRecordMultipleOrdered(t *testing.T) {
 	// Most recent first.
 	if entries[0].PID != 102 || entries[2].PID != 100 {
 		t.Errorf("entries not ordered newest-first: %+v", entries)
+	}
+}
+
+func TestQuerySkipsTornLine(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.jsonl")
+	store, err := NewAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	if err := store.Record(ctx, model.HistoryEntry{Port: 3000, PID: 1, Status: "seen"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Record(ctx, model.HistoryEntry{Port: 3000, PID: 2, Status: "seen"}); err != nil {
+		t.Fatal(err)
+	}
+	// Append a torn record as the final line, as a crash mid-write would leave.
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString(`{"port": 3000, "pid": 99`); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+
+	entries, err := store.Query(ctx, 3000, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("got %d entries, want 2 (torn line skipped)", len(entries))
+	}
+	if entries[0].PID != 2 || entries[1].PID != 1 {
+		t.Errorf("entries not newest-first: %+v", entries)
+	}
+}
+
+func TestHistoryFilePerms(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.jsonl")
+	store, err := NewAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm&0o077 != 0 {
+		t.Errorf("history file perms = %o, want owner-only (0600)", perm)
 	}
 }

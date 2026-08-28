@@ -38,6 +38,27 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Changed
 
+- **Removed gopsutil and embedded SQLite.** Process metadata is now read
+  natively on both platforms — `sysctl` + the raw `__sysctl` syscall + libproc
+  (`proc_pidpath`/`proc_pidinfo`) on macOS, byte-oriented `/proc` on Linux —
+  with no external commands and no hidden `ps` spawns (previously gopsutil ran
+  `ps` twice per lookup on macOS). The binary shrank **9.3 MB → 5.9 MB** and
+  `go.mod` went from ~19 modules to 3 (`purego`, `x/sys`, `x/term`).
+- **History is now an owner-only (0600) JSONL log** with atomic `O_APPEND`
+  appends instead of an embedded SQLite database, cutting a large dependency
+  and its per-invocation open cost. The old `history.db` is left untouched;
+  delete it once you no longer need it.
+- **The macOS listing uses one lsof call** (`-FpctnT`, TCP LISTEN + UDP in a
+  single spawn, protocol recovered from the `TST=` field) instead of two,
+  halving the listing's external-process cost.
+- **`--restart` re-runs the raw argv directly** (`exec.Command(argv[0],
+  argv[1:]...)`) instead of `sh -c`, so a crafted argv cannot inject shell
+  syntax. It also picks the *nearest* shell ancestor (nested shells such as
+  Terminal → zsh → tool → zsh → target previously chose the wrong command) and
+  re-resolves the launch argv when the ancestor chain only carries identity.
+- `go test -race` is now run in CI on **Linux**; on macOS it remains blocked by
+  the documented Go-1.23/macOS `dyld: missing LC_UUID` toolchain issue (which
+  is why `CGO_ENABLED=0` is required), not by project code.
 - **Performance: lazy inspection depth.** `portlens <port>` now runs a fast
   path that resolves ownership, minimal process metadata, project, exposure,
   and container — but skips the process tree, network connections, and verbose

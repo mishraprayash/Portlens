@@ -1,18 +1,20 @@
-// Package history provides local, private port-observation history backed by an
-// embedded SQLite database. History is stored on the user's machine only and is
-// never transmitted anywhere.
+// Package history provides local, private port-observation history backed by a
+// per-line JSON log file. History is stored on the user's machine only and is
+// never transmitted anywhere. The log is append-only: each Record is one
+// atomic O_APPEND write, and Query scans the file defensively, skipping any
+// malformed line. If a crash tears a write mid-line (leaving no trailing
+// newline), the torn record and the record appended after it share one physical
+// line and both are skipped; this is accepted for best-effort local history.
 package history
 
 import (
+	"bufio"
+	"bytes"
 	"context"
-	"database/sql"
+	"encoding/json"
 	"os"
 	"path/filepath"
-	"strconv"
 	"sync"
-	"time"
-
-	_ "modernc.org/sqlite"
 
 	"github.com/portlens/portlens/internal/config"
 	"github.com/portlens/portlens/internal/model"
@@ -25,153 +27,112 @@ type Store interface {
 	Close() error
 }
 
-// SQLiteStore is the default Store implementation.
-type SQLiteStore struct {
+// JSONLStore appends JSON records to a private log file.
+type JSONLStore struct {
 	mu   sync.Mutex
-	db   *sql.DB
 	path string
+	f    *os.File
 }
 
-// New opens (or creates) the history database at the default location.
-func New() (*SQLiteStore, error) {
+// New opens (or creates) the history log at the default location.
+func New() (*JSONLStore, error) {
 	return NewAt(DefaultPath())
 }
 
-// NewAt opens (or creates) the history database at an explicit path. It is
-// useful for tests.
-func NewAt(path string) (*SQLiteStore, error) {
+// NewAt opens (or creates) the history log at an explicit path. The file is
+// created with owner-only permissions (0600) because it records which
+// processes and projects ran on this machine.
+func NewAt(path string) (*JSONLStore, error) {
 	if dir := filepath.Dir(path); dir != "" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return nil, err
 		}
 	}
-	db, err := sql.Open("sqlite", path)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return nil, err
 	}
-	// A single connection avoids SQLite locking contention from concurrent
-	// access to the same file.
-	db.SetMaxOpenConns(1)
-	s := &SQLiteStore{db: db, path: path}
-	if err := s.migrate(); err != nil {
-		_ = db.Close()
-		return nil, err
+	return &JSONLStore{path: path, f: f}, nil
+}
+
+// Record appends one observation as a JSON line. A single O_APPEND write keeps
+// concurrent PortLens processes from interleaving records.
+func (s *JSONLStore) Record(_ context.Context, entry model.HistoryEntry) error {
+	line, err := json.Marshal(entry)
+	if err != nil {
+		return err
 	}
-	return s, nil
-}
-
-func (s *SQLiteStore) migrate() error {
-	const schema = `
-CREATE TABLE IF NOT EXISTS port_history (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    port        INTEGER NOT NULL,
-    observed_at TEXT    NOT NULL,
-    pid         INTEGER,
-    process     TEXT,
-    project     TEXT,
-    command     TEXT,
-    address     TEXT,
-    status      TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_port_history_port
-    ON port_history (port, observed_at DESC);
-`
-	_, err := s.db.Exec(schema)
+	line = append(line, '\n')
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err = s.f.Write(line)
 	return err
 }
 
-func (s *SQLiteStore) Record(ctx context.Context, entry model.HistoryEntry) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	const q = `INSERT INTO port_history
-        (port, observed_at, pid, process, project, command, address, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-	_, err := s.db.ExecContext(ctx, q,
-		entry.Port,
-		entry.ObservedAt.Format(time.RFC3339Nano),
-		nullableInt64(entry.PID),
-		nullableString(entry.Process),
-		nullableString(entry.Project),
-		nullableString(entry.Command),
-		nullableString(entry.Address),
-		entry.Status,
-	)
-	return err
-}
-
-func (s *SQLiteStore) Query(ctx context.Context, port int32, limit int) ([]model.HistoryEntry, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// Query returns up to limit most recent observations for a port, newest first.
+// Malformed lines (e.g. a record torn by a crash) are skipped rather than
+// failing the whole read.
+func (s *JSONLStore) Query(_ context.Context, port int32, limit int) ([]model.HistoryEntry, error) {
 	if limit <= 0 {
 		limit = 20
 	}
-	const q = `SELECT port, observed_at, pid, process, project, command, address, status
-        FROM port_history WHERE port = ? ORDER BY observed_at DESC LIMIT ?`
-	rows, err := s.db.QueryContext(ctx, q, port, limit)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.f.Sync(); err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(s.path)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
+	sc := bufio.NewScanner(bytes.NewReader(data))
+	sc.Buffer(make([]byte, 64*1024), 1024*1024)
 	var out []model.HistoryEntry
-	for rows.Next() {
-		var e model.HistoryEntry
-		var observed string
-		var pid, project, process, command, address sql.NullString
-		var status string
-		if err := rows.Scan(&e.Port, &observed, &pid, &process, &project, &command, &address, &status); err != nil {
-			return nil, err
+	for sc.Scan() {
+		line := sc.Bytes()
+		if len(line) == 0 {
+			continue
 		}
-		e.ObservedAt, _ = time.Parse(time.RFC3339Nano, observed)
-		e.PID = parseInt(pid)
-		e.Process = process.String
-		e.Project = project.String
-		e.Command = command.String
-		e.Address = address.String
-		e.Status = status
-		out = append(out, e)
+		var e model.HistoryEntry
+		if err := json.Unmarshal(line, &e); err != nil {
+			continue // torn or corrupt record; skip
+		}
+		if e.Port == port {
+			out = append(out, e)
+		}
 	}
-	return out, rows.Err()
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
+
+	// The file is chronological (oldest first); return the most recent `limit`.
+	if len(out) > limit {
+		out = out[len(out)-limit:]
+	}
+	reverse(out)
+	return out, nil
 }
 
-func (s *SQLiteStore) Close() error {
+func (s *JSONLStore) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.db.Close()
+	return s.f.Close()
 }
 
-// DefaultPath returns the location of the history database for the current OS.
+func reverse(s []model.HistoryEntry) {
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		s[i], s[j] = s[j], s[i]
+	}
+}
+
+// DefaultPath returns the location of the history log for the current OS.
 func DefaultPath() string {
-	return filepath.Join(DataDir(), "history.db")
+	return filepath.Join(DataDir(), "history.jsonl")
 }
 
 // DataDir returns the platform-appropriate data directory for PortLens. It is
 // a thin wrapper around config.Dir so every component agrees on one location.
 func DataDir() string {
 	return config.Dir()
-}
-
-func nullableInt64(v int32) any {
-	if v == 0 {
-		return nil
-	}
-	return int64(v)
-}
-
-func nullableString(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
-}
-
-func parseInt(s sql.NullString) int32 {
-	if !s.Valid {
-		return 0
-	}
-	n, err := strconv.ParseInt(s.String, 10, 32)
-	if err != nil {
-		return 0
-	}
-	return int32(n)
 }

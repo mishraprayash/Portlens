@@ -70,9 +70,10 @@ func runPorts(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, op
 // resolves ownership and the essentials the compact summary shows; the deep
 // path additionally computes the process tree, network connections, and
 // verbose facts. Interactive mode starts fast and re-inspects on demand for
-// the tree/connections keys.
+// the tree/connections keys. --restart needs the ancestor chain to find the
+// shell launch command, so it forces full depth.
 func inspectDepth(opts *options) inspector.Depth {
-	if opts.verbose || opts.tree || opts.connections || opts.jsonOut {
+	if opts.verbose || opts.tree || opts.connections || opts.restart || opts.jsonOut {
 		return inspector.DepthFull
 	}
 	return inspector.DepthFast

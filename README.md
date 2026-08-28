@@ -253,8 +253,8 @@ PortLens is **local-first** by design:
 - **No privilege escalation.** If a process requires elevated privileges to
   inspect or signal, PortLens reports the permission problem rather than trying
   to escalate.
-- **Local history only.** History is stored in a local SQLite database under
-  your OS data directory and is never transmitted.
+- **Local history only.** History is stored in a local, owner-only (0600)
+  JSONL log file under your OS data directory and is never transmitted.
 
 ## 7. Architecture overview
 
@@ -267,11 +267,12 @@ internal/model/      Shared, OS-independent data types
 internal/platform/   The abstraction layer (interfaces + factories)
   interfaces:        PortResolver, ProcessInspector, NetworkInspector,
                      ProcessTreeProvider, ClipboardProvider, ProcessController
-  darwin_*.go        macOS implementations (lsof, pbcopy, syscall)
+  darwin_*.go        macOS implementations (sysctl + libproc, lsof fallback,
+                     pbcopy, syscall)
   linux_*.go         Linux implementations (/proc, xclip/wl-copy, syscall)
 internal/inspector/  Orchestrates providers into a Report (+ risk assessment)
 internal/detect/     Project / runtime / framework detection (filesystem + argv)
-internal/history/    Local SQLite history store
+internal/history/    Local owner-only JSONL history log
 internal/actions/    Kill / restart / open / copy (with confirmation)
 internal/render/     Terminal UI, tables, tree, JSON output
 tests/               Integration tests using controlled processes

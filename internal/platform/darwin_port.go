@@ -55,24 +55,26 @@ func (r darwinPortResolver) ResolvePort(ctx context.Context, port uint16, protoc
 }
 
 func (r darwinPortResolver) Listeners(ctx context.Context) ([]model.Listener, error) {
-	data, err := runLsof(ctx, "-nP", "-iTCP", "-sTCP:LISTEN", "-Fpctn")
+	// One lsof invocation for both families: TCP sockets in LISTEN state and
+	// all bound UDP sockets. The -T field emits TST= for TCP sockets and
+	// nothing for UDP, which lets us label the protocol; connected UDP sockets
+	// (local->remote) are dropped by parseSockName. A single spawn halves the
+	// cost of the listing.
+	data, err := runLsof(ctx, "-nP", "-iTCP", "-sTCP:LISTEN", "-iUDP", "-FpctnT")
 	if err != nil {
 		return nil, err
 	}
 	var out []model.Listener
 	for _, rec := range parseLsofFields(data) {
-		if addr, port, ok := parseSockName(rec.name); ok {
-			out = append(out, listenerFromRecord(rec, addr, port, model.ProtocolTCP))
+		addr, port, ok := parseSockName(rec.name)
+		if !ok {
+			continue
 		}
-	}
-	udp, err := runLsof(ctx, "-nP", "-iUDP", "-Fpctn")
-	if err != nil {
-		return nil, err
-	}
-	for _, rec := range parseLsofFields(udp) {
-		if addr, port, ok := parseSockName(rec.name); ok {
-			out = append(out, listenerFromRecord(rec, addr, port, model.ProtocolUDP))
+		proto := model.ProtocolUDP
+		if rec.state != "" { // TCP LISTEN sockets carry a TST= state field
+			proto = model.ProtocolTCP
 		}
+		out = append(out, listenerFromRecord(rec, addr, port, proto))
 	}
 	return out, nil
 }

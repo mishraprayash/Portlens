@@ -10,7 +10,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/portlens/portlens/internal/inspector"
 	"github.com/portlens/portlens/internal/model"
 	"github.com/portlens/portlens/internal/platform"
 )
@@ -140,19 +139,6 @@ func (m *Manager) Kill(ctx context.Context, report *model.Report, force bool) er
 		time.Sleep(150 * time.Millisecond)
 	}
 	return &ErrStillRunning{PID: report.Process.PID}
-}
-
-// RestartCommand determines the command that can be used to restart the process
-// tree, if one can be confidently inferred.
-func RestartCommand(report *model.Report) (string, error) {
-	if report == nil || report.Process == nil {
-		return "", ErrRestartUnavailable
-	}
-	cmd := inspector.LaunchCommand(report)
-	if cmd == "" {
-		return "", ErrRestartUnavailable
-	}
-	return cmd, nil
 }
 
 // lookupContainer resolves the container owning a report's port, preferring the

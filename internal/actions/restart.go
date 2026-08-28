@@ -8,27 +8,42 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/portlens/portlens/internal/inspector"
 	"github.com/portlens/portlens/internal/model"
 )
 
 // Restart relaunches the owning process (or restarts the owning container). For
-// containers it issues a runtime restart; otherwise it runs the detected launch
-// command again in the process's working directory. It only runs when the
-// target can be confidently identified.
+// containers it issues a runtime restart; otherwise it re-runs the raw argv of
+// the shell-launched process directly (never through a shell, so a crafted
+// argv cannot inject shell syntax) in the process's working directory. It only
+// runs when the target can be confidently identified.
 func (m *Manager) Restart(ctx context.Context, report *model.Report) error {
 	if c := m.lookupContainer(ctx, report); c != nil {
 		return m.restartContainer(ctx, c)
 	}
-	cmd, err := RestartCommand(report)
-	if err != nil {
-		return err
+	proc := inspector.LaunchProcess(report)
+	if proc == nil {
+		return ErrRestartUnavailable
+	}
+	// The ancestor chain carries only identity (name/pid/ppid); fetch the full
+	// argv when the recorded Cmdline is empty so restart still works with the
+	// native process-table provider.
+	argv := proc.Cmdline
+	if len(argv) == 0 {
+		if full, err := m.Platform.Processes.Info(ctx, proc.PID); err == nil && len(full.Cmdline) > 0 {
+			proc = full
+			argv = full.Cmdline
+		}
+	}
+	if len(argv) == 0 {
+		return ErrRestartUnavailable
 	}
 	cwd := ""
 	if report.Process != nil {
 		cwd = report.Process.CWD
 	}
 
-	fmt.Fprintf(m.Out, "Detected command:\n  %s\n\nRestart command:\n  %s\n", cmd, cmd)
+	fmt.Fprintf(m.Out, "Detected command:\n  %s\n\nRestart command:\n  %s\n", proc.Command, proc.Command)
 
 	if m.Confirm != nil {
 		ok, err := m.Confirm("Restart the process? [y/N] ")
@@ -40,7 +55,7 @@ func (m *Manager) Restart(ctx context.Context, report *model.Report) error {
 		}
 	}
 
-	run := exec.CommandContext(ctx, "sh", "-c", cmd)
+	run := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	if cwd != "" {
 		run.Dir = cwd
 	}
