@@ -5,8 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
+	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/portlens/portlens/internal/actions"
@@ -105,6 +109,9 @@ func scanHeader(ports []int32) string {
 // show a live count, ETA, and found-so-far without duplicating the loop. It
 // returns the in-use reports and the most severe exit code seen.
 func scanPorts(ctx context.Context, stderr io.Writer, insp *inspector.Inspector, proto model.Protocol, ports []int32, noRecord bool, progress func(done, total, found int, elapsed time.Duration)) ([]*model.Report, int) {
+	if len(ports) == 0 {
+		return nil, exitcode.Success
+	}
 	found := make([]*model.Report, 0, len(ports))
 	worst := exitcode.Success
 	start := time.Now()
@@ -125,15 +132,15 @@ func scanPorts(ctx context.Context, stderr io.Writer, insp *inspector.Inspector,
 		}
 	}
 
-	for i, p := range ports {
-		// Fast skip for idle ports when the active port set is known.
+	// Single port fast path: avoid goroutine synchronization overhead.
+	if len(ports) == 1 {
+		p := ports[0]
 		if activePorts != nil && !activePorts[uint16(p)] {
 			if progress != nil {
-				progress(i+1, len(ports), len(found), time.Since(start))
+				progress(1, 1, 0, time.Since(start))
 			}
-			continue
+			return nil, exitcode.Success
 		}
-
 		report, err := insp.InspectDepth(ctx, p, proto, inspector.DepthFast)
 		switch {
 		case err == nil:
@@ -144,15 +151,114 @@ func scanPorts(ctx context.Context, stderr io.Writer, insp *inspector.Inspector,
 				found = append(found, report)
 			}
 		case errors.Is(err, inspector.ErrPortNotFound):
-			// Idle ports are expected in a scan, not an error.
 		default:
 			fmt.Fprintf(stderr, "portlens: %v\n", err)
 			worst = maxExit(worst, mapError(err))
 		}
 		if progress != nil {
-			progress(i+1, len(ports), len(found), time.Since(start))
+			progress(1, 1, len(found), time.Since(start))
+		}
+		return found, worst
+	}
+
+	type scanResult struct {
+		report *model.Report
+		err    error
+	}
+
+	type portJob struct {
+		index int
+		port  int32
+	}
+
+	results := make([]scanResult, len(ports))
+	var toInspect []portJob
+	var idleCount int
+
+	for i, p := range ports {
+		if activePorts != nil && !activePorts[uint16(p)] {
+			idleCount++
+		} else {
+			toInspect = append(toInspect, portJob{index: i, port: p})
 		}
 	}
+
+	var doneCount atomic.Int64
+	var foundCount atomic.Int64
+	var progressMu sync.Mutex
+
+	reportProgress := func() {
+		if progress == nil {
+			return
+		}
+		progressMu.Lock()
+		defer progressMu.Unlock()
+		progress(int(doneCount.Load()), len(ports), int(foundCount.Load()), time.Since(start))
+	}
+
+	if idleCount > 0 {
+		doneCount.Add(int64(idleCount))
+		reportProgress()
+	}
+
+	if len(toInspect) > 0 {
+		workers := runtime.NumCPU() * 2
+		if workers > 16 {
+			workers = 16
+		}
+		if workers > len(toInspect) {
+			workers = len(toInspect)
+		}
+		if workers < 1 {
+			workers = 1
+		}
+		slog.DebugContext(ctx, "starting concurrent scan", "total_ports", len(ports), "to_inspect", len(toInspect), "workers", workers)
+
+		jobs := make(chan portJob, len(toInspect))
+		for _, job := range toInspect {
+			jobs <- job
+		}
+		close(jobs)
+
+		var wg sync.WaitGroup
+		for w := 0; w < workers; w++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for job := range jobs {
+					if ctx.Err() != nil {
+						return
+					}
+					report, err := insp.InspectDepth(ctx, job.port, proto, inspector.DepthFast)
+					if err == nil && !noRecord {
+						recordHistory(report)
+					}
+					results[job.index] = scanResult{report: report, err: err}
+					doneCount.Add(1)
+					if report != nil && report.Status == "listening" {
+						foundCount.Add(1)
+					}
+					reportProgress()
+				}
+			}()
+		}
+		wg.Wait()
+	}
+
+	for _, res := range results {
+		switch {
+		case res.report != nil:
+			if res.report.Status == "listening" {
+				found = append(found, res.report)
+			}
+		case res.err == nil || errors.Is(res.err, inspector.ErrPortNotFound):
+			// Idle or skipped port
+		default:
+			fmt.Fprintf(stderr, "portlens: %v\n", res.err)
+			worst = maxExit(worst, mapError(res.err))
+		}
+	}
+
 	return found, worst
 }
 

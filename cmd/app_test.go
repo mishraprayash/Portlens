@@ -187,3 +187,45 @@ func TestWriteScanProgress(t *testing.T) {
 		t.Errorf("non-interactive progress line = %q", b.String())
 	}
 }
+
+func TestRunScanMultipleActivePortsParallel(t *testing.T) {
+	ln1, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skipf("cannot bind listener: %v", err)
+	}
+	defer ln1.Close()
+	p1 := int32(ln1.Addr().(*net.TCPAddr).Port)
+
+	ln2, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skipf("cannot bind listener: %v", err)
+	}
+	defer ln2.Close()
+	p2 := int32(ln2.Addr().(*net.TCPAddr).Port)
+
+	idle1 := int32(64001)
+	idle2 := int32(64002)
+
+	var out, errBuf bytes.Buffer
+	opts := &options{
+		ports:    []int32{p1, idle1, p2, idle2},
+		protocol: "tcp",
+		noRecord: true,
+		sortBy:   "port",
+	}
+	code := runScan(context.Background(), &out, &errBuf, opts)
+	if code != exitcode.Success {
+		t.Fatalf("runScan returned %d, want 0 (stderr: %s)", code, errBuf.String())
+	}
+
+	got := out.String()
+	if !strings.Contains(got, fmt.Sprintf("%d", p1)) {
+		t.Errorf("missing port %d in output: %s", p1, got)
+	}
+	if !strings.Contains(got, fmt.Sprintf("%d", p2)) {
+		t.Errorf("missing port %d in output: %s", p2, got)
+	}
+	if !strings.Contains(got, "Found 2 of 4 ports in use") {
+		t.Errorf("expected 2 of 4 ports in use, got: %s", got)
+	}
+}
