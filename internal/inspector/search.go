@@ -112,9 +112,11 @@ func (i *Inspector) buildEntries(
 			Address:  l.Address,
 			Status:   l.State,
 			PID:      l.PID,
+			Service:  detect.LookupService(uint16(l.Port)),
 		}
 		if p != nil {
 			entry.Process = p.Name
+			entry.Origin = detect.ProcessOrigin(p)
 			if proj := i.Projects.Detect(ctx, p.CWD); proj != nil {
 				entry.Project = proj.Name
 			}

@@ -10,11 +10,13 @@ import (
 
 func TestSummaryListening(t *testing.T) {
 	report := &model.Report{
-		Port:     3000,
+		Port:     5432,
 		Protocol: model.ProtocolTCP,
 		Status:   "listening",
 		Address:  "127.0.0.1",
-		Process:  &model.ProcessInfo{PID: 48231, Name: "node", Command: "pnpm dev"},
+		Service:  "PostgreSQL",
+		Process:  &model.ProcessInfo{PID: 48231, Name: "postgres", Command: "postgres"},
+		Origin:   model.OriginSystem,
 		Project:  &model.ProjectInfo{Name: "orbit-backend", Runtime: "node", Detected: true},
 		Exposure: &model.Exposure{Worst: model.RiskLow},
 	}
@@ -23,7 +25,7 @@ func TestSummaryListening(t *testing.T) {
 	r.Summary(report)
 
 	out := buf.String()
-	for _, want := range []string{"PORT 3000", "LISTENING", "127.0.0.1", "node (pid 48231)", "pnpm dev", "orbit-backend", "LOW RISK"} {
+	for _, want := range []string{"PORT 5432", "LISTENING", "127.0.0.1", "Service", "PostgreSQL", "postgres (pid 48231)", "postgres", "Origin", "system", "orbit-backend", "LOW RISK"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("Summary output missing %q:\n%s", want, out)
 		}
@@ -49,19 +51,70 @@ func TestSummaryNotListening(t *testing.T) {
 
 func TestReportVerbose(t *testing.T) {
 	report := &model.Report{
-		Port:     3000,
+		Port:     5432,
 		Protocol: model.ProtocolTCP,
 		Status:   "listening",
 		Address:  "127.0.0.1",
-		Process:  &model.ProcessInfo{PID: 1, Name: "node"},
+		Service:  "PostgreSQL",
+		Process:  &model.ProcessInfo{PID: 1, Name: "postgres"},
+		Origin:   model.OriginSystem,
 	}
 	var buf bytes.Buffer
 	r := New(&buf, false)
 	r.Report(report)
 
 	out := buf.String()
-	if !strings.Contains(out, "ACTIONS") {
-		t.Errorf("verbose Report should include sections:\n%s", out)
+	for _, want := range []string{"ACTIONS", "Service", "PostgreSQL", "Origin", "system"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("verbose Report should include %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestListShowsServiceProtocolOrigin(t *testing.T) {
+	entries := []model.PortEntry{
+		{Port: 88, Process: "kdc", Protocol: model.ProtocolTCP, Address: "0.0.0.0", Status: "LISTEN",
+			Service: "Kerberos", Origin: model.OriginSystem},
+		{Port: 88, Process: "kdc", Protocol: model.ProtocolUDP, Address: "0.0.0.0", Status: "BOUND",
+			Service: "Kerberos", Origin: model.OriginSystem},
+		{Port: 5432, Process: "postgres", Protocol: model.ProtocolTCP, Address: "127.0.0.1", Status: "LISTEN",
+			Service: "PostgreSQL", Origin: model.OriginUser, Project: "brew", Runtime: "postgres"},
+	}
+	var buf bytes.Buffer
+	r := New(&buf, false)
+	r.List(entries, ListOptions{})
+
+	out := buf.String()
+	for _, want := range []string{"SERVICE", "PROTOCOL", "ORIGIN", "Kerberos", "PostgreSQL", "tcp", "udp", "system", "user"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("List output missing %q:\n%s", want, out)
+		}
+	}
+	if !strings.Contains(out, "88") {
+		t.Errorf("both protocol rows should be present:\n%s", out)
+	}
+}
+
+func TestListFilterMatchesServiceAndOrigin(t *testing.T) {
+	entries := []model.PortEntry{
+		{Port: 6379, Process: "redis-server", Protocol: model.ProtocolTCP, Address: "127.0.0.1", Status: "LISTEN",
+			Service: "Redis", Origin: model.OriginUser},
+		{Port: 88, Process: "kdc", Protocol: model.ProtocolTCP, Address: "0.0.0.0", Status: "LISTEN",
+			Service: "Kerberos", Origin: model.OriginSystem},
+	}
+	var buf bytes.Buffer
+	r := New(&buf, false)
+	r.List(entries, ListOptions{Filter: "system"})
+
+	out := buf.String()
+	if !strings.Contains(out, "88") || strings.Contains(out, "6379") {
+		t.Errorf("filter by origin should keep only the system row:\n%s", out)
+	}
+
+	buf.Reset()
+	r.List(entries, ListOptions{Filter: "kerberos"})
+	if !strings.Contains(buf.String(), "88") || strings.Contains(buf.String(), "6379") {
+		t.Errorf("filter by service should keep only the matching row:\n%s", buf.String())
 	}
 }
 

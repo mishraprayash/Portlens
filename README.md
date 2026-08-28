@@ -130,15 +130,22 @@ ACTIONS
 [q] Quit
 ```
 
-With no port, PortLens lists the interesting listening ports:
+With no port, PortLens lists the interesting listening ports, identifying the
+well-known **service** per port and whether each process is a **system**
+(OS-bundled) or **user** (installed) component:
 
 ```bash
 $ portlens
-PORT   PROCESS       CONTAINER   PROJECT          RUNTIME     ADDRESS          STATUS
-3000   node          -           orbit-backend    Node.js     127.0.0.1        LISTEN
-5432   postgres      -           brew             PostgreSQL  127.0.0.1        LISTEN
-6379   docker-proxy  redis-1      -                -           127.0.0.1        LISTEN
+PORT   PROCESS               SERVICE        PROJECT  RUNTIME     PROTOCOL  ADDRESS         STATUS  ORIGIN
+88     kdc                   Kerberos       -        -           tcp       0.0.0.0:88      LISTEN  system
+5353   mDNSResponder         mDNS (DNS-SD)  -        -           udp       0.0.0.0:5353     BOUND   system
+5432   postgres              PostgreSQL     brew     PostgreSQL  tcp       [::]:5432        LISTEN  user
+6379   redis-server          Redis          brew     Redis       tcp       127.0.0.1:6379   LISTEN  user
 ```
+
+A `CONTAINER` column appears when a port is owned by a container (see
+[Docker & container awareness](#42-docker--container-awareness)); `--filter`
+also matches the service and origin columns.
 
 ## 4. Command reference
 

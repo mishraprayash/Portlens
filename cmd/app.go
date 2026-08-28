@@ -202,6 +202,8 @@ func reportsToEntries(reports []*model.Report) []model.PortEntry {
 			Protocol:  r.Protocol,
 			Address:   r.Address,
 			Status:    r.Status,
+			Service:   r.Service,
+			Origin:    r.Origin,
 			Container: r.Container,
 		}
 		if r.Process != nil {

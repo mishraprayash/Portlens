@@ -26,6 +26,9 @@ func (r *Renderer) Report(report *model.Report) {
 		{"Protocol", strings.ToUpper(string(report.Protocol.Normalize()))},
 		{"Address", formatAddr(report.Address, uint16(report.Port))},
 	}
+	if report.Service != "" {
+		rows = append(rows, [2]string{"Service", report.Service})
+	}
 	r.writeln(r.kv(rows))
 
 	if report.Process != nil {
@@ -67,6 +70,9 @@ func (r *Renderer) renderProcess(report *model.Report) {
 			{"PID", fmt.Sprintf("%d", p.PID)},
 			{"Name", p.Name},
 			{"Command", p.Command},
+		}
+		if report.Origin != "" {
+			rows = append(rows, [2]string{"Origin", string(report.Origin)})
 		}
 		if !p.StartTime.IsZero() {
 			rows = append(rows, [2]string{"Started", p.StartTime.Format("15:04:05")},

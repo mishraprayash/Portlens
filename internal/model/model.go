@@ -152,6 +152,17 @@ type Exposure struct {
 	Worst           RiskLevel `json:"worst_level"`
 }
 
+// Origin classifies whether the owning process is bundled with the operating
+// system ("system") or was installed/launched by the user ("third-party"). It
+// is a heuristic, so the empty value (unknown) is also valid.
+type Origin string
+
+const (
+	OriginSystem  Origin = "system" // part of the operating system (e.g. macOS/Apple)
+	OriginUser    Origin = "user"   // installed or launched by the user (third-party)
+	OriginUnknown Origin = "unknown"
+)
+
 // Report is the full inspection result for a single port. It is the source of
 // truth for both the human-facing terminal UI and the machine-readable JSON.
 type Report struct {
@@ -159,7 +170,9 @@ type Report struct {
 	Protocol  Protocol       `json:"protocol"`
 	Status    string         `json:"status"` // listening, not_listening, unknown
 	Address   string         `json:"address"`
+	Service   string         `json:"service,omitempty"` // well-known service name for the port
 	Process   *ProcessInfo   `json:"process,omitempty"`
+	Origin    Origin         `json:"origin,omitempty"` // system | user (heuristic)
 	Container *Container     `json:"container,omitempty"`
 	Ancestors []*ProcessInfo `json:"ancestors,omitempty"`
 	Children  []*ProcessInfo `json:"children,omitempty"`
@@ -192,11 +205,13 @@ type PortEntry struct {
 	Protocol  Protocol   `json:"protocol"`
 	Process   string     `json:"process,omitempty"`
 	PID       int32      `json:"pid,omitempty"`
+	Service   string     `json:"service,omitempty"` // well-known service name for the port
 	Container *Container `json:"container,omitempty"`
 	Project   string     `json:"project,omitempty"`
 	Runtime   string     `json:"runtime,omitempty"`
 	Address   string     `json:"address"`
 	Status    string     `json:"status"`
+	Origin    Origin     `json:"origin,omitempty"` // system | user (heuristic)
 }
 
 // HistoryEntry is a single observation of a port over time.

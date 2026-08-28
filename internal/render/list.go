@@ -26,8 +26,8 @@ func (r *Renderer) List(entries []model.PortEntry, opts ListOptions) {
 	if opts.Filter != "" {
 		f := strings.ToLower(opts.Filter)
 		entries = filterEntries(entries, func(e model.PortEntry) bool {
-			hay := strings.ToLower(fmt.Sprintf("%d %s %s %s %s %s %s",
-				e.Port, e.Process, e.Project, e.Runtime, e.Address, e.Status, containerFilterText(e.Container)))
+			hay := strings.ToLower(fmt.Sprintf("%d %s %s %s %s %s %s %s %s",
+				e.Port, e.Process, e.Project, e.Runtime, e.Address, e.Status, e.Service, e.Origin, containerFilterText(e.Container)))
 			return strings.Contains(hay, f)
 		})
 	}
@@ -47,9 +47,9 @@ func (r *Renderer) List(entries []model.PortEntry, opts ListOptions) {
 		}
 	}
 
-	headers := []string{"PORT", "PROCESS", "PROJECT", "RUNTIME", "ADDRESS", "STATUS"}
+	headers := []string{"PORT", "PROCESS", "SERVICE", "PROJECT", "RUNTIME", "PROTOCOL", "ADDRESS", "STATUS", "ORIGIN"}
 	if hasContainer {
-		headers = []string{"PORT", "PROCESS", "CONTAINER", "PROJECT", "RUNTIME", "ADDRESS", "STATUS"}
+		headers = []string{"PORT", "PROCESS", "CONTAINER", "SERVICE", "PROJECT", "RUNTIME", "PROTOCOL", "ADDRESS", "STATUS", "ORIGIN"}
 	}
 	cols := [][]string{}
 	for _, e := range entries {
@@ -68,6 +68,14 @@ func (r *Renderer) List(entries []model.PortEntry, opts ListOptions) {
 		if proj == "" {
 			proj = "-"
 		}
+		svc := e.Service
+		if svc == "" {
+			svc = "-"
+		}
+		origin := string(e.Origin)
+		if origin == "" {
+			origin = "-"
+		}
 		row := []string{
 			fmt.Sprintf("%d", e.Port),
 			proc,
@@ -75,7 +83,7 @@ func (r *Renderer) List(entries []model.PortEntry, opts ListOptions) {
 		if hasContainer {
 			row = append(row, listContainerCell(e.Container))
 		}
-		row = append(row, proj, rt, formatAddr(e.Address, uint16(e.Port)), e.Status)
+		row = append(row, svc, proj, rt, string(e.Protocol.Normalize()), formatAddr(e.Address, uint16(e.Port)), e.Status, origin)
 		cols = append(cols, row)
 	}
 	r.writeln(r.table(headers, cols))

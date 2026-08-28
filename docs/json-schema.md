@@ -11,7 +11,9 @@ deterministic and designed for shell scripts and AI agents.
   "protocol": "tcp",       // "tcp" | "udp"
   "status": "listening",   // "listening" | "not_listening"
   "address": "127.0.0.1",  // bind address of the primary listener
+  "service": "PostgreSQL", // omitempty — well-known service name for the port
   "process": { ... },      // omitempty — owning process
+  "origin": "user",        // omitempty — "system" | "user" (heuristic)
   "container": { ... },    // omitempty — owning container (docker), if any
   "ancestors": [ ... ],    // omitempty — chain, oldest first
   "children": [ ... ],     // omitempty — direct children
@@ -117,10 +119,34 @@ daemon is unreachable. All fields are facts reported by the container runtime
 `level` and `worst_level` use the strings `"LOW RISK"`, `"WARNING"`, and
 `"POTENTIALLY DANGEROUS"`.
 
+## Listing entries (`portlens --json` with no port)
+
+`portlens --json` (no port) emits an array of rows:
+
+```jsonc
+{
+  "port": 5432,
+  "protocol": "tcp",
+  "process": "postgres",     // omitempty
+  "pid": 946,                // omitempty
+  "service": "PostgreSQL",   // omitempty — well-known service name
+  "project": "brew",         // omitempty
+  "runtime": "postgres",     // omitempty
+  "address": "[::]",
+  "status": "LISTEN",
+  "origin": "user",          // omitempty — "system" | "user" (heuristic)
+  "container": { ... }       // omitempty
+}
+```
+
 ## Stability notes
 
 - Field names and types are stable within a major version.
 - Omitted (`omitempty`) fields are absent, not `null`.
 - Timestamps are RFC 3339 (with sub-second precision when available).
 - `is_target` marks the process that owns the inspected port.
+- `service` is a curated well-known-port lookup (a fact about the port, not a
+  claim about the process).
+- `origin` is a heuristic inference (executable path + process name); treat it
+  as a hint, not a guarantee.
 - `inferences` are explicitly not guaranteed — treat them as hints.

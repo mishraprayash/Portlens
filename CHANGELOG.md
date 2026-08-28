@@ -8,6 +8,17 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Added
 
+- The port listing, compact summary, verbose report, and JSON now identify the
+  **service** behind each port from a curated well-known-port registry (e.g.
+  `5432 → PostgreSQL`, `5353 → mDNS`), plus a `SERVICE` column in the listing.
+- The listing, summary, verbose report, and JSON now classify each owning
+  process as `system` (bundled with the OS, e.g. `kdc`, `mDNSResponder`) or
+  `user` (Homebrew, `/Applications`, toolchains) via an `ORIGIN` column /
+  `Origin` field. The classification is a heuristic based on the executable
+  path and process name; unknown stays blank.
+- The listing now has a `PROTOCOL` column (tcp/udp), so a port listening on
+  both TCP and UDP (e.g. `88` Kerberos) shows as two clearly-labeled rows
+  instead of two look-alike ones. `--filter` matches service and origin too.
 - Docker/container awareness: reports and listings show the container that
   owns or publishes a port (name, image, compose project/service), and
   `--kill`/`--restart` target the container instead of its host-side process

@@ -12,6 +12,10 @@ Things observed directly from the OS:
 - The working directory.
 - Listening sockets and their bind addresses.
 - Active network connections and their states.
+- **Service** — the well-known name registered for the port (a conservative,
+  curated registry: IANA-registered services and widely deployed
+  infrastructure, e.g. `5432 → PostgreSQL`, `5353 → mDNS (DNS-SD)`). This
+  names what the port *is for*; it never claims what a process is doing.
 
 These populate the `facts` array and the concrete report fields.
 
@@ -28,6 +32,13 @@ Things PortLens guessed, always labeled "best-effort, not guaranteed":
   containing a recognized marker (`.git`, `package.json`, `go.mod`,
   `pyproject.toml`, `Cargo.toml`, ...).
 - **Git repo/branch** — read from `.git` metadata.
+- **Origin** — whether the owning process is a **system** component (bundled
+  with the OS, e.g. `kdc`, `mDNSResponder`, `rapportd`) or **user**-installed
+  (Homebrew services, `/Applications`, language toolchains). Decided from the
+  executable path when available, falling back to well-known system/third-party
+  daemon names when the path can't be resolved (e.g. a process owned by another
+  user). Shown as `system` / `user` in the listing, summary, and JSON; `-`
+  when unknown.
 - **Interpretation** — a one-line human summary ("NestJS process (Node.js)").
 
 These populate the `inferences` array.

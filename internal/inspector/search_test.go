@@ -88,3 +88,31 @@ func TestBuildEntries(t *testing.T) {
 		t.Errorf("keep filter: got %+v, want two port 3000 entries (tcp+udp)", kept)
 	}
 }
+
+func TestBuildEntriesServiceAndOrigin(t *testing.T) {
+	insp := &Inspector{Projects: detect.NewProjectDetector()}
+	listeners := []model.Listener{
+		{Protocol: model.ProtocolTCP, Address: "127.0.0.1", Port: 5432, State: "LISTEN", PID: 21, Process: "postgres"},
+		{Protocol: model.ProtocolTCP, Address: "0.0.0.0", Port: 88, State: "LISTEN", PID: 22, Process: "kdc"},
+		{Protocol: model.ProtocolUDP, Address: "0.0.0.0", Port: 88, State: "BOUND", PID: 22, Process: "kdc"},
+	}
+	infos := map[int32]*model.ProcessInfo{
+		21: {PID: 21, Name: "postgres", Exe: "/opt/homebrew/opt/postgresql@16/bin/postgres"},
+		22: {PID: 22, Name: "kdc", Exe: "/System/Library/PrivateFrameworks/Heimdal.framework/Helpers/kdc"},
+	}
+
+	entries := insp.buildEntries(context.Background(), listeners, infos, nil)
+	if len(entries) != 3 {
+		t.Fatalf("expected 3 entries, got %d: %+v", len(entries), entries)
+	}
+	byPort := map[int32]model.PortEntry{}
+	for _, e := range entries {
+		byPort[e.Port] = e
+	}
+	if got := byPort[5432]; got.Service != "PostgreSQL" || got.Origin != model.OriginUser {
+		t.Errorf("postgres entry = %+v, want Service=PostgreSQL Origin=user", got)
+	}
+	if got := byPort[88]; got.Service != "Kerberos" || got.Origin != model.OriginSystem {
+		t.Errorf("kdc entry = %+v, want Service=Kerberos Origin=system", got)
+	}
+}

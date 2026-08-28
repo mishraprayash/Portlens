@@ -13,14 +13,16 @@ shows a **compact summary** of the important facts; add `--verbose` (or `-v`)
 for the full detailed report.
 
 ```bash
-$ portlens 3000
-PORT 3000
+$ portlens 5432
+PORT 5432
 Status     LISTENING
-Address    127.0.0.1:3000
-Process    node (pid 48231)
-Command    pnpm dev
-Project    orbit-backend (Node.js)
-Exposure   LOW RISK
+Address    [::]:5432
+Service    PostgreSQL
+Process    postgres (pid 946)
+Command    postgres -D /opt/homebrew/var/postgresql@14
+Origin     user
+Project    brew  (PostgreSQL)
+Exposure   WARNING
 ```
 
 ```text
@@ -94,14 +96,25 @@ report. On a piped/redirected terminal, it prints the report once and exits
 
 ```bash
 $ portlens
-PORT   PROCESS       PROJECT          RUNTIME     ADDRESS          STATUS
-3000   node          orbit-backend    Node.js     127.0.0.1        LISTEN
-5432   postgres      brew             PostgreSQL   127.0.0.1        LISTEN
-6379   redis-server  brew             Redis        127.0.0.1        LISTEN
+PORT   PROCESS               SERVICE        PROJECT  RUNTIME     PROTOCOL  ADDRESS         STATUS  ORIGIN
+88     kdc                   Kerberos       -        -           tcp       0.0.0.0:88      LISTEN  system
+5353   mDNSResponder         mDNS (DNS-SD)  -        -           udp       0.0.0.0:5353     BOUND   system
+5432   postgres              PostgreSQL     brew     PostgreSQL  tcp       [::]:5432        LISTEN  user
+6379   redis-server          Redis          brew     Redis       tcp       127.0.0.1:6379   LISTEN  user
+27017  mongod                MongoDB        brew     MongoDB     tcp       127.0.0.1:27017  LISTEN  user
 ```
 
 **Use case — "what's running on this machine right now?"** A quick inventory of
-listening services with their project, runtime, and bind address.
+listening services. The columns answer the three questions that matter:
+
+- **SERVICE** — what the port is *for* from a well-known-port registry
+  (`5432 → PostgreSQL`, `5353 → mDNS`); `-` when the port has no registry entry.
+- **PROTOCOL** — `tcp` or `udp`. A port used by both (e.g. `88` Kerberos) shows
+  as two rows; `LISTEN`/`BOUND` correspond to TCP/UDP respectively.
+- **ORIGIN** — whether the owning process is **system** (bundled with the OS:
+  `kdc`, `mDNSResponder`, `rapportd`, ...) or **user** (Homebrew services,
+  `/Applications` apps, language toolchains). This is a best-effort heuristic;
+  `-` when unknown.
 
 ### Sorting & filtering
 
@@ -111,14 +124,17 @@ $ portlens --sort project        # group by detected project
 $ portlens --sort runtime        # group by runtime (node, go, python, ...)
 $ portlens --filter node         # only rows matching "node"
 $ portlens --filter orbit        # find every port owned by the "orbit" project
+$ portlens --filter system       # only OS-bundled processes (origin == system)
+$ portlens --filter kerberos     # find the service by its well-known name
 $ portlens --tcp                 # TCP listeners only (hide UDP)
 ```
 
 **Use case — "which ports does my `orbit` project occupy?"**
 `portlens --filter orbit` answers it instantly.
 
-**Use case — "find free ports / audit UDP."** UDP sockets are reported as
-`BOUND` (UDP has no listen state). Use `--tcp` to see only TCP.
+**Use case — "are any of my processes the OS's?"** `portlens --filter system`
+lists only OS-bundled components; everything else on your machine is
+user-installed (Homebrew, apps, toolchains).
 
 ---
 

@@ -28,6 +28,9 @@ func (r *Renderer) Summary(report *model.Report) {
 		{"Protocol", strings.ToUpper(string(report.Protocol.Normalize()))},
 		{"Address", formatAddr(report.Address, uint16(report.Port))},
 	}
+	if report.Service != "" {
+		rows = append(rows, [2]string{"Service", report.Service})
+	}
 	if report.Process != nil {
 		p := report.Process
 		name := p.Name
@@ -38,6 +41,9 @@ func (r *Renderer) Summary(report *model.Report) {
 		if p.Command != "" {
 			rows = append(rows, [2]string{"Command", p.Command})
 		}
+	}
+	if report.Origin != "" {
+		rows = append(rows, [2]string{"Origin", string(report.Origin)})
 	}
 	if c := report.Container; c != nil {
 		rows = append(rows, [2]string{"Container", containerLabel(c)})

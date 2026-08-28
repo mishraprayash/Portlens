@@ -49,6 +49,7 @@ func (i *Inspector) Inspect(ctx context.Context, port int32, protocol model.Prot
 	report.Status = "listening"
 	report.Protocol = primary.Protocol
 	report.Address = primary.Address
+	report.Service = detect.LookupService(uint16(port))
 
 	pid := primary.PID
 	if pid <= 0 {
@@ -71,6 +72,7 @@ func (i *Inspector) Inspect(ctx context.Context, port int32, protocol model.Prot
 	}
 	proc.IsTarget = true
 	report.Process = proc
+	report.Origin = detect.ProcessOrigin(proc)
 
 	// Build process hierarchy.
 	if ancestors, err := i.Platform.Tree.Ancestors(ctx, pid); err == nil {
