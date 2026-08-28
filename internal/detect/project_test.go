@@ -92,3 +92,38 @@ func TestDetectGitInfo(t *testing.T) {
 		t.Errorf("git branch = %q, want main", info.GitBranch)
 	}
 }
+
+func TestDetectGitWorktreeAndSlashedBranch(t *testing.T) {
+	root := t.TempDir()
+	actualGitDir := filepath.Join(root, "main-repo", ".git", "worktrees", "feature-wt")
+	worktreeDir := filepath.Join(root, "worktree-dir")
+
+	writeFile(t, filepath.Join(actualGitDir, "HEAD"), "ref: refs/heads/feature/auth/oauth2\n")
+	writeFile(t, filepath.Join(actualGitDir, "config"), "[remote \"origin\"]\n\turl = git@github.com:acme/cool-project.git\n")
+	writeFile(t, filepath.Join(worktreeDir, ".git"), "gitdir: "+actualGitDir+"\n")
+
+	info := (fsProjectDetector{}).Detect(context.Background(), worktreeDir)
+	if info == nil {
+		t.Fatal("expected detected git project from worktree")
+	}
+	if info.GitRepo != "cool-project" {
+		t.Errorf("git repo = %q, want cool-project", info.GitRepo)
+	}
+	if info.GitBranch != "feature/auth/oauth2" {
+		t.Errorf("git branch = %q, want feature/auth/oauth2", info.GitBranch)
+	}
+}
+
+func TestDetectGitDetachedHEAD(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, ".git", "HEAD"), "d13ff16a48677a28e7e2c918342410a562143bc8\n")
+	writeFile(t, filepath.Join(dir, ".git", "config"), "[remote \"origin\"]\n\turl = https://github.com/acme/detached-repo.git\n")
+
+	info := (fsProjectDetector{}).Detect(context.Background(), dir)
+	if info == nil {
+		t.Fatal("expected detected git project")
+	}
+	if info.GitBranch != "d13ff16" {
+		t.Errorf("git branch = %q, want d13ff16", info.GitBranch)
+	}
+}

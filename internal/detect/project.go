@@ -119,30 +119,65 @@ func scanProjectDir(dir string) *model.ProjectInfo {
 
 func gitInfo(dir string) (repo string, branch string) {
 	gitDir := filepath.Join(dir, ".git")
-	if !exists(gitDir) {
+	fi, err := os.Stat(gitDir)
+	if err != nil {
 		return "", ""
 	}
+	if !fi.IsDir() {
+		// In a git worktree or submodule, .git is a text file containing "gitdir: <path>".
+		content, err := os.ReadFile(gitDir)
+		if err != nil {
+			return "", ""
+		}
+		text := strings.TrimSpace(string(content))
+		if strings.HasPrefix(text, "gitdir:") {
+			target := strings.TrimSpace(strings.TrimPrefix(text, "gitdir:"))
+			if !filepath.IsAbs(target) {
+				gitDir = filepath.Clean(filepath.Join(dir, target))
+			} else {
+				gitDir = target
+			}
+		}
+	}
+
 	if head, err := os.ReadFile(filepath.Join(gitDir, "HEAD")); err == nil {
 		headStr := strings.TrimSpace(string(head))
 		if strings.HasPrefix(headStr, "ref:") {
-			parts := strings.Split(headStr, "/")
-			branch = parts[len(parts)-1]
+			ref := strings.TrimSpace(strings.TrimPrefix(headStr, "ref:"))
+			branch = strings.TrimPrefix(ref, "refs/heads/")
+		} else if len(headStr) >= 7 && !strings.Contains(headStr, " ") {
+			branch = headStr[:7]
 		}
 	}
-	// Prefer the directory name, then the origin remote.
+
+	// Prefer the origin remote URL, falling back to directory name.
 	if cfg, err := os.ReadFile(filepath.Join(gitDir, "config")); err == nil {
+		inOrigin := false
 		for _, line := range strings.Split(string(cfg), "\n") {
-			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "url = ") {
-				u := strings.TrimSuffix(strings.TrimPrefix(line, "url = "), ".git")
-				parts := strings.Split(strings.Trim(u, "/"), "/")
-				repo = parts[len(parts)-1]
-				break
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "[") {
+				inOrigin = strings.Contains(trimmed, `remote "origin"`)
+			}
+			if (inOrigin || repo == "") && strings.HasPrefix(trimmed, "url") {
+				parts := strings.SplitN(trimmed, "=", 2)
+				if len(parts) == 2 {
+					u := strings.TrimSpace(parts[1])
+					u = strings.TrimSuffix(u, ".git")
+					tokens := strings.FieldsFunc(u, func(r rune) bool {
+						return r == '/' || r == ':'
+					})
+					if len(tokens) > 0 {
+						repo = tokens[len(tokens)-1]
+						if inOrigin {
+							break
+						}
+					}
+				}
 			}
 		}
 	}
 	if repo == "" {
-		repo = filepath.Base(filepath.Dir(gitDir))
+		repo = filepath.Base(dir)
 	}
 	return repo, branch
 }
