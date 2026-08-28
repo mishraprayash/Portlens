@@ -200,10 +200,10 @@ clipboard, interactive keys, exit codes, UDP, **port-range scanning with
 progress/ETA and `--log`**, and Docker awareness — see the
 [Usage guide & use cases](docs/usage.md).
 
-## 4.2 Docker & container awareness
+## 4.2 Docker & Podman container awareness
 
-When a port is published by a container (Docker Desktop, Docker Engine, or a
-Compose stack), PortLens shows the container alongside the process:
+When a port is published by a container (Docker Desktop, Docker Engine, Podman,
+or a Compose stack), PortLens shows the container alongside the process:
 
 ```
 PORT 8080
@@ -219,13 +219,13 @@ Exposure    WARNING
 - **Detection** — the listing gains a `CONTAINER` column and the full report a
   `CONTAINER` section (name, ID, image, compose project/service, status).
   Linux resolves the owning process's cgroup first (a kernel fact that needs no
-  daemon); everywhere, a single query to the local Docker daemon (over its unix
-  socket, honoring `DOCKER_HOST`) maps host ports to containers.
+  daemon); everywhere, queries to the local Docker or Podman daemon (over unix
+  sockets, honoring `DOCKER_HOST` and `CONTAINER_HOST`) map host ports to containers.
 - **Container-aware actions** — `--kill` and `--restart` on a containerized
   port stop/restart the **container**, not the host-side process. On macOS the
-  host-side process is the Docker VM, which must never be signaled — so this is
-  both more correct and safer.
-- **Graceful degradation** — when no Docker daemon is reachable, container
+  host-side process is the VM, which must never be signaled — so this is both
+  more correct and safer.
+- **Graceful degradation** — when no container daemon is reachable, container
   detection is skipped silently; nothing breaks. Disable it explicitly with
   `--no-docker`.
 - **Local-first** — only the local daemon socket is ever queried. Nothing

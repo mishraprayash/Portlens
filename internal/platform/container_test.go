@@ -25,6 +25,8 @@ func TestContainerIDFromCgroup(t *testing.T) {
 	}{
 		{"cgroup v1 docker", "12:memory:/docker/" + id, id},
 		{"cgroup v2 systemd scope", "0::/system.slice/docker-" + id + ".scope", id},
+		{"cgroup v2 podman libpod", "0::/user.slice/user-1000.slice/user@1000.service/app.slice/libpod-" + id + ".scope", id},
+		{"cgroup v2 podman scope", "0::/user.slice/user-1000.slice/user@1000.service/app.slice/podman-" + id + ".scope", id},
 		{"kubepods cri-containerd", "5:cpu,cpuacct:/kubepods/burstable/pod123/cri-containerd-" + id2 + ".scope", id2},
 		{"not in a container", "12:blkio:/", ""},
 		{"empty", "", ""},
@@ -47,8 +49,17 @@ func TestDockerSocketPaths(t *testing.T) {
 			t.Fatalf("first path = %v, want /tmp/alt.sock", paths)
 		}
 	})
+	t.Run("honors unix CONTAINER_HOST", func(t *testing.T) {
+		t.Setenv("DOCKER_HOST", "")
+		t.Setenv("CONTAINER_HOST", "unix:///tmp/podman.sock")
+		paths := dockerSocketPaths()
+		if len(paths) == 0 || paths[0] != "/tmp/podman.sock" {
+			t.Fatalf("first path = %v, want /tmp/podman.sock", paths)
+		}
+	})
 	t.Run("ignores non-unix DOCKER_HOST", func(t *testing.T) {
 		t.Setenv("DOCKER_HOST", "tcp://127.0.0.1:2375")
+		t.Setenv("CONTAINER_HOST", "")
 		paths := dockerSocketPaths()
 		for _, p := range paths {
 			if strings.Contains(p, "2375") {
@@ -57,6 +68,21 @@ func TestDockerSocketPaths(t *testing.T) {
 		}
 		if paths[0] != "/var/run/docker.sock" {
 			t.Fatalf("first path = %q, want /var/run/docker.sock", paths[0])
+		}
+	})
+	t.Run("includes podman paths", func(t *testing.T) {
+		t.Setenv("DOCKER_HOST", "")
+		t.Setenv("CONTAINER_HOST", "")
+		paths := dockerSocketPaths()
+		foundPodman := false
+		for _, p := range paths {
+			if strings.Contains(p, "podman") {
+				foundPodman = true
+				break
+			}
+		}
+		if !foundPodman {
+			t.Errorf("expected podman socket paths in candidates: %v", paths)
 		}
 	})
 }

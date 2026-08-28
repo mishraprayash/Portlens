@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -50,29 +51,69 @@ func newDockerProvider(socket string) *dockerProvider {
 	}
 }
 
-// newContainerProvider returns a ContainerProvider for the local Docker daemon,
-// or nil when no docker socket is reachable so inspection degrades gracefully.
+// newContainerProvider returns a ContainerProvider for the local Docker or Podman daemon,
+// or nil when no container socket is reachable so inspection degrades gracefully.
 func newContainerProvider() ContainerProvider {
 	for _, path := range dockerSocketPaths() {
 		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			slog.Debug("connected to container runtime socket", "socket", path)
 			return newDockerProvider(path)
 		}
 	}
 	return nil
 }
 
-// dockerSocketPaths returns the candidate docker socket paths in order of
-// preference, honoring DOCKER_HOST when it points at a unix socket.
+// dockerSocketPaths returns candidate container daemon socket paths in order of
+// preference (Docker then Podman), honoring DOCKER_HOST and CONTAINER_HOST.
 func dockerSocketPaths() []string {
-	var out []string
-	if h := os.Getenv("DOCKER_HOST"); h != "" {
-		if strings.HasPrefix(h, "unix://") {
-			out = append(out, strings.TrimPrefix(h, "unix://"))
-		}
+	var candidates []string
+
+	// 1. Explicit environment overrides
+	if h := os.Getenv("DOCKER_HOST"); h != "" && strings.HasPrefix(h, "unix://") {
+		candidates = append(candidates, strings.TrimPrefix(h, "unix://"))
 	}
-	out = append(out, "/var/run/docker.sock")
-	if home, err := os.UserHomeDir(); err == nil {
-		out = append(out, filepath.Join(home, ".docker", "run", "docker.sock"))
+	if h := os.Getenv("CONTAINER_HOST"); h != "" && strings.HasPrefix(h, "unix://") {
+		candidates = append(candidates, strings.TrimPrefix(h, "unix://"))
+	}
+
+	// 2. Standard system Docker sockets
+	candidates = append(candidates, "/var/run/docker.sock", "/run/docker.sock")
+
+	// 3. User rootless Docker socket
+	home, err := os.UserHomeDir()
+	if err == nil && home != "" {
+		candidates = append(candidates, filepath.Join(home, ".docker", "run", "docker.sock"))
+	}
+
+	// 4. Podman Linux rootful sockets
+	candidates = append(candidates, "/run/podman/podman.sock", "/var/run/podman/podman.sock")
+
+	// 5. Podman Linux rootless sockets
+	if xdg := os.Getenv("XDG_RUNTIME_DIR"); xdg != "" {
+		candidates = append(candidates, filepath.Join(xdg, "podman", "podman.sock"))
+	}
+	if uid := os.Getuid(); uid >= 0 {
+		candidates = append(candidates, fmt.Sprintf("/run/user/%d/podman/podman.sock", uid))
+	}
+
+	// 6. Podman macOS machine sockets
+	if home != "" {
+		podmanMachineDir := filepath.Join(home, ".local", "share", "containers", "podman", "machine")
+		candidates = append(candidates,
+			filepath.Join(podmanMachineDir, "podman.sock"),
+			filepath.Join(podmanMachineDir, "qemu", "podman.sock"),
+			filepath.Join(podmanMachineDir, "applehv", "podman.sock"),
+		)
+	}
+
+	// Deduplicate candidates while preserving preference order
+	seen := make(map[string]bool, len(candidates))
+	var out []string
+	for _, p := range candidates {
+		if p != "" && !seen[p] {
+			seen[p] = true
+			out = append(out, p)
+		}
 	}
 	return out
 }
