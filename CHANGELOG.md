@@ -26,6 +26,8 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Added
 
+- **Podman & rootless container runtime awareness**: Expanded container detection beyond Docker to Podman, supporting `CONTAINER_HOST` environment variables, system/rootful sockets (`/run/podman/podman.sock`), user rootless sockets (`$XDG_RUNTIME_DIR/podman/podman.sock`, `/run/user/<uid>/podman/podman.sock`), macOS Podman machine sockets, and cgroup v2 systemd/libpod scopes.
+- **Modular CLI subcommand architecture**: Introduced a decoupled `SubcommandRegistry` and `Subcommand` routing layer in `cmd/dispatch.go`, cleanly separating top-level subcommands and their aliases from port arguments while cleanly handling preceding global flags.
 - **Structured diagnostic logging (`--debug`, `-d`, or `PORTLENS_DEBUG=1`)**: Added structured `log/slog` debug tracing across the CLI, inspector, detector, and platform layers to `stderr`, enabling deep field troubleshooting without cluttering standard output.
 - The port listing, compact summary, verbose report, and JSON now identify the
   **service** behind each port from a curated well-known-port registry (e.g.
