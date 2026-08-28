@@ -41,6 +41,9 @@ func (r *Renderer) Summary(report *model.Report) {
 		if p.Command != "" {
 			rows = append(rows, [2]string{"Command", p.Command})
 		}
+		if p.MemoryBytes > 0 {
+			rows = append(rows, [2]string{"Memory", model.FormatBytes(p.MemoryBytes)})
+		}
 	}
 	if report.Origin != "" {
 		rows = append(rows, [2]string{"Origin", string(report.Origin)})
@@ -62,6 +65,13 @@ func (r *Renderer) Summary(report *model.Report) {
 			label += "  (" + rt + ")"
 		}
 		rows = append(rows, [2]string{"Project", label})
+	}
+	if report.HTTPProbe != nil {
+		probeVal := report.HTTPProbe.Status
+		if report.HTTPProbe.Title != "" {
+			probeVal += fmt.Sprintf(" — %q", report.HTTPProbe.Title)
+		}
+		rows = append(rows, [2]string{"HTTP Probe", probeVal})
 	}
 	if report.Exposure != nil && report.Exposure.Worst != "" {
 		rows = append(rows, [2]string{"Exposure", string(report.Exposure.Worst)})

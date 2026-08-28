@@ -107,9 +107,9 @@ func linuxProcInfo(pid int32, full bool) (*model.ProcessInfo, error) {
 			info.StartTime = st
 		}
 		info.User = linuxUser(pid)
-		if rss := linuxRSS(pid); rss > 0 {
-			info.MemoryBytes = rss
-		}
+	}
+	if rss := linuxRSS(pid); rss > 0 {
+		info.MemoryBytes = rss
 	}
 	return info, nil
 }

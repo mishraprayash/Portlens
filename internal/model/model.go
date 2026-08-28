@@ -6,6 +6,7 @@
 package model
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 )
@@ -183,6 +184,7 @@ type Report struct {
 	Project        *ProjectInfo `json:"project,omitempty"`
 	Network        *NetworkInfo `json:"network,omitempty"`
 	Exposure       *Exposure    `json:"exposure,omitempty"`
+	HTTPProbe      *HTTPProbe   `json:"http_probe,omitempty"`
 	Interpretation string       `json:"interpretation,omitempty"`
 
 	// Facts records concrete observations. Inference records interpretations
@@ -190,6 +192,15 @@ type Report struct {
 	// trust facts and treat inferences with appropriate skepticism.
 	Facts      []string `json:"facts,omitempty"`
 	Inferences []string `json:"inferences,omitempty"`
+}
+
+// HTTPProbe contains lightweight HTTP inspection results when an endpoint responds to HTTP GET.
+type HTTPProbe struct {
+	Status     string        `json:"status,omitempty"`      // e.g. "200 OK"
+	StatusCode int           `json:"status_code,omitempty"` // e.g. 200
+	Title      string        `json:"title,omitempty"`       // extracted HTML <title>
+	Server     string        `json:"server,omitempty"`      // Server response header
+	Latency    time.Duration `json:"latency,omitempty"`     // round-trip time
 }
 
 // NetworkInfo describes the network footprint of the owning process.
@@ -244,4 +255,23 @@ func FormatDuration(d time.Duration) string {
 
 func itoa(n int) string {
 	return strconv.Itoa(n)
+}
+
+// FormatBytes renders a byte count in human-friendly units (B, KB, MB, GB).
+func FormatBytes(b uint64) string {
+	const unit = 1024
+	if b < unit {
+		return strconv.FormatUint(b, 10) + " B"
+	}
+	div, exp := uint64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	units := []string{"KB", "MB", "GB", "TB"}
+	val := float64(b) / float64(div)
+	if val >= 10 || exp == 0 {
+		return fmt.Sprintf("%.0f %s", val, units[exp])
+	}
+	return fmt.Sprintf("%.1f %s", val, units[exp])
 }

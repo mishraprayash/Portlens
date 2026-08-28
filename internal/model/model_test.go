@@ -38,3 +38,22 @@ func TestListenerKey(t *testing.T) {
 		t.Errorf("key = %q, want tcp:3000", l.Key())
 	}
 }
+
+func TestFormatBytes(t *testing.T) {
+	cases := []struct {
+		b    uint64
+		want string
+	}{
+		{500, "500 B"},
+		{1024, "1 KB"},
+		{1024 * 50, "50 KB"},
+		{1024 * 1024 * 128, "128 MB"},
+		{1024 * 1024 * 1024, "1.0 GB"},
+		{uint64(1.5 * 1024 * 1024 * 1024), "1.5 GB"},
+	}
+	for _, c := range cases {
+		if got := FormatBytes(c.b); got != c.want {
+			t.Errorf("FormatBytes(%d) = %q, want %q", c.b, got, c.want)
+		}
+	}
+}

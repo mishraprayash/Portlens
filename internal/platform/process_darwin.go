@@ -111,9 +111,9 @@ func darwinProcInfo(pid int32, full bool) (*model.ProcessInfo, error) {
 		if uid := kp.Eproc.Ucred.Uid; uid > 0 {
 			info.User = username(uid)
 		}
-		if rss := darwinRSS(pid); rss > 0 {
-			info.MemoryBytes = rss
-		}
+	}
+	if rss := darwinRSS(pid); rss > 0 {
+		info.MemoryBytes = rss
 	}
 	return info, nil
 }

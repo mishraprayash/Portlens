@@ -219,3 +219,32 @@ func TestListFilterMatchesContainer(t *testing.T) {
 		t.Errorf("filter by container name should keep only the matching row:\n%s", out)
 	}
 }
+
+func TestSummaryMemoryAndHTTPProbe(t *testing.T) {
+	report := &model.Report{
+		Port:     3000,
+		Protocol: model.ProtocolTCP,
+		Status:   "listening",
+		Address:  "127.0.0.1",
+		Process: &model.ProcessInfo{
+			PID:         1234,
+			Name:        "node",
+			MemoryBytes: 150 * 1024 * 1024,
+		},
+		HTTPProbe: &model.HTTPProbe{
+			Status: "200 OK",
+			Title:  "Vite React App",
+		},
+	}
+	var buf bytes.Buffer
+	r := New(&buf, false)
+	r.Summary(report)
+
+	out := buf.String()
+	if !strings.Contains(out, "150 MB") {
+		t.Errorf("expected memory 150 MB in summary output:\n%s", out)
+	}
+	if !strings.Contains(out, "200 OK") || !strings.Contains(out, "Vite React App") {
+		t.Errorf("expected HTTP probe in summary output:\n%s", out)
+	}
+}

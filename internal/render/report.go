@@ -43,6 +43,9 @@ func (r *Renderer) Report(report *model.Report) {
 	if report.Exposure != nil {
 		r.renderExposure(report)
 	}
+	if report.HTTPProbe != nil {
+		r.renderHTTPProbe(report.HTTPProbe)
+	}
 	if report.Process != nil {
 		r.renderTreeSection(report)
 	}
@@ -80,6 +83,9 @@ func (r *Renderer) renderProcess(report *model.Report) {
 		}
 		if p.User != "" {
 			rows = append(rows, [2]string{"User", p.User})
+		}
+		if p.MemoryBytes > 0 {
+			rows = append(rows, [2]string{"Memory", model.FormatBytes(p.MemoryBytes)})
 		}
 		if p.CWD != "" {
 			rows = append(rows, [2]string{"Directory", shortenHome(p.CWD)})
@@ -253,4 +259,19 @@ func parentLabel(report *model.Report) string {
 		return ""
 	}
 	return fmt.Sprintf("%s (pid %d)", parent.Name, parent.PID)
+}
+
+func (r *Renderer) renderHTTPProbe(p *model.HTTPProbe) {
+	r.section("HTTP PROBE", func() {
+		rows := [][2]string{
+			{"Status", fmt.Sprintf("%s (%s)", p.Status, model.FormatDuration(p.Latency))},
+		}
+		if p.Title != "" {
+			rows = append(rows, [2]string{"HTML Title", p.Title})
+		}
+		if p.Server != "" {
+			rows = append(rows, [2]string{"Server", p.Server})
+		}
+		r.writeln(r.kv(rows))
+	})
 }
