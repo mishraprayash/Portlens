@@ -17,10 +17,14 @@ import (
 // ConfirmFunc prompts the user and reports whether to proceed.
 type ConfirmFunc func(prompt string) (bool, error)
 
+// ProcessStarter launches a process from argv and cwd, returning the started PID.
+type ProcessStarter func(ctx context.Context, argv []string, cwd string) (int, error)
+
 // Manager coordinates actions over a platform handle.
 type Manager struct {
 	Platform *platform.Platform
 	Confirm  ConfirmFunc
+	Starter  ProcessStarter
 	Out      io.Writer
 	Wait     time.Duration
 }
@@ -98,6 +102,29 @@ func (m *Manager) Kill(ctx context.Context, report *model.Report, force bool) er
 		}
 	}
 
+	err := m.TerminateTree(ctx, report.Process.PID, force)
+	if err != nil {
+		return err
+	}
+	if force {
+		fmt.Fprintf(m.Out, "Process %d terminated\n", report.Process.PID)
+	} else {
+		fmt.Fprintf(m.Out, "Process %d exited gracefully\n", report.Process.PID)
+	}
+	return nil
+}
+
+// TerminateTree terminates the process tree rooted at pid without prompting.
+// When force is false it sends SIGTERM, waits up to m.Wait for the root process to exit,
+// and returns nil on success. When force is true it sends SIGKILL.
+func (m *Manager) TerminateTree(ctx context.Context, pid int32, force bool) error {
+	pids := []int32{pid}
+	if m.Platform != nil && m.Platform.Tree != nil {
+		if tree, err := m.Platform.Tree.Descendants(ctx, pid); err == nil {
+			pids = TreePIDs(tree)
+		}
+	}
+
 	sig := platform.SignalTerm
 	label := "SIGTERM"
 	if force {
@@ -108,8 +135,8 @@ func (m *Manager) Kill(ctx context.Context, report *model.Report, force bool) er
 
 	// Signal deepest-first so children are cleaned up before their parent.
 	var firstErr error
-	for _, pid := range pids {
-		if err := m.Platform.Controller.Signal(ctx, pid, sig); err != nil {
+	for _, p := range pids {
+		if err := m.Platform.Controller.Signal(ctx, p, sig); err != nil {
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -119,10 +146,9 @@ func (m *Manager) Kill(ctx context.Context, report *model.Report, force bool) er
 	if force {
 		// SIGKILL is immediate; give the OS a moment then confirm.
 		time.Sleep(300 * time.Millisecond)
-		if m.Platform.Controller.IsAlive(ctx, report.Process.PID) {
-			return &ErrStillRunning{PID: report.Process.PID}
+		if m.Platform.Controller.IsAlive(ctx, pid) {
+			return &ErrStillRunning{PID: pid}
 		}
-		fmt.Fprintf(m.Out, "Process %d terminated\n", report.Process.PID)
 		return nil
 	}
 
@@ -132,13 +158,12 @@ func (m *Manager) Kill(ctx context.Context, report *model.Report, force bool) er
 
 	deadline := time.Now().Add(m.Wait)
 	for time.Now().Before(deadline) {
-		if !m.Platform.Controller.IsAlive(ctx, report.Process.PID) {
-			fmt.Fprintf(m.Out, "Process %d exited gracefully\n", report.Process.PID)
+		if !m.Platform.Controller.IsAlive(ctx, pid) {
 			return nil
 		}
 		time.Sleep(150 * time.Millisecond)
 	}
-	return &ErrStillRunning{PID: report.Process.PID}
+	return &ErrStillRunning{PID: pid}
 }
 
 // lookupContainer resolves the container owning a report's port, preferring the

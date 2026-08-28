@@ -29,6 +29,9 @@ func LaunchProcess(report *model.Report) *model.ProcessInfo {
 			if i+1 < len(ancestors) && ancestors[i+1] != nil {
 				return ancestors[i+1]
 			}
+			if report.Process != nil && report.Process.PID != a.PID {
+				return report.Process
+			}
 			// The shell itself owns the port; its own argv is the entry point.
 			return a
 		}
