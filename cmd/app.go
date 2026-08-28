@@ -80,43 +80,26 @@ func scanMode(opts *options) bool {
 // progressInterval is how often the live progress line is refreshed.
 const progressInterval = 200 * time.Millisecond
 
-// runScan inspects every requested port, reports only the in-use ones, and
-// summarizes the scan. Progress (count, percent, ETA, found so far) goes to
-// stderr so stdout stays clean for the results. When --log is given, the full
-// report for every in-use port is written to that file.
-func runScan(ctx context.Context, stdout, stderr io.Writer, opts *options) int {
-	insp := newInspector(opts)
-	proto := protocolFrom(opts)
+// scanHeader renders the one-line preamble shown before a multi-port scan.
+func scanHeader(ports []int32) string {
+	return fmt.Sprintf("Scanning %d ports (%s)...", len(ports), formatPorts(ports))
+}
 
-	total := len(opts.ports)
-	interactive := isTerminal(stderr)
-	start := time.Now()
-
-	logFile := (*os.File)(nil)
-	if opts.logPath != "" {
-		f, err := os.Create(opts.logPath)
-		if err != nil {
-			fmt.Fprintf(stderr, "portlens: cannot create log file: %v\n", err)
-			return exitcode.GeneralError
-		}
-		defer f.Close()
-		logFile = f
-		fmt.Fprintln(f, "# PortLens scan log")
-		fmt.Fprintf(f, "# Time: %s\n", time.Now().Format(time.RFC3339))
-		fmt.Fprintf(f, "# Ports scanned: %d (%s)\n", total, formatPorts(opts.ports))
-		fmt.Fprintf(f, "# Protocol: %s\n\n", proto.Normalize())
-	}
-
-	fmt.Fprintf(stdout, "Scanning %d ports (%s)...\n", total, formatPorts(opts.ports))
-
-	found := make([]*model.Report, 0, total)
+// scanPorts is the single shared inspection loop behind scan mode, JSON output,
+// and any other multi-port command. It inspects every port, keeps only the
+// in-use reports (Status "listening"), treats idle ports as expected rather
+// than errors, and calls progress (when non-nil) after each port so callers can
+// show a live count, ETA, and found-so-far without duplicating the loop. It
+// returns the in-use reports and the most severe exit code seen.
+func scanPorts(ctx context.Context, stderr io.Writer, insp *inspector.Inspector, proto model.Protocol, ports []int32, noRecord bool, progress func(done, total, found int, elapsed time.Duration)) ([]*model.Report, int) {
+	found := make([]*model.Report, 0, len(ports))
 	worst := exitcode.Success
-	lastRefresh := time.Time{}
-	for i, p := range opts.ports {
+	start := time.Now()
+	for i, p := range ports {
 		report, err := insp.Inspect(ctx, p, proto)
 		switch {
 		case err == nil:
-			if !opts.noRecord {
+			if !noRecord {
 				recordHistory(report)
 			}
 			if report.Status == "listening" {
@@ -128,40 +111,70 @@ func runScan(ctx context.Context, stdout, stderr io.Writer, opts *options) int {
 			fmt.Fprintf(stderr, "portlens: %v\n", err)
 			worst = maxExit(worst, mapError(err))
 		}
-
-		done := i + 1
-		now := time.Now()
-		if interactive {
-			if now.Sub(lastRefresh) >= progressInterval || done == total {
-				lastRefresh = now
-				writeScanProgress(stderr, done, total, now.Sub(start), len(found), true)
-			}
-		} else if done == total || done%100 == 0 {
-			writeScanProgress(stderr, done, total, now.Sub(start), len(found), false)
+		if progress != nil {
+			progress(i+1, len(ports), len(found), time.Since(start))
 		}
 	}
-	if interactive {
-		fmt.Fprintln(stderr)
+	return found, worst
+}
+
+// scanProgressReporter renders live scan progress to a stream (stderr). On a
+// terminal the line is rewritten in place; otherwise it is printed once per
+// hundred ports so piped output still shows progress without flooding it.
+type scanProgressReporter struct {
+	w           io.Writer
+	interactive bool
+	lastRefresh time.Time
+}
+
+func newScanProgressReporter(w io.Writer) *scanProgressReporter {
+	return &scanProgressReporter{w: w, interactive: isTerminal(w)}
+}
+
+// Report is a drop-in for the scanPorts progress callback.
+func (p *scanProgressReporter) Report(done, total, found int, elapsed time.Duration) {
+	now := time.Now()
+	if p.interactive {
+		if now.Sub(p.lastRefresh) >= progressInterval || done == total {
+			p.lastRefresh = now
+			writeScanProgress(p.w, done, total, elapsed, found, true)
+		}
+		return
 	}
+	if done == total || done%100 == 0 {
+		writeScanProgress(p.w, done, total, elapsed, found, false)
+	}
+}
+
+// Finish clears the in-place progress line so the next output starts on a
+// fresh line when running on a terminal.
+func (p *scanProgressReporter) Finish() {
+	if p.interactive {
+		fmt.Fprintln(p.w)
+	}
+}
+
+// runScan inspects every requested port and prints only the in-use ones as a
+// table, followed by a summary of how many were found and how long it took.
+// Progress goes to stderr so stdout stays clean for the results. The shared
+// scanPorts loop and the --log stdout tee keep this free of per-command logic.
+func runScan(ctx context.Context, stdout, stderr io.Writer, opts *options) int {
+	insp := newInspector(opts)
+	proto := protocolFrom(opts)
+
+	total := len(opts.ports)
+	start := time.Now()
+	fmt.Fprintf(stdout, "%s\n", scanHeader(opts.ports))
+
+	reporter := newScanProgressReporter(stderr)
+	found, worst := scanPorts(ctx, stderr, insp, proto, opts.ports, opts.noRecord, reporter.Report)
+	reporter.Finish()
 	elapsed := time.Since(start)
 
 	entries := reportsToEntries(found)
 	r := render.New(stdout, !opts.noColor)
 	r.List(entries, render.ListOptions{SortBy: opts.sortBy, Filter: opts.filter, OnlyTCP: opts.onlyTCP})
 	fmt.Fprintf(stdout, "\nFound %d of %d ports in use in %s.\n", len(found), total, formatElapsed(elapsed))
-
-	if logFile != nil {
-		fmt.Fprintf(logFile, "# Ports in use: %d\n", len(found))
-		fmt.Fprintf(logFile, "# Elapsed: %s\n\n", formatElapsed(elapsed))
-		lw := render.New(logFile, false)
-		for _, report := range found {
-			fmt.Fprintf(logFile, "===== Port %d =====\n\n", report.Port)
-			lw.Report(report)
-			fmt.Fprintln(logFile)
-		}
-		fmt.Fprintf(stdout, "Logged %d result(s) to %s\n", len(found), opts.logPath)
-	}
-
 	return worst
 }
 
@@ -228,29 +241,37 @@ func formatElapsed(d time.Duration) string {
 	return model.FormatDuration(d)
 }
 
-// runPortsJSON inspects every port up front so that all reports can be emitted
-// as a single JSON array on stdout.
+// teeLog wraps w so everything written to it is also appended to the file at
+// path, returning the combined writer and the open file handle. Callers must
+// close the handle. It is the single mechanism behind --log, so any command can
+// capture its output without per-command plumbing.
+func teeLog(w io.Writer, path string) (io.Writer, *os.File, error) {
+	f, err := os.Create(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	return io.MultiWriter(w, f), f, nil
+}
+
+// runPortsJSON inspects every requested port and emits a single JSON array of
+// the in-use reports on stdout. Idle ports are omitted, matching scan mode.
+// The scan preamble and live progress go to stderr so stdout stays a pure JSON
+// payload, ready to pipe into jq or a file.
 func runPortsJSON(ctx context.Context, stdout, stderr io.Writer, opts *options) int {
 	insp := newInspector(opts)
 	proto := protocolFrom(opts)
 
-	reports := make([]*model.Report, 0, len(opts.ports))
-	worst := exitcode.Success
-	for _, p := range opts.ports {
-		report, err := insp.Inspect(ctx, p, proto)
-		if err != nil {
-			if errors.Is(err, inspector.ErrPortNotFound) {
-				reports = append(reports, report)
-				worst = maxExit(worst, exitcode.PortNotFound)
-				continue
-			}
-			fmt.Fprintf(stderr, "portlens: %v\n", err)
-			worst = maxExit(worst, mapError(err))
-			continue
-		}
-		reports = append(reports, report)
-	}
-	_ = render.JSONReports(stdout, reports)
+	total := len(opts.ports)
+	start := time.Now()
+	fmt.Fprintln(stderr, scanHeader(opts.ports))
+
+	reporter := newScanProgressReporter(stderr)
+	found, worst := scanPorts(ctx, stderr, insp, proto, opts.ports, opts.noRecord, reporter.Report)
+	reporter.Finish()
+	elapsed := time.Since(start)
+
+	_ = render.JSONReports(stdout, found)
+	fmt.Fprintf(stderr, "Found %d of %d ports in use in %s.\n", len(found), total, formatElapsed(elapsed))
 	return worst
 }
 

@@ -208,6 +208,16 @@ $ portlens 3000 --json | jq '.process.pid, .project.framework'
 }
 ```
 
+A single port emits one object (including the `not_listening` shape when idle).
+A range or several ports emit a JSON **array of only the in-use ports** — idle
+ports are omitted, matching scan mode. Progress and the `Found N of M`
+summary go to **stderr**, so stdout is always a pure JSON payload:
+
+```bash
+$ portlens 4000-4010 --json | jq 'length'     # counts only the in-use ports
+$ portlens 4000-4010 --json > scan.json        # clean array, no progress in it
+```
+
 **Use case — shell scripts.** Parse the deterministic schema with `jq`.
 
 **Use case — AI agents / tooling.** The stable, documented schema (see
@@ -494,26 +504,29 @@ Found 2 of 5001 ports in use in 42.1s.
   `1-99999`) still fail fast before any work starts.
 - Abort anytime with Ctrl-C.
 
-### Logging results to a file
+### Logging output to a file — `--log <path>`
 
-Add `--log <path>` to write the **full detailed report** of every in-use port
-to a file once the scan finishes:
+`--log <path>` captures **this command's output** to a file, so any invocation
+can be logged with one flag — no per-command plumbing:
 
 ```bash
-$ portlens 3000-8000 --log scan.txt
-...
-Found 2 of 5001 ports in use in 42.1s.
-Logged 2 result(s) to scan.txt
+$ portlens 3000-8000 --log scan.txt     # capture the scan results table
+$ portlens 5432 --log report.txt        # capture a single-port report
+$ portlens --log inventory.txt          # capture the full listing
+$ portlens 4000-4010 --json --log scan.json   # pure JSON array in the file
 ```
 
-The log is plain text with a header (time, ports scanned, protocol) and one
-`===== Port N =====` section per in-use port. `--log` requires scan mode (a
-range or multiple ports, without `--json` or an action flag).
+- The file contains exactly what stdout prints: the report, table, JSON, or
+  summary. **Progress, ETA, and diagnostics are never written** (they go to
+  stderr), so the log is clean.
+- Output in a log is **plain text** (no color codes), and interactive mode is
+  disabled, so a `--log` invocation always produces a single complete result.
+- `--log` cannot be combined with `--watch`.
 
 **Use case — "find what's actually using my port block."** During development
-you often occupy a small slice of a large range. Scan `3000-8000`, keep the
-full details in `scan.txt` for later, and glance at the console table for the
-short answer.
+you often occupy a small slice of a large range. Scan `3000-8000 --log
+scan.txt`: watch the ETA on screen, then keep the results table for later or
+diff it between runs.
 
 ---
 

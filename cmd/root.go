@@ -94,6 +94,21 @@ func Execute(args []string, stdout, stderr io.Writer, stdin io.Reader) int {
 		return exitcode.Success
 	}
 
+	// --log tees stdout to a file, so any command's output can be captured with
+	// one mechanism instead of per-command plumbing. Progress and diagnostics
+	// (stderr) are intentionally not captured, and wrapping stdout disables
+	// color and interactive mode so the log stays plain and complete.
+	if opts.logPath != "" {
+		w, f, err := teeLog(stdout, opts.logPath)
+		if err != nil {
+			fmt.Fprintf(stderr, "portlens: cannot create log file: %v\n", err)
+			return exitcode.GeneralError
+		}
+		defer f.Close()
+		stdout = w
+		fmt.Fprintf(stderr, "portlens: logging output to %s\n", opts.logPath)
+	}
+
 	// Dynamic port sources resolve at runtime: --all, --pid, and --name.
 	if opts.all || opts.pid > 0 || opts.name != "" {
 		if code := resolveDynamicPorts(stdout, stderr, opts); code != exitcode.Success {
@@ -209,8 +224,8 @@ func parseArgs(args []string) (*options, error) {
 		return nil, fmt.Errorf("--force requires --kill")
 	}
 
-	if opts.logPath != "" && !scanMode(opts) {
-		return nil, fmt.Errorf("--log requires a port range or multiple ports (without --json or an action flag)")
+	if opts.logPath != "" && opts.watch {
+		return nil, fmt.Errorf("--log cannot be used with --watch")
 	}
 
 	return opts, nil

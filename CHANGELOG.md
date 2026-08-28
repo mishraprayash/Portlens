@@ -38,6 +38,18 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Changed
 
+- `--json` on a range or multiple ports now emits **only the in-use ports** as
+  an array (idle ports are omitted, matching scan mode) and shows the same
+  scan progress/ETA/summary on stderr, so stdout stays a pure JSON payload
+  ready for `jq` or a file.
+- `--log <file>` now works with **every** command (single port, listing, scan,
+  JSON, actions) instead of only scan mode: it captures the command's stdout
+  to the file. Progress/diagnostics (stderr) are never written, output is
+  plain (no color), and interactive mode is disabled. It cannot be combined
+  with `--watch`.
+- Multi-port inspection (scan mode, JSON) shares one inspection loop, progress
+  reporter, and exit-code policy via `scanPorts`, so the commands stay
+  consistent and free of duplicated logic.
 - Multi-port invocations (ranges, several ports, groups) now use **scan mode**:
   only the ports actually in use are printed, live progress shows a count,
   percent, and ETA (to stderr), and a summary reports how many of the scanned

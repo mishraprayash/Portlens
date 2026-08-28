@@ -22,9 +22,11 @@ COMMANDS / FLAGS
   portlens <port>... --verbose        Full detailed report (-v)
   portlens <port>... --tree           Show the complete process hierarchy
   portlens <port>... --connections    Show network connections, grouped and summarized
-  portlens <port>... --json           Machine-readable JSON output (array for multiple ports)
-  portlens <port>... --log <file>     Scan mode: write the full report of every in-use port
-                                      to <file> after the scan finishes
+  portlens <port>... --json           JSON output (array of the in-use ports for a
+                                      range/multiple ports; progress on stderr)
+  portlens <port>... --log <file>     Write this command's output to <file> (any
+                                      command); plain text, no progress, works
+                                      with --json too
   portlens <port>... --kill           Gracefully terminate the owning process(es) (SIGTERM)
   portlens <port>... --kill --force   Force termination (SIGKILL)
   portlens <port>... --restart        Restart the process if the launch command is known
@@ -54,6 +56,8 @@ GENERAL FLAGS
   --no-color        Disable colored output
   --no-record       Do not record this inspection to local history
   --no-docker       Do not query the Docker daemon for container ownership
+  --log <file>      Capture stdout of this command to a file; plain output,
+                    disables interactive mode (cannot be used with --watch)
 
 EXIT CODES
   0  success                1  general error       2  invalid arguments

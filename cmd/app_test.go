@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -55,18 +56,20 @@ func TestRunScanReportsOnlyInUsePorts(t *testing.T) {
 	}
 }
 
-func TestRunScanWritesLogFile(t *testing.T) {
+func TestRunScanWritesLogViaTee(t *testing.T) {
 	inUse, idle := runScanTest(t)
 	logPath := filepath.Join(t.TempDir(), "scan.log")
 
 	var out, errBuf bytes.Buffer
-	opts := &options{ports: []int32{inUse, idle}, protocol: "tcp", noRecord: true, sortBy: "port", logPath: logPath}
-	code := runScan(context.Background(), &out, &errBuf, opts)
+	w, f, err := teeLog(&out, logPath)
+	if err != nil {
+		t.Fatalf("teeLog: %v", err)
+	}
+	defer f.Close()
+	opts := &options{ports: []int32{inUse, idle}, protocol: "tcp", noRecord: true, sortBy: "port"}
+	code := runScan(context.Background(), w, &errBuf, opts)
 	if code != exitcode.Success {
 		t.Fatalf("runScan returned %d, want 0 (stderr: %s)", code, errBuf.String())
-	}
-	if !strings.Contains(out.String(), fmt.Sprintf("Logged 1 result(s) to %s", logPath)) {
-		t.Errorf("expected log confirmation, got:\n%s", out.String())
 	}
 
 	data, err := os.ReadFile(logPath)
@@ -75,33 +78,96 @@ func TestRunScanWritesLogFile(t *testing.T) {
 	}
 	got := string(data)
 	for _, want := range []string{
-		"# PortLens scan log",
-		fmt.Sprintf("# Ports scanned: 2 (%d-%d)", inUse, idle),
-		"# Ports in use: 1",
-		fmt.Sprintf("===== Port %d =====", inUse),
+		fmt.Sprintf("Scanning 2 ports (%d-%d)...", inUse, idle),
+		fmt.Sprintf("%d", inUse),
+		fmt.Sprintf("Found "),
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("log missing %q:\n%s", want, got)
 		}
 	}
-	if strings.Contains(got, fmt.Sprintf("===== Port %d =====", idle)) {
-		t.Errorf("idle port should not be logged:\n%s", got)
+	if strings.Contains(got, "Scanning 2/2") {
+		t.Errorf("progress should not be logged (it goes to stderr):\n%s", got)
 	}
 }
 
-func TestRunScanUnwritableLogFile(t *testing.T) {
+func TestTeeLog(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "out.log")
+	var buf bytes.Buffer
+	w, f, err := teeLog(&buf, logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Fprintln(w, "hello")
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if buf.String() != "hello\n" {
+		t.Errorf("tee target output = %q, want %q", buf.String(), "hello\n")
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "hello\n" {
+		t.Errorf("log file = %q, want %q", string(data), "hello\n")
+	}
+}
+
+func TestTeeLogError(t *testing.T) {
+	_, _, err := teeLog(io.Discard, filepath.Join(t.TempDir(), "no-such-dir", "out.log"))
+	if err == nil {
+		t.Error("expected error for unwritable log path")
+	}
+}
+
+func TestExecuteLogsOutput(t *testing.T) {
+	inUse, _ := runScanTest(t)
+	logPath := filepath.Join(t.TempDir(), "out.log")
+
 	var out, errBuf bytes.Buffer
-	opts := &options{
-		ports:    []int32{3000, 3001},
-		protocol: "tcp",
-		logPath:  filepath.Join(t.TempDir(), "no-such-dir", "scan.log"),
+	code := Execute([]string{fmt.Sprint(inUse), "--no-record", "--log", logPath}, &out, &errBuf, strings.NewReader(""))
+	if code != exitcode.Success {
+		t.Fatalf("Execute returned %d, want 0 (stderr: %s)", code, errBuf.String())
 	}
-	code := runScan(context.Background(), &out, &errBuf, opts)
-	if code != exitcode.GeneralError {
-		t.Errorf("runScan returned %d, want %d", code, exitcode.GeneralError)
+	if !strings.Contains(errBuf.String(), "logging output to "+logPath) {
+		t.Errorf("stderr should announce the log file:\n%s", errBuf.String())
 	}
-	if !strings.Contains(errBuf.String(), "cannot create log file") {
-		t.Errorf("stderr = %q, want create-log-file error", errBuf.String())
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), fmt.Sprintf("PORT %d", inUse)) {
+		t.Errorf("log should contain the report output:\n%s", string(data))
+	}
+}
+
+func TestRunPortsJSONOnlyInUse(t *testing.T) {
+	inUse, idle := runScanTest(t)
+
+	var out, errBuf bytes.Buffer
+	opts := &options{ports: []int32{inUse, idle}, protocol: "tcp", jsonOut: true, noRecord: true}
+	code := runPortsJSON(context.Background(), &out, &errBuf, opts)
+	if code != exitcode.Success {
+		t.Fatalf("runPortsJSON returned %d, want 0 (stderr: %s)", code, errBuf.String())
+	}
+
+	got := out.String()
+	if !strings.Contains(got, fmt.Sprintf("\"port\": %d", inUse)) {
+		t.Errorf("JSON should include the in-use port %d:\n%s", inUse, got)
+	}
+	if strings.Contains(got, fmt.Sprintf("\"port\": %d", idle)) {
+		t.Errorf("JSON should omit the idle port %d:\n%s", idle, got)
+	}
+	// stdout must be a pure JSON array.
+	if !strings.HasPrefix(strings.TrimSpace(got), "[") {
+		t.Errorf("stdout should be a JSON array:\n%s", got)
+	}
+	// progress + summary feedback on stderr.
+	progress := errBuf.String()
+	if !strings.Contains(progress, fmt.Sprintf("Scanning 2 ports (%d-%d)", inUse, idle)) ||
+		!strings.Contains(progress, "Found 1 of 2 ports in use") {
+		t.Errorf("stderr should carry scan feedback:\n%s", progress)
 	}
 }
 

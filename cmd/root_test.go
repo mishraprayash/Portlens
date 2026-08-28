@@ -3,7 +3,6 @@ package cmd
 import (
 	"errors"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -302,26 +301,36 @@ func TestParseArgsLog(t *testing.T) {
 	if opts.logPath != "scan.txt" {
 		t.Errorf("logPath = %q, want scan.txt", opts.logPath)
 	}
-	if opts.logPath != "" && !scanMode(opts) {
+	if !scanMode(opts) {
 		t.Error("expected scan mode for a range with --log")
 	}
 }
 
-func TestParseArgsLogValidation(t *testing.T) {
+func TestParseArgsLogGeneral(t *testing.T) {
 	cases := []struct {
 		in   []string
 		want string
 	}{
-		{[]string{"3000", "--log", "scan.txt"}, "--log requires"},
-		{[]string{"3000", "4000", "--log", "scan.txt", "--json"}, "--log requires"},
-		{[]string{"3000", "4000", "--log", "scan.txt", "--tree"}, "--log requires"},
-		{[]string{"--all", "--log", "scan.txt"}, "--log requires"},
+		{[]string{"3000", "--log", "x.txt"}, "x.txt"},
+		{[]string{"3000", "4000", "--log", "x.txt", "--json"}, "x.txt"},
+		{[]string{"3000", "4000", "--log", "x.txt", "--tree"}, "x.txt"},
+		{[]string{"--log", "x.txt"}, "x.txt"},
 	}
 	for _, c := range cases {
-		_, err := parseArgs(c.in)
-		if err == nil || !strings.Contains(err.Error(), c.want) {
-			t.Errorf("parseArgs(%v) error = %v, want containing %q", c.in, err, c.want)
+		opts, err := parseArgs(c.in)
+		if err != nil {
+			t.Errorf("parseArgs(%v): unexpected error %v", c.in, err)
+			continue
 		}
+		if opts.logPath != c.want {
+			t.Errorf("parseArgs(%v) logPath = %q, want %q", c.in, opts.logPath, c.want)
+		}
+	}
+}
+
+func TestParseArgsLogRejectsWatch(t *testing.T) {
+	if _, err := parseArgs([]string{"3000", "--log", "x.txt", "--watch"}); err == nil {
+		t.Error("expected error for --log with --watch")
 	}
 }
 

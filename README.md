@@ -158,9 +158,12 @@ portlens @dev                      Inspect a named group from your config
 portlens                           List interesting listening ports
 portlens <port>... --tree          Show the complete process hierarchy
 portlens <port>... --connections   Show network connections, grouped & summarized
-portlens <port>... --json          Machine-readable JSON output (array for multiple ports)
-portlens <port>... --log <file>    Scan mode: write the full report of every
-                                   in-use port to <file> after the scan finishes
+portlens <port>... --json          JSON output — for a range/multiple ports this
+                                   emits the in-use ports as an array (progress
+                                   and ETA on stderr, so stdout stays pipeable)
+portlens <port>... --log <file>    Write this command's output to <file> — works
+                                   for any command, including --json; plain text,
+                                   no progress lines, interactive mode disabled
 portlens <port>... --kill          Gracefully terminate the owning process(es) (SIGTERM)
 portlens <port>... --kill --force  Force termination (SIGKILL)
 portlens <port>... --restart       Restart the process if the launch command is known
@@ -184,9 +187,9 @@ on state change; requires `--watch`).
 
 General flags: `--protocol <tcp|udp>`, `--yes`/`-y` (skip confirmations),
 `--verbose`/`-v` (full detailed report instead of the compact summary),
-`--log <path>` (scan mode: write in-use port reports to a file),
-`--no-color`, `--no-record` (skip history recording), `--no-docker` (skip
-container detection).
+`--log <path>` (capture any command's stdout to a file; plain text, disables
+interactive mode, incompatible with `--watch`), `--no-color`, `--no-record`
+(skip history recording), `--no-docker` (skip container detection).
 
 ## 4.1 Usage & use cases
 
