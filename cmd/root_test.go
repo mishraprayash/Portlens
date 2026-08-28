@@ -3,7 +3,11 @@ package cmd
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/portlens/portlens/internal/model"
 )
 
 func TestReorderArgs(t *testing.T) {
@@ -129,6 +133,19 @@ func TestParsePortArg(t *testing.T) {
 func TestParsePortArgTooLargeRange(t *testing.T) {
 	if _, err := parsePortArg("1-99999"); err == nil {
 		t.Error("expected error for oversized range")
+	}
+}
+
+func TestParsePortArgFullPortSpace(t *testing.T) {
+	ports, err := parsePortArg("3000-8000")
+	if err != nil {
+		t.Fatalf("expected full port space to be allowed, got %v", err)
+	}
+	if len(ports) != 5001 {
+		t.Errorf("got %d ports, want 5001", len(ports))
+	}
+	if ports[0] != 3000 || ports[5000] != 8000 {
+		t.Errorf("range endpoints wrong: %d..%d", ports[0], ports[5000])
 	}
 }
 
@@ -274,5 +291,96 @@ func TestParseArgsNoDocker(t *testing.T) {
 func TestParseArgsForceRequiresKill(t *testing.T) {
 	if _, err := parseArgs([]string{"3000", "--force"}); err == nil {
 		t.Error("expected error for --force without --kill")
+	}
+}
+
+func TestParseArgsLog(t *testing.T) {
+	opts, err := parseArgs([]string{"3000-3010", "--log", "scan.txt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.logPath != "scan.txt" {
+		t.Errorf("logPath = %q, want scan.txt", opts.logPath)
+	}
+	if opts.logPath != "" && !scanMode(opts) {
+		t.Error("expected scan mode for a range with --log")
+	}
+}
+
+func TestParseArgsLogValidation(t *testing.T) {
+	cases := []struct {
+		in   []string
+		want string
+	}{
+		{[]string{"3000", "--log", "scan.txt"}, "--log requires"},
+		{[]string{"3000", "4000", "--log", "scan.txt", "--json"}, "--log requires"},
+		{[]string{"3000", "4000", "--log", "scan.txt", "--tree"}, "--log requires"},
+		{[]string{"--all", "--log", "scan.txt"}, "--log requires"},
+	}
+	for _, c := range cases {
+		_, err := parseArgs(c.in)
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("parseArgs(%v) error = %v, want containing %q", c.in, err, c.want)
+		}
+	}
+}
+
+func TestScanMode(t *testing.T) {
+	cases := []struct {
+		name string
+		opts *options
+		want bool
+	}{
+		{"multi plain", &options{ports: []int32{3000, 4000}}, true},
+		{"range plain", &options{ports: []int32{3000, 3001, 3002}}, true},
+		{"single port", &options{ports: []int32{3000}}, false},
+		{"no ports", &options{}, false},
+		{"json", &options{ports: []int32{3000, 4000}, jsonOut: true}, false},
+		{"kill", &options{ports: []int32{3000, 4000}, kill: true}, false},
+		{"restart", &options{ports: []int32{3000, 4000}, restart: true}, false},
+		{"open", &options{ports: []int32{3000, 4000}, open: true}, false},
+		{"tree", &options{ports: []int32{3000, 4000}, tree: true}, false},
+		{"connections", &options{ports: []int32{3000, 4000}, connections: true}, false},
+		{"history", &options{ports: []int32{3000, 4000}, history: true}, false},
+	}
+	for _, c := range cases {
+		if got := scanMode(c.opts); got != c.want {
+			t.Errorf("scanMode(%s) = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestFormatElapsed(t *testing.T) {
+	if got := formatElapsed(30 * time.Second); got != "30.0s" {
+		t.Errorf("formatElapsed(30s) = %q, want 30.0s", got)
+	}
+	if got := formatElapsed(90 * time.Second); got != "1m" {
+		t.Errorf("formatElapsed(90s) = %q, want 1m", got)
+	}
+}
+
+func TestReportsToEntries(t *testing.T) {
+	reports := []*model.Report{
+		{
+			Port: 3000, Protocol: model.ProtocolTCP, Address: "127.0.0.1", Status: "listening",
+			Process:   &model.ProcessInfo{PID: 42, Name: "node"},
+			Project:   &model.ProjectInfo{Name: "orbit-backend", Runtime: "node"},
+			Container: &model.Container{Name: "api-1"},
+		},
+		{Port: 3001, Protocol: model.ProtocolTCP, Status: "not_listening"},
+	}
+	entries := reportsToEntries(reports)
+	if len(entries) != 2 {
+		t.Fatalf("got %d entries", len(entries))
+	}
+	e := entries[0]
+	if e.Port != 3000 || e.Process != "node" || e.Project != "orbit-backend" || e.Runtime != "node" {
+		t.Errorf("entry = %+v", e)
+	}
+	if e.PID != 42 || e.Container == nil || e.Container.Name != "api-1" {
+		t.Errorf("entry = %+v", e)
+	}
+	if entries[1].Status != "not_listening" {
+		t.Errorf("second entry = %+v", entries[1])
 	}
 }

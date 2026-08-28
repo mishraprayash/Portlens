@@ -27,6 +27,14 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Changed
 
+- Multi-port invocations (ranges, several ports, groups) now use **scan mode**:
+  only the ports actually in use are printed, live progress shows a count,
+  percent, and ETA (to stderr), and a summary reports how many of the scanned
+  ports were found and how long the scan took. Idle ports are no longer an
+  error. `--log <file>` writes the full report of every in-use port after the
+  scan finishes.
+- Port ranges may now span the full port space (1-65535); previously a single
+  range was capped at 1024 ports.
 - `portlens <port>` now shows a compact summary by default; use `--verbose`
   (or `-v`) for the full detailed report. `-v` is no longer a `--version`
   alias (`--version` remains).

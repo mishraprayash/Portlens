@@ -441,7 +441,7 @@ clean, parseable output.
 
 ---
 
-## Port ranges & `--all`
+## Port ranges, scanning, and `--log`
 
 Multiple ports, ranges, and named groups can be mixed in one invocation:
 
@@ -453,10 +453,51 @@ $ portlens @dev                      # a group from your config
 $ portlens --all --kill --force      # stop every listening process
 ```
 
-**Use case — "free a block of ports."** During development you often occupy a
-contiguous block (a Next.js app, its API, and a socket service). `portlens
-4100-4105 --kill --yes` clears them in one shot. Ranges are bounded to 1024
-ports so a typo like `1-99999` fails fast instead of scanning the whole range.
+### Scan mode
+
+Inspecting several ports at once (a range, a group, or explicit ports) runs in
+**scan mode**: instead of printing every port's details, PortLens shows live
+progress and prints only the ports that are actually in use.
+
+```bash
+$ portlens 3000-8000
+Scanning 5001 ports (3000-8000)...
+PORT   PROCESS       PROJECT   RUNTIME    ADDRESS         STATUS
+5432   postgres      brew      PostgreSQL [::]:5432       listening
+6379   redis-server  brew      Redis      127.0.0.1:6379  listening
+
+Found 2 of 5001 ports in use in 42.1s.
+```
+
+- **Progress & ETA** — while scanning, a line shows `Scanning 1234/5001
+  (24.7%) | 3 in use | ETA 32s`. On a terminal it is rewritten in place; when
+  output is piped it is printed to stderr so stdout stays clean for results.
+- **Only in-use ports are printed** — idle ports are not listed and are not an
+  error. Exit codes now reflect only real failures (permission denied, etc.).
+- **Ports can span the whole range** `1-65535`; ports outside `1-65535` (e.g.
+  `1-99999`) still fail fast before any work starts.
+- Abort anytime with Ctrl-C.
+
+### Logging results to a file
+
+Add `--log <path>` to write the **full detailed report** of every in-use port
+to a file once the scan finishes:
+
+```bash
+$ portlens 3000-8000 --log scan.txt
+...
+Found 2 of 5001 ports in use in 42.1s.
+Logged 2 result(s) to scan.txt
+```
+
+The log is plain text with a header (time, ports scanned, protocol) and one
+`===== Port N =====` section per in-use port. `--log` requires scan mode (a
+range or multiple ports, without `--json` or an action flag).
+
+**Use case — "find what's actually using my port block."** During development
+you often occupy a small slice of a large range. Scan `3000-8000`, keep the
+full details in `scan.txt` for later, and glance at the console table for the
+short answer.
 
 ---
 

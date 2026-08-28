@@ -18,9 +18,12 @@ import (
 
 var errHelp = errors.New("help requested")
 
-// maxPortsPerInvocation bounds how many ports a single range may expand to, so
-// a typo like "1-99999" cannot trigger a pathological amount of work.
-const maxPortsPerInvocation = 1024
+// maxPortsPerInvocation bounds how many ports a single range may expand to. The
+// full port space is allowed because multi-port invocations use scan mode: they
+// print only in-use ports, show live progress with an ETA, and can be aborted
+// with Ctrl-C. Ports must still fall within 1-65535, so a typo like "1-99999"
+// is rejected before any work is started.
+const maxPortsPerInvocation = 65535
 
 type options struct {
 	ports    []int32
@@ -42,6 +45,8 @@ type options struct {
 	all  bool
 	pid  int
 	name string
+
+	logPath string
 
 	watch    bool
 	interval int
@@ -146,6 +151,7 @@ func parseArgs(args []string) (*options, error) {
 	fs.StringVar(&opts.protocol, "protocol", "", "")
 	fs.StringVar(&opts.sortBy, "sort", "port", "")
 	fs.StringVar(&opts.filter, "filter", "", "")
+	fs.StringVar(&opts.logPath, "log", "", "")
 
 	reordered := reorderArgs(args)
 	if err := fs.Parse(reordered.flags); err != nil {
@@ -203,6 +209,10 @@ func parseArgs(args []string) (*options, error) {
 		return nil, fmt.Errorf("--force requires --kill")
 	}
 
+	if opts.logPath != "" && !scanMode(opts) {
+		return nil, fmt.Errorf("--log requires a port range or multiple ports (without --json or an action flag)")
+	}
+
 	return opts, nil
 }
 
@@ -237,7 +247,7 @@ type argSplit struct {
 }
 
 var valueFlags = map[string]bool{
-	"protocol": true, "sort": true, "filter": true, "name": true, "pid": true, "interval": true,
+	"protocol": true, "sort": true, "filter": true, "name": true, "pid": true, "interval": true, "log": true,
 }
 
 func reorderArgs(args []string) argSplit {

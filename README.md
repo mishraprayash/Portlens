@@ -145,12 +145,15 @@ PORT   PROCESS       CONTAINER   PROJECT          RUNTIME     ADDRESS          S
 ```
 portlens <port>...                 Inspect port(s) — compact summary by default
 portlens <port>... --verbose       Full detailed report (-v)
-portlens 4000-4010                 Inspect a range of ports
+portlens 4000-4010                 Scan a range: only in-use ports are printed,
+                                   with live progress, ETA, and a final summary
 portlens @dev                      Inspect a named group from your config
 portlens                           List interesting listening ports
 portlens <port>... --tree          Show the complete process hierarchy
 portlens <port>... --connections   Show network connections, grouped & summarized
 portlens <port>... --json          Machine-readable JSON output (array for multiple ports)
+portlens <port>... --log <file>    Scan mode: write the full report of every
+                                   in-use port to <file> after the scan finishes
 portlens <port>... --kill          Gracefully terminate the owning process(es) (SIGTERM)
 portlens <port>... --kill --force  Force termination (SIGKILL)
 portlens <port>... --restart       Restart the process if the launch command is known
@@ -174,6 +177,7 @@ on state change; requires `--watch`).
 
 General flags: `--protocol <tcp|udp>`, `--yes`/`-y` (skip confirmations),
 `--verbose`/`-v` (full detailed report instead of the compact summary),
+`--log <path>` (scan mode: write in-use port reports to a file),
 `--no-color`, `--no-record` (skip history recording), `--no-docker` (skip
 container detection).
 
@@ -181,7 +185,8 @@ container detection).
 
 For step-by-step examples and a use case for **every** feature — inspection,
 listing, tree, connections, JSON, kill/force-kill, restart, open, history,
-clipboard, interactive keys, exit codes, and UDP — see the
+clipboard, interactive keys, exit codes, UDP, **port-range scanning with
+progress/ETA and `--log`**, and Docker awareness — see the
 [Usage guide & use cases](docs/usage.md).
 
 ## 4.2 Docker & container awareness

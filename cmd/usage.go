@@ -13,7 +13,9 @@ USAGE
 
   With no port, PortLens lists the interesting listening ports on this host.
   Multiple ports, port ranges (e.g. 4000-4010), and named groups (e.g. @dev)
-  may be given; each is inspected in turn.
+  may be given. A range or several ports start a SCAN: only the ports in use
+  are printed, live progress shows a count and ETA, and a summary is printed
+  when the scan finishes.
 
 COMMANDS / FLAGS
   portlens <port>...                  Inspect port(s) — compact summary by default
@@ -21,6 +23,8 @@ COMMANDS / FLAGS
   portlens <port>... --tree           Show the complete process hierarchy
   portlens <port>... --connections    Show network connections, grouped and summarized
   portlens <port>... --json           Machine-readable JSON output (array for multiple ports)
+  portlens <port>... --log <file>     Scan mode: write the full report of every in-use port
+                                      to <file> after the scan finishes
   portlens <port>... --kill           Gracefully terminate the owning process(es) (SIGTERM)
   portlens <port>... --kill --force   Force termination (SIGKILL)
   portlens <port>... --restart        Restart the process if the launch command is known
