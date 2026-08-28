@@ -6,6 +6,23 @@ All notable changes to PortLens are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **`--restart` now gracefully terminates the existing process first**: Shuts down the running process tree and waits for the port to release before relaunching, eliminating `EADDRINUSE` socket conflicts. Stdio is detached into `/dev/null` so background logs do not corrupt the terminal session.
+- **`LaunchProcess` directly launched by shell**: Fixed detection so that when a process is the immediate child of an interactive shell, PortLens restarts the process itself rather than mistakenly trying to re-execute the parent shell.
+- **Subcommand routing with global flags**: `portlens [flags] config ...` (e.g. `portlens --no-color config list`) now dispatches to the config subcommand instead of erroring with an invalid port.
+- **Git worktrees, submodules, and branch paths**: Supports `.git` files with `gitdir:` indirection, preserves full multi-segment branch names (e.g. `feature/auth/oauth2`), parses SSH remote URLs, and handles detached HEAD states.
+- **Interactive TUI escape sequence drainage & PID verification**: Drains trailing bytes of ANSI escape sequences (e.g. arrow keys) so they do not spill into the shell upon exit, and confirms the target PID is still alive before signaling to prevent killing recycled PIDs.
+- **Watch mode immediate signal cancellation**: Migrated `runWatch` to `signal.NotifyContext` so `Ctrl-C` or `SIGTERM` cancels in-flight inspection passes immediately instead of blocking until the current tick finishes.
+- **Unbounded `lsof` execution timeout**: Added a 10-second safety deadline to macOS `runLsof` when invoked with an unbounded context, preventing indefinite blocking on unresponsive network mounts (NFS/SMB).
+- **Linux `/proc` socket link slice bounds safety**: Added defensive validation for socket symlinks in `/proc/<pid>/fd`, eliminating potential slice out-of-bounds panics on malformed symlinks.
+- **Non-blocking browser launching on Linux**: Launched browser processes asynchronously via `cmd.Start()`, preventing foreground browser processes from locking the PortLens CLI.
+
+### Changed
+
+- **Multi-port and range scan bulk pre-filtering**: Scans (`portlens 3000-8000`) now query the host's active listener table once in bulk and filter in memory, reducing 5,000-port scan times from ~42s down to ~20ms by avoiding thousands of redundant `lsof` process spawns on macOS and `/proc` parsing passes on Linux.
+- **Refined exposure risk classification**: Accurately distinguishes private LAN/VPN addresses (RFC 1918 / RFC 4193 / link-local) from public internet-routable WAN interfaces.
+
 ### Added
 
 - The port listing, compact summary, verbose report, and JSON now identify the

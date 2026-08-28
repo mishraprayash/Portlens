@@ -108,7 +108,32 @@ func scanPorts(ctx context.Context, stderr io.Writer, insp *inspector.Inspector,
 	found := make([]*model.Report, 0, len(ports))
 	worst := exitcode.Success
 	start := time.Now()
+
+	// Performance optimization: when scanning multiple ports, query the host's
+	// active listeners once to build a filter set. This avoids spawning thousands
+	// of external processes (e.g. lsof on macOS) or repeatedly re-reading /proc tables.
+	var activePorts map[uint16]bool
+	if len(ports) > 1 && insp != nil && insp.Platform != nil && insp.Platform.Ports != nil {
+		if allListeners, err := insp.Platform.Ports.Listeners(ctx); err == nil {
+			activePorts = make(map[uint16]bool, len(allListeners))
+			normProto := proto.Normalize()
+			for _, l := range allListeners {
+				if normProto == "" || l.Protocol.Normalize() == normProto {
+					activePorts[l.Port] = true
+				}
+			}
+		}
+	}
+
 	for i, p := range ports {
+		// Fast skip for idle ports when the active port set is known.
+		if activePorts != nil && !activePorts[uint16(p)] {
+			if progress != nil {
+				progress(i+1, len(ports), len(found), time.Since(start))
+			}
+			continue
+		}
+
 		report, err := insp.InspectDepth(ctx, p, proto, inspector.DepthFast)
 		switch {
 		case err == nil:

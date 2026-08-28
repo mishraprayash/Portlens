@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"bytes"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -391,5 +393,16 @@ func TestReportsToEntries(t *testing.T) {
 	}
 	if entries[1].Status != "not_listening" {
 		t.Errorf("second entry = %+v", entries[1])
+	}
+}
+
+func TestExecuteConfigSubcommandWithFlags(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Execute([]string{"--no-color", "config", "path"}, &stdout, &stderr, nil)
+	if code != 0 {
+		t.Fatalf("Execute returned %d, want 0 (stderr: %s)", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "config.json") {
+		t.Fatalf("expected config path in stdout, got: %q", stdout.String())
 	}
 }

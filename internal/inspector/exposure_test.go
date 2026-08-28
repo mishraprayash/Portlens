@@ -31,6 +31,19 @@ func TestAssessExposurePublicInterface(t *testing.T) {
 	if !e.PublicInterface {
 		t.Errorf("expected public interface flag")
 	}
+	if e.Worst != model.RiskWarning {
+		t.Errorf("expected WARNING for private LAN, got %v", e.Worst)
+	}
+}
+
+func TestAssessExposurePublicWAN(t *testing.T) {
+	e := assessExposure([]model.Listener{{Address: "93.184.216.34", Port: 80, PID: 1}})
+	if !e.PublicInterface {
+		t.Errorf("expected public interface flag")
+	}
+	if e.Worst != model.RiskDangerous {
+		t.Errorf("expected POTENTIALLY DANGEROUS for public WAN, got %v", e.Worst)
+	}
 }
 
 func TestAssessExposureMultipleProcesses(t *testing.T) {

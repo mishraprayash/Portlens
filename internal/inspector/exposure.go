@@ -1,6 +1,10 @@
 package inspector
 
-import "github.com/portlens/portlens/internal/model"
+import (
+	"net"
+
+	"github.com/portlens/portlens/internal/model"
+)
 
 // riskRank orders risk levels from least to most severe.
 var riskRank = map[model.RiskLevel]int{
@@ -20,6 +24,8 @@ func assessExposure(listeners []model.Listener) *model.Exposure {
 	}
 
 	pids := map[int32]bool{}
+	hasPublicWAN := false
+	hasPrivateLAN := false
 	for _, l := range listeners {
 		switch {
 		case isWildcard(l.Address):
@@ -28,6 +34,11 @@ func assessExposure(listeners []model.Listener) *model.Exposure {
 			e.BoundLocalhost = true
 		case l.Address != "":
 			e.PublicInterface = true
+			if isPrivateNetwork(l.Address) {
+				hasPrivateLAN = true
+			} else {
+				hasPublicWAN = true
+			}
 		}
 		if l.PID > 0 {
 			pids[l.PID] = true
@@ -42,10 +53,16 @@ func assessExposure(listeners []model.Listener) *model.Exposure {
 	}
 
 	switch {
+	case e.BoundWildcard && hasPublicWAN:
+		add(model.RiskDangerous, "Bound to wildcard and a public interface; potentially reachable from the internet")
 	case e.BoundWildcard && e.PublicInterface:
 		add(model.RiskDangerous, "Bound to all interfaces (0.0.0.0) on a non-loopback interface; potentially reachable from the network")
+	case hasPublicWAN:
+		add(model.RiskDangerous, "Bound to a public interface; potentially reachable from the internet")
 	case e.BoundWildcard:
 		add(model.RiskWarning, "Bound to all interfaces (0.0.0.0); reachable from other machines on the local network")
+	case hasPrivateLAN:
+		add(model.RiskWarning, "Bound to a private network interface; reachable from other machines on the local network")
 	case e.PublicInterface:
 		add(model.RiskWarning, "Bound to a non-loopback interface; may be reachable from other machines")
 	default:
@@ -60,4 +77,12 @@ func assessExposure(listeners []model.Listener) *model.Exposure {
 
 func isWildcard(addr string) bool {
 	return addr == "0.0.0.0" || addr == "::" || addr == "*"
+}
+
+func isPrivateNetwork(addr string) bool {
+	ip := net.ParseIP(addr)
+	if ip == nil {
+		return false
+	}
+	return ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast()
 }

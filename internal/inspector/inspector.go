@@ -6,6 +6,7 @@ package inspector
 import (
 	"context"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -249,7 +250,13 @@ func isLoopback(addr string) bool {
 	if addr == "127.0.0.1" || addr == "::1" || addr == "localhost" {
 		return true
 	}
-	return strings.HasPrefix(addr, "127.")
+	if strings.HasPrefix(addr, "127.") {
+		return true
+	}
+	if ip := net.ParseIP(addr); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
 }
 
 func displayAddr(addr string) string {

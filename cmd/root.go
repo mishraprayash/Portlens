@@ -64,8 +64,19 @@ type options struct {
 
 // Execute runs the CLI and returns a process exit code.
 func Execute(args []string, stdout, stderr io.Writer, stdin io.Reader) int {
-	if len(args) > 0 && args[0] == "config" {
-		return runConfig(args[1:], stdout, stderr)
+	if isCfg, cfgArgs, preFlags := extractConfigSubcommand(args); isCfg {
+		for i := 0; i < len(preFlags); i++ {
+			f := preFlags[i]
+			if (f == "--log" || f == "-log") && i+1 < len(preFlags) {
+				w, file, err := teeLog(stdout, preFlags[i+1])
+				if err == nil {
+					defer file.Close()
+					stdout = w
+				}
+				i++
+			}
+		}
+		return runConfig(cfgArgs, stdout, stderr)
 	}
 
 	expanded, err := expandGroups(args, configGroupLookup)
@@ -400,4 +411,33 @@ func describeTarget(opts *options) string {
 	default:
 		return "matching listening port"
 	}
+}
+
+// extractConfigSubcommand scans args to see if "config" is the first positional command.
+// If so, it returns true, the arguments to pass to runConfig, and any global flags preceding it.
+func extractConfigSubcommand(args []string) (bool, []string, []string) {
+	var flags []string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			break
+		}
+		if strings.HasPrefix(a, "-") && a != "-" {
+			flags = append(flags, a)
+			name := strings.TrimLeft(a, "-")
+			if eq := strings.IndexByte(name, '='); eq >= 0 {
+				name = name[:eq]
+			}
+			if valueFlags[name] && !strings.Contains(a, "=") && i+1 < len(args) {
+				flags = append(flags, args[i+1])
+				i++
+			}
+			continue
+		}
+		if a == "config" {
+			return true, args[i+1:], flags
+		}
+		break
+	}
+	return false, nil, nil
 }
