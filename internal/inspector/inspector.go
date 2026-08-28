@@ -17,6 +17,17 @@ import (
 // ErrPortNotFound is returned when nothing is listening on the requested port.
 var ErrPortNotFound = fmt.Errorf("no process is listening on this port")
 
+// Depth controls how much inspection InspectDepth performs. The fast path
+// resolves port ownership plus only what the compact summary displays; the
+// deep path additionally computes the process tree, network connections, and
+// verbose facts. The fast path must never pay the deep path's cost.
+type Depth int
+
+const (
+	DepthFast Depth = iota
+	DepthFull
+)
+
 // Inspector performs port and process inspection.
 type Inspector struct {
 	Platform *platform.Platform
@@ -35,6 +46,11 @@ func New(p *platform.Platform) *Inspector {
 
 // Inspect produces a full report for a single port.
 func (i *Inspector) Inspect(ctx context.Context, port int32, protocol model.Protocol) (*model.Report, error) {
+	return i.InspectDepth(ctx, port, protocol, DepthFull)
+}
+
+// InspectDepth produces a report for a single port at the requested depth.
+func (i *Inspector) InspectDepth(ctx context.Context, port int32, protocol model.Protocol, depth Depth) (*model.Report, error) {
 	report := &model.Report{Port: port, Protocol: protocol, Status: "not_listening"}
 
 	listeners, err := i.Platform.Ports.ResolvePort(ctx, uint16(port), protocol)
@@ -64,8 +80,14 @@ func (i *Inspector) Inspect(ctx context.Context, port int32, protocol model.Prot
 		return report, nil
 	}
 
-	proc, err := i.Platform.Processes.Info(ctx, pid)
-	if err != nil {
+	var proc *model.ProcessInfo
+	var perr error
+	if depth == DepthFull {
+		proc, perr = i.Platform.Processes.Info(ctx, pid)
+	} else {
+		proc, perr = i.Platform.Processes.InfoBasic(ctx, pid)
+	}
+	if perr != nil {
 		report.Status = "listening"
 		report.Facts = append(report.Facts, fmt.Sprintf("Port %d was bound to process %d which has since exited", port, pid))
 		return report, nil
@@ -74,15 +96,17 @@ func (i *Inspector) Inspect(ctx context.Context, port int32, protocol model.Prot
 	report.Process = proc
 	report.Origin = detect.ProcessOrigin(proc)
 
-	// Build process hierarchy.
-	if ancestors, err := i.Platform.Tree.Ancestors(ctx, pid); err == nil {
-		report.Ancestors = ancestors
-	}
-	if children, err := i.Platform.Processes.Children(ctx, pid); err == nil {
-		report.Children = children
-	}
-	if tree, err := i.Platform.Tree.Descendants(ctx, pid); err == nil {
-		report.Descendants = tree
+	// Build process hierarchy (deep only; the compact summary never shows it).
+	if depth == DepthFull {
+		if ancestors, err := i.Platform.Tree.Ancestors(ctx, pid); err == nil {
+			report.Ancestors = ancestors
+		}
+		if children, err := i.Platform.Tree.Children(ctx, pid); err == nil {
+			report.Children = children
+		}
+		if tree, err := i.Platform.Tree.Descendants(ctx, pid); err == nil {
+			report.Descendants = tree
+		}
 	}
 
 	// Project detection from the process working directory.
@@ -101,12 +125,16 @@ func (i *Inspector) Inspect(ctx context.Context, port int32, protocol model.Prot
 		report.Project.Framework = framework
 	}
 
-	// Network footprint.
-	report.Network = i.networkInfo(ctx, pid, listeners)
+	// Network footprint (deep only; the summary and scan results never use it).
+	if depth == DepthFull {
+		report.Network = i.networkInfo(ctx, pid, listeners)
+	}
 	report.Exposure = assessExposure(listeners)
 
-	// Interpretation.
-	i.interpret(report)
+	// Interpretation (deep only; Facts/Inferences are not shown in the summary).
+	if depth == DepthFull {
+		i.interpret(report)
+	}
 
 	// Container ownership (best-effort; silently skipped when no runtime).
 	i.attachContainer(ctx, report)

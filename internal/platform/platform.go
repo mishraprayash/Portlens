@@ -43,8 +43,11 @@ type ProcessInspector interface {
 	// Info returns basic metadata for a PID, or ErrProcessNotFound.
 	Info(ctx context.Context, pid int32) (*model.ProcessInfo, error)
 
-	// Children returns the direct children of a PID.
-	Children(ctx context.Context, pid int32) ([]*model.ProcessInfo, error)
+	// InfoBasic returns only the metadata needed for the fast path (name,
+	// executable, command line, working directory, parent PID). It must not
+	// spawn external commands, unlike Info, which may require an expensive
+	// call for fields the fast path never displays.
+	InfoBasic(ctx context.Context, pid int32) (*model.ProcessInfo, error)
 
 	// Exists reports whether the process is still alive.
 	Exists(ctx context.Context, pid int32) bool
@@ -55,6 +58,9 @@ type ProcessTreeProvider interface {
 	// Ancestors returns the chain of parents from the PID up to the root
 	// (init/launchd), oldest last.
 	Ancestors(ctx context.Context, pid int32) ([]*model.ProcessInfo, error)
+
+	// Children returns the direct children of a PID.
+	Children(ctx context.Context, pid int32) ([]*model.ProcessInfo, error)
 
 	// Descendants returns the full descendant tree of a PID.
 	Descendants(ctx context.Context, pid int32) (*model.ProcessTree, error)

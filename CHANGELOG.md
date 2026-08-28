@@ -38,6 +38,25 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Changed
 
+- **Performance: lazy inspection depth.** `portlens <port>` now runs a fast
+  path that resolves ownership, minimal process metadata, project, exposure,
+  and container — but skips the process tree, network connections, and verbose
+  facts unless the requested output needs them (`--verbose`, `--tree`,
+  `--connections`, single-port `--json`). This removed the expensive
+  full-process scans and hidden `ps` spawns from the default lookup, cutting
+  end-to-end latency roughly **10x** (≈250ms → ≈20ms on macOS) and
+  allocations per inspection from ≈16,700 to ≈450.
+- **Performance: native process tables.** Process hierarchy operations
+  (Ancestors/Children/Descendants, used by `--verbose`, `--tree`, `--kill`,
+  and `--pid`/`--name`) now read the process table once per invocation — a
+  single `sysctl` on macOS, one `/proc` scan on Linux — instead of enumerating
+  the process table repeatedly via gopsutil. Deep inspection dropped from
+  ≈70ms to ≈32ms with ≈15x fewer allocations. gopsutil remains only for
+  per-process metadata, and the fast path (`InfoBasic`) no longer spawns `ps`.
+- **Multi-port `--json`** now uses the fast depth, so each array entry carries
+  the essentials (port, protocol, status, address, service, process, origin,
+  project, exposure, container) and omits the process tree and network
+  sections.
 - `--json` on a range or multiple ports now emits **only the in-use ports** as
   an array (idle ports are omitted, matching scan mode) and shows the same
   scan progress/ETA/summary on stderr, so stdout stays a pure JSON payload

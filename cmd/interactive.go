@@ -10,16 +10,18 @@ import (
 
 	"github.com/portlens/portlens/internal/actions"
 	"github.com/portlens/portlens/internal/exitcode"
+	"github.com/portlens/portlens/internal/inspector"
 	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/platform"
 	"github.com/portlens/portlens/internal/render"
 )
 
 // runInteractive renders the report and enters a single-key action loop. It is
-// only entered when both stdout and stdin are terminals.
+// only entered when both stdout and stdin are terminals. The landing view uses
+// the fast report; tree and connections re-inspect with full depth on demand
+// so the common case never pays for data it does not display.
 func runInteractive(
 	ctx context.Context,
-	plat *platform.Platform,
+	insp *inspector.Inspector,
 	mgr *actions.Manager,
 	r *render.Renderer,
 	report *model.Report,
@@ -56,9 +58,9 @@ func runInteractive(
 		case 'u':
 			copyText(ctx, mgr, stdout, actions.LocalURL(report), "URL")
 		case 't':
-			r.Tree(report)
+			r.Tree(deepInteractiveReport(ctx, insp, report))
 		case 'n':
-			r.Connections(report)
+			r.Connections(deepInteractiveReport(ctx, insp, report))
 		case 'k':
 			if err := mgr.Kill(ctx, report, false); err != nil {
 				fmt.Fprintf(stdout, "kill failed: %v\n", err)
@@ -80,6 +82,17 @@ func runInteractive(
 			}
 		}
 	}
+}
+
+// deepInteractiveReport re-inspects the current port at full depth so the
+// interactive tree/connections views have fresh deep data. It falls back to the
+// original report if the inspection fails (e.g. the process exited meanwhile).
+func deepInteractiveReport(ctx context.Context, insp *inspector.Inspector, report *model.Report) *model.Report {
+	deep, err := insp.InspectDepth(ctx, report.Port, report.Protocol, inspector.DepthFull)
+	if err != nil {
+		return report
+	}
+	return deep
 }
 
 func copyText(ctx context.Context, mgr *actions.Manager, stdout io.Writer, text, label string) {

@@ -4,9 +4,13 @@
 deterministic and designed for shell scripts and AI agents.
 
 `portlens <port>... --json` with more than one port emits a JSON **array
-containing only the in-use (listening) ports**; idle ports are omitted. The
-scan preamble, progress, and summary go to stderr, so stdout is always a pure
-JSON payload.
+containing only the in-use (listening) ports**; idle ports are omitted. These
+entries use the fast inspection depth, so each carries the essentials — `port`,
+`protocol`, `status`, `address`, `service`, `process`, `origin`, `project`,
+`exposure`, and `container` when present — and deliberately omit the process
+tree (`ancestors`/`children`) and `network` sections for speed. A single port
+still emits the full deep object. The scan preamble, progress, and summary go
+to stderr, so stdout is always a pure JSON payload.
 
 ## Top level
 

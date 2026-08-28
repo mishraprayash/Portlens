@@ -12,27 +12,16 @@ import (
 	"github.com/portlens/portlens/internal/model"
 )
 
-// maxDepth guards against pathological process hierarchies (PPID cycles).
-const maxDepth = 64
-
 // gopsutilProcessInspector inspects processes via gopsutil, which itself uses
 // native system APIs (sysctl on macOS, /proc on Linux). This implementation is
 // shared across platforms because gopsutil already provides the OS abstraction
 // for process metadata.
 type gopsutilProcessInspector struct{}
 
-// gopsutilTreeProvider builds process trees using the same metadata source.
-type gopsutilTreeProvider struct {
-	inspector ProcessInspector
-}
-
 // syscallProcessController sends signals via syscall.Kill.
 type syscallProcessController struct{}
 
-func newProcessInspector() ProcessInspector { return gopsutilProcessInspector{} }
-func newProcessTreeProvider() ProcessTreeProvider {
-	return &gopsutilTreeProvider{inspector: gopsutilProcessInspector{}}
-}
+func newProcessInspector() ProcessInspector   { return gopsutilProcessInspector{} }
 func newProcessController() ProcessController { return syscallProcessController{} }
 
 func (gopsutilProcessInspector) Info(_ context.Context, pid int32) (*model.ProcessInfo, error) {
@@ -41,6 +30,37 @@ func (gopsutilProcessInspector) Info(_ context.Context, pid int32) (*model.Proce
 		return nil, ErrProcessNotFound
 	}
 	return infoFromProcess(p)
+}
+
+// InfoBasic fetches only the fields the fast path displays and deliberately
+// skips the calls that are expensive on some platforms — notably CreateTime
+// and Status, which gopsutil implements by spawning `ps` on macOS. This keeps
+// `portlens <port>` free of hidden external processes.
+func (gopsutilProcessInspector) InfoBasic(ctx context.Context, pid int32) (*model.ProcessInfo, error) {
+	p, err := process.NewProcess(pid)
+	if err != nil {
+		return nil, ErrProcessNotFound
+	}
+	info := &model.ProcessInfo{PID: p.Pid}
+	if name, err := p.Name(); err == nil {
+		info.Name = name
+	}
+	if exe, err := p.Exe(); err == nil {
+		info.Exe = exe
+	}
+	if cmdline, err := p.CmdlineSlice(); err == nil {
+		info.Cmdline = cmdline
+		info.Command = commandFromCmdline(cmdline, info.Name)
+	} else if cmdline, err := p.Cmdline(); err == nil && cmdline != "" {
+		info.Command = cmdline
+	}
+	if cwd, err := p.Cwd(); err == nil {
+		info.CWD = cwd
+	}
+	if ppid, err := p.Ppid(); err == nil {
+		info.PPID = ppid
+	}
+	return info, nil
 }
 
 func infoFromProcess(p *process.Process) (*model.ProcessInfo, error) {
@@ -88,82 +108,8 @@ func infoFromProcess(p *process.Process) (*model.ProcessInfo, error) {
 	return info, nil
 }
 
-func (gopsutilProcessInspector) Children(_ context.Context, pid int32) ([]*model.ProcessInfo, error) {
-	p, err := process.NewProcess(pid)
-	if err != nil {
-		return nil, ErrProcessNotFound
-	}
-	kids, err := p.Children()
-	if err != nil {
-		return nil, err
-	}
-	out := make([]*model.ProcessInfo, 0, len(kids))
-	for _, k := range kids {
-		if info, err := infoFromProcess(k); err == nil {
-			out = append(out, info)
-		}
-	}
-	return out, nil
-}
-
 func (gopsutilProcessInspector) Exists(_ context.Context, pid int32) bool {
 	return isProcessAlive(pid)
-}
-
-func (t *gopsutilTreeProvider) Ancestors(ctx context.Context, pid int32) ([]*model.ProcessInfo, error) {
-	var chain []*model.ProcessInfo
-	seen := map[int32]bool{}
-	cur := pid
-	for depth := 0; depth < maxDepth; depth++ {
-		if seen[cur] {
-			break
-		}
-		seen[cur] = true
-		info, err := t.inspector.Info(ctx, cur)
-		if err != nil {
-			break
-		}
-		chain = append(chain, info)
-		if info.PPID <= 0 || info.PPID == cur {
-			break
-		}
-		cur = info.PPID
-	}
-	// chain is child→parent; reverse so oldest comes first.
-	reverseInfos(chain)
-	return chain, nil
-}
-
-func (t *gopsutilTreeProvider) Descendants(ctx context.Context, pid int32) (*model.ProcessTree, error) {
-	info, err := t.inspector.Info(ctx, pid)
-	if err != nil {
-		return nil, err
-	}
-	root := &model.ProcessTree{Process: *info}
-	var walk func(node *model.ProcessTree, current int32, depth int, seen map[int32]bool)
-	walk = func(node *model.ProcessTree, current int32, depth int, seen map[int32]bool) {
-		if depth >= maxDepth || seen[current] {
-			return
-		}
-		seen[current] = true
-		kids, err := t.inspector.Children(ctx, current)
-		if err != nil {
-			return
-		}
-		for _, k := range kids {
-			child := &model.ProcessTree{Process: *k}
-			node.Children = append(node.Children, child)
-			walk(child, k.PID, depth+1, seen)
-		}
-	}
-	walk(root, pid, 0, map[int32]bool{})
-	return root, nil
-}
-
-func reverseInfos(s []*model.ProcessInfo) {
-	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
-		s[i], s[j] = s[j], s[i]
-	}
 }
 
 func (syscallProcessController) Signal(_ context.Context, pid int32, sig Signal) error {

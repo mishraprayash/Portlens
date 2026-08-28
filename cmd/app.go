@@ -66,6 +66,18 @@ func runPorts(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, op
 	return worst
 }
 
+// inspectDepth picks how much inspection an invocation needs. The fast path
+// resolves ownership and the essentials the compact summary shows; the deep
+// path additionally computes the process tree, network connections, and
+// verbose facts. Interactive mode starts fast and re-inspects on demand for
+// the tree/connections keys.
+func inspectDepth(opts *options) inspector.Depth {
+	if opts.verbose || opts.tree || opts.connections || opts.jsonOut {
+		return inspector.DepthFull
+	}
+	return inspector.DepthFast
+}
+
 // scanMode reports whether a multi-port invocation should use scan mode: scan
 // all requested ports, print only the ones in use, show live progress with an
 // ETA, and summarize the results at the end. Action and view flags still loop
@@ -96,7 +108,7 @@ func scanPorts(ctx context.Context, stderr io.Writer, insp *inspector.Inspector,
 	worst := exitcode.Success
 	start := time.Now()
 	for i, p := range ports {
-		report, err := insp.Inspect(ctx, p, proto)
+		report, err := insp.InspectDepth(ctx, p, proto, inspector.DepthFast)
 		switch {
 		case err == nil:
 			if !noRecord {
@@ -312,7 +324,7 @@ func runPort(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, opt
 		return runHistory(stdout, stderr, opts, port)
 	}
 
-	report, err := insp.Inspect(ctx, port, proto)
+	report, err := insp.InspectDepth(ctx, port, proto, inspectDepth(opts))
 	if err != nil {
 		if errors.Is(err, inspector.ErrPortNotFound) {
 			r := render.New(stdout, !opts.noColor)
@@ -361,7 +373,7 @@ func runPort(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, opt
 		return exitcode.Success
 	default:
 		if len(opts.ports) == 1 && isTerminal(stdout) && isTerminalReader(stdin) {
-			return runInteractive(ctx, insp.Platform, mgr, r, report, stdin, stdout, opts)
+			return runInteractive(ctx, insp, mgr, r, report, stdin, stdout, opts)
 		}
 		renderReport(r, report, opts)
 		return exitcode.Success

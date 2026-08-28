@@ -113,8 +113,12 @@ func renderWatchTick(ctx context.Context, stdout, stderr io.Writer, opts *option
 	}
 
 	proto := protocolFrom(opts)
+	depth := inspector.DepthFast
+	if opts.verbose {
+		depth = inspector.DepthFull
+	}
 	for _, p := range opts.ports {
-		report, err := insp.Inspect(ctx, p, proto)
+		report, err := insp.InspectDepth(ctx, p, proto, depth)
 		if err != nil {
 			if errors.Is(err, inspector.ErrPortNotFound) {
 				r.Report(&model.Report{Port: p, Protocol: proto, Status: "not_listening"})

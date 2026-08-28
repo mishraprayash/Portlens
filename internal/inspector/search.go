@@ -68,7 +68,9 @@ func (i *Inspector) SearchByPID(ctx context.Context, pid int32) ([]model.PortEnt
 	return entries, nil
 }
 
-// processInfos resolves process metadata for each unique listener PID.
+// processInfos resolves process metadata for each unique listener PID. It uses
+// InfoBasic, which never spawns external commands and fetches only the fields
+// the listing displays.
 func (i *Inspector) processInfos(ctx context.Context, listeners []model.Listener) map[int32]*model.ProcessInfo {
 	out := map[int32]*model.ProcessInfo{}
 	for _, l := range listeners {
@@ -78,7 +80,7 @@ func (i *Inspector) processInfos(ctx context.Context, listeners []model.Listener
 		if _, ok := out[l.PID]; ok {
 			continue
 		}
-		if p, err := i.Platform.Processes.Info(ctx, l.PID); err == nil {
+		if p, err := i.Platform.Processes.InfoBasic(ctx, l.PID); err == nil {
 			out[l.PID] = p
 		}
 	}

@@ -9,10 +9,15 @@ export CGO_ENABLED := 0
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X github.com/portlens/portlens/internal/version.Version=$(VERSION)
 
-.PHONY: build install test vet fmt lint check clean cross
+.PHONY: build build-release install test vet fmt lint check clean cross bench profile race
 
 build:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/$(BINARY) .
+
+# A small, reproducible release build: no build path metadata, stripped DWARF,
+# and the version stamp. Produces bin/portlens-release.
+build-release:
+	$(GO) build -trimpath -ldflags '$(LDFLAGS)' -o bin/$(BINARY)-release .
 
 install:
 	$(GO) install -ldflags '$(LDFLAGS)' .
@@ -40,6 +45,24 @@ lint:
 
 # check is the full local gate; CI runs the same set of checks.
 check: lint test
+
+# bench runs the performance regression suite (see docs/performance.md).
+bench:
+	$(GO) test -run '^$$' -bench . -benchmem -count=1 ./internal/...
+
+# profile writes CPU/allocation profiles for the fast and deep inspection paths.
+profile:
+	$(GO) test -run '^$$' -bench 'BenchmarkInspectPort(Fast)?$$' -benchtime 20x \
+		-cpuprofile /tmp/portlens-cpu.out -memprofile /tmp/portlens-mem.out \
+		./internal/inspector/
+	@echo "CPU:     go tool pprof /tmp/portlens-cpu.out"
+	@echo "Memory:  go tool pprof /tmp/portlens-mem.out"
+
+# race runs the race detector. NOTE: on macOS this is blocked by a pre-existing
+# gopsutil/purego incompatibility with the Go race runtime (see
+# docs/performance.md); CI does not run -race.
+race:
+	$(GO) test -race -count=1 ./...
 
 clean:
 	rm -rf bin

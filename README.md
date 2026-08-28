@@ -298,6 +298,7 @@ See [docs/architecture.md](docs/architecture.md) for details.
 | [docs/exit-codes.md](docs/exit-codes.md)   | Exit codes for scripting                        |
 | [docs/detection.md](docs/detection.md)     | Facts vs. inferences; how detection works       |
 | [docs/security.md](docs/security.md)       | Security & privacy model                        |
+| [docs/performance.md](docs/performance.md) | Fast/deep paths, benchmarks, syscall & alloc analysis |
 
 ## 8. Development
 
