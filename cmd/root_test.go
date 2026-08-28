@@ -406,3 +406,14 @@ func TestExecuteConfigSubcommandWithFlags(t *testing.T) {
 		t.Fatalf("expected config path in stdout, got: %q", stdout.String())
 	}
 }
+
+func TestExecuteDebugFlag(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Execute([]string{"--debug", "--no-color", "config", "path"}, &stdout, &stderr, nil)
+	if code != 0 {
+		t.Fatalf("Execute returned %d, want 0 (stderr: %s)", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "config.json") {
+		t.Fatalf("expected config path in stdout, got: %q", stdout.String())
+	}
+}

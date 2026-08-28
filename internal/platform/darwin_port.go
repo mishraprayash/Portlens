@@ -4,6 +4,7 @@ package platform
 
 import (
 	"context"
+	"log/slog"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -23,6 +24,7 @@ func newNetworkInspector() NetworkInspector { return darwinNetworkInspector{} }
 
 // runLsof executes lsof with the given arguments and returns stdout.
 func runLsof(ctx context.Context, args ...string) (string, error) {
+	slog.DebugContext(ctx, "executing lsof", "args", args)
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
@@ -31,6 +33,7 @@ func runLsof(ctx context.Context, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "lsof", args...)
 	out, err := cmd.Output()
 	if err != nil {
+		slog.DebugContext(ctx, "lsof command returned error", "args", args, "error", err)
 		// lsof exits 1 when nothing matches; that is a valid empty result.
 		if _, ok := err.(*exec.ExitError); ok && len(out) == 0 {
 			return "", nil

@@ -6,6 +6,7 @@ package inspector
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"strings"
 	"time"
@@ -52,10 +53,12 @@ func (i *Inspector) Inspect(ctx context.Context, port int32, protocol model.Prot
 
 // InspectDepth produces a report for a single port at the requested depth.
 func (i *Inspector) InspectDepth(ctx context.Context, port int32, protocol model.Protocol, depth Depth) (*model.Report, error) {
+	slog.DebugContext(ctx, "inspecting port", "port", port, "protocol", protocol, "depth", depth)
 	report := &model.Report{Port: port, Protocol: protocol, Status: "not_listening"}
 
 	listeners, err := i.Platform.Ports.ResolvePort(ctx, uint16(port), protocol)
 	if err != nil {
+		slog.DebugContext(ctx, "port resolution error", "port", port, "error", err)
 		return report, err
 	}
 	if len(listeners) == 0 {
@@ -63,6 +66,7 @@ func (i *Inspector) InspectDepth(ctx context.Context, port int32, protocol model
 	}
 
 	primary := choosePrimary(listeners)
+	slog.DebugContext(ctx, "port listeners resolved", "port", port, "listeners_count", len(listeners), "primary_pid", primary.PID)
 	report.Status = "listening"
 	report.Protocol = primary.Protocol
 	report.Address = primary.Address

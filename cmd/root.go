@@ -7,6 +7,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
+	"os"
 	"strconv"
 	"strings"
 
@@ -53,6 +55,7 @@ type options struct {
 	notify   bool
 
 	verbose bool
+	debug   bool
 
 	yes      bool
 	noRecord bool
@@ -64,6 +67,15 @@ type options struct {
 
 // Execute runs the CLI and returns a process exit code.
 func Execute(args []string, stdout, stderr io.Writer, stdin io.Reader) int {
+	debug := os.Getenv("PORTLENS_DEBUG") != ""
+	for _, a := range args {
+		if a == "--debug" || a == "-debug" || a == "-d" {
+			debug = true
+			break
+		}
+	}
+	initLogger(debug, stderr)
+
 	if isCfg, cfgArgs, preFlags := extractConfigSubcommand(args); isCfg {
 		for i := 0; i < len(preFlags); i++ {
 			f := preFlags[i]
@@ -168,6 +180,8 @@ func parseArgs(args []string) (*options, error) {
 	fs.BoolVar(&opts.notify, "notify", false, "")
 	fs.BoolVar(&opts.verbose, "verbose", false, "")
 	fs.BoolVar(&opts.verbose, "v", false, "")
+	fs.BoolVar(&opts.debug, "debug", false, "")
+	fs.BoolVar(&opts.debug, "d", false, "")
 	fs.IntVar(&opts.interval, "interval", 0, "")
 	fs.IntVar(&opts.pid, "pid", 0, "")
 	fs.StringVar(&opts.name, "name", "", "")
@@ -440,4 +454,13 @@ func extractConfigSubcommand(args []string) (bool, []string, []string) {
 		break
 	}
 	return false, nil, nil
+}
+
+// initLogger configures the default slog logger for diagnostic tracing.
+func initLogger(debug bool, w io.Writer) {
+	if debug {
+		slog.SetDefault(slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	} else {
+		slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError + 1})))
+	}
 }

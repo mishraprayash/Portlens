@@ -20,11 +20,13 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Changed
 
+- **Parallel multi-port and range scan inspection**: Replaced sequential port inspection in `scanPorts` with a concurrent worker pool (`min(2*NumCPU, 16)` workers), parallelizing inspection across active ports while maintaining exact input order and thread-safe progress reporting.
 - **Multi-port and range scan bulk pre-filtering**: Scans (`portlens 3000-8000`) now query the host's active listener table once in bulk and filter in memory, reducing 5,000-port scan times from ~42s down to ~20ms by avoiding thousands of redundant `lsof` process spawns on macOS and `/proc` parsing passes on Linux.
 - **Refined exposure risk classification**: Accurately distinguishes private LAN/VPN addresses (RFC 1918 / RFC 4193 / link-local) from public internet-routable WAN interfaces.
 
 ### Added
 
+- **Structured diagnostic logging (`--debug`, `-d`, or `PORTLENS_DEBUG=1`)**: Added structured `log/slog` debug tracing across the CLI, inspector, detector, and platform layers to `stderr`, enabling deep field troubleshooting without cluttering standard output.
 - The port listing, compact summary, verbose report, and JSON now identify the
   **service** behind each port from a curated well-known-port registry (e.g.
   `5432 → PostgreSQL`, `5353 → mDNS`), plus a `SERVICE` column in the listing.

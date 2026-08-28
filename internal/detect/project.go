@@ -7,6 +7,7 @@ package detect
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,13 +34,14 @@ type packageJSON struct {
 
 // Detect walks up from cwd looking for the nearest project root (the first
 // directory containing a recognized marker file).
-func (fsProjectDetector) Detect(_ context.Context, cwd string) *model.ProjectInfo {
+func (fsProjectDetector) Detect(ctx context.Context, cwd string) *model.ProjectInfo {
 	if cwd == "" {
 		return nil
 	}
 	dir := filepath.Clean(cwd)
 	for {
 		if info := scanProjectDir(dir); info != nil && info.Detected {
+			slog.DebugContext(ctx, "project root detected", "dir", dir, "name", info.Name, "repo", info.GitRepo, "branch", info.GitBranch)
 			return info
 		}
 		parent := filepath.Dir(dir)

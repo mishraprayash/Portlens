@@ -56,6 +56,7 @@ GENERAL FLAGS
   --no-color        Disable colored output
   --no-record       Do not record this inspection to local history
   --no-docker       Do not query the Docker daemon for container ownership
+  --debug, -d       Enable structured diagnostic logging to stderr (or PORTLENS_DEBUG=1)
   --log <file>      Capture stdout of this command to a file; plain output,
                     disables interactive mode (cannot be used with --watch)
 
