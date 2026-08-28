@@ -3,6 +3,7 @@
 package platform
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"testing"
@@ -118,5 +119,37 @@ func TestIsProcessAliveLinux(t *testing.T) {
 	}
 	if isProcessAlive(99999999) {
 		t.Error("nonexistent pid should not be alive")
+	}
+}
+
+// TestIsProcessAliveZombie is a byte-level test of the zombie check: the state
+// character follows the ')' (after one space), not directly at it.
+func TestIsProcessAliveZombie(t *testing.T) {
+	pid := int32(os.Getpid())
+	// The check reads /proc/<pid>/stat; verify the parser used for the state
+	// char handles the ')' + space + state layout.
+	data, err := os.ReadFile(procDir(pid) + "/stat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	close := bytes.LastIndexByte(data, ')')
+	if close < 0 {
+		t.Fatal("no comm close paren")
+	}
+	rest := trimLeftSpace(data[close+1:])
+	if len(rest) == 0 {
+		t.Fatal("no state token")
+	}
+	switch rest[0] {
+	case 'R', 'S', 'D', 'T', 'Z', 'I', 'X':
+		// valid Linux process state character
+	default:
+		t.Fatalf("unexpected state char %q in %q", rest[0], data[:close+4])
+	}
+	if rest[0] == 'Z' {
+		t.Fatal("test process should not be a zombie")
+	}
+	if isProcessAlive(pid) == false {
+		t.Error("own process should be reported alive")
 	}
 }

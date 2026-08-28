@@ -247,21 +247,24 @@ func linuxRSS(pid int32) uint64 {
 	return pages * uint64(unix.Getpagesize())
 }
 
-// isProcessAlive reports whether a PID is live and not a zombie.
+// isProcessAlive reports whether a PID is live and not a zombie. kill(pid, 0)
+// succeeds for zombies (which linger until their parent reaps them), so the
+// process state is read from /proc/<pid>/stat: after the comm field the state
+// character follows the ')', preceded by a single space.
 func isProcessAlive(pid int32) bool {
 	if err := syscall.Kill(int(pid), 0); err != nil {
 		return false
 	}
 	data, err := os.ReadFile(procDir(pid) + "/stat")
 	if err != nil {
-		return false
-	}
-	open := bytes.IndexByte(data, '(')
-	close := bytes.LastIndexByte(data, ')')
-	if open < 0 || close <= open || close+1 >= len(data) {
 		return true
 	}
-	return data[close+1] != 'Z'
+	close := bytes.LastIndexByte(data, ')')
+	if close < 0 {
+		return true
+	}
+	rest := trimLeftSpace(data[close+1:])
+	return len(rest) > 0 && rest[0] != 'Z'
 }
 
 // splitNUL splits a NUL-separated byte slice into its non-empty parts.
