@@ -15,7 +15,7 @@ import (
 type completionSubcommand struct{}
 
 func (c *completionSubcommand) Name() string      { return "completion" }
-func (c *completionSubcommand) Aliases() []string { return []string{"complete"} }
+func (c *completionSubcommand) Aliases() []string { return nil }
 func (c *completionSubcommand) Description() string {
 	return "Generate shell autocompletion script (bash, zsh, fish)"
 }
@@ -102,7 +102,7 @@ _portlens_completions() {
         return 0
     fi
 
-    local subcmds="config free next completion"
+    local subcmds="config next completion"
     local ports=$(portlens --_complete_ports 2>/dev/null | cut -d: -f1)
     COMPREPLY=( $(compgen -W "$subcmds $ports" -- "$cur") )
 }
@@ -130,7 +130,6 @@ _portlens() {
     local -a subcommands
     subcommands=(
         'config:Manage named port groups (@name)'
-        'free:Free port(s) by terminating occupying processes'
         'next:Find the next available listening port'
         'completion:Generate shell autocompletion script'
     )
@@ -177,9 +176,6 @@ _portlens() {
             ;;
         args)
             case $line[1] in
-                free)
-                    _portlens_ports
-                    ;;
                 config)
                     _values 'config actions' 'list' 'add' 'remove' 'show' 'path'
                     ;;
@@ -207,7 +203,6 @@ end
 complete -c portlens -f
 complete -c portlens -n '__fish_use_subcommand' -a '(__portlens_ports)' -d 'Listening port'
 complete -c portlens -n '__fish_use_subcommand' -a 'config' -d 'Manage named port groups'
-complete -c portlens -n '__fish_use_subcommand' -a 'free' -d 'Free port(s)'
 complete -c portlens -n '__fish_use_subcommand' -a 'next' -d 'Find next available port'
 complete -c portlens -n '__fish_use_subcommand' -a 'completion' -d 'Generate completion script'
 complete -c portlens -l verbose -s v -d 'Full detailed report'

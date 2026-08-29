@@ -38,7 +38,6 @@ COMMANDS / FLAGS
                                       wrap in /.../ to use a regex)
   portlens <port>... --watch          Re-render every --interval seconds until Ctrl-C
   portlens <port>... --watch --notify Notify (macOS/Linux) when a port goes up, down, or changes
-  portlens free <port>...             Terminate processes on port(s) to free them immediately
   portlens next [start]               Find the lowest available/free port (default 3000)
   portlens completion <shell>         Generate shell autocompletion script (bash, zsh, fish)
   portlens config                     Manage named port groups (@name)

@@ -17,7 +17,7 @@ import (
 type nextSubcommand struct{}
 
 func (n *nextSubcommand) Name() string        { return "next" }
-func (n *nextSubcommand) Aliases() []string   { return []string{"avail", "available"} }
+func (n *nextSubcommand) Aliases() []string   { return nil }
 func (n *nextSubcommand) Description() string { return "Find the next available listening port" }
 func (n *nextSubcommand) Run(ctx context.Context, args []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	return runNext(ctx, args, stdout, stderr)

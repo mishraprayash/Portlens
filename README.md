@@ -174,7 +174,6 @@ portlens --pid <pid>               Find the listening ports owned by a process (
 portlens --name <query>            Find ports by process name/command (regex with /.../)
 portlens <port>... --watch         Re-render every --interval seconds until Ctrl-C
 portlens <port>... --watch --notify  Notify when a port goes up, down, or changes
-portlens free <port>...            Terminate processes holding port(s) to free them
 portlens next [start]              Find the lowest available/free port (default 3000)
 portlens completion <shell>        Generate shell autocompletion script (bash, zsh, fish)
 portlens config                    Manage named port groups (@name)

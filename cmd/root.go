@@ -250,9 +250,16 @@ func parseArgs(args []string) (*options, error) {
 
 	switch strings.ToLower(opts.protocol) {
 	case "", "tcp", "tcp4", "tcp6":
+		if opts.protocol != "" {
+			opts.onlyTCP = true
+		}
 	case "udp", "udp4", "udp6":
 	default:
 		return nil, fmt.Errorf("invalid --protocol %q (must be tcp or udp)", opts.protocol)
+	}
+
+	if opts.onlyTCP && opts.protocol == "" {
+		opts.protocol = "tcp"
 	}
 
 	if opts.force && !opts.kill {

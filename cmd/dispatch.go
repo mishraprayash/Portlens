@@ -22,7 +22,6 @@ type SubcommandRegistry struct {
 func defaultSubcommandRegistry() *SubcommandRegistry {
 	r := &SubcommandRegistry{commands: make(map[string]Subcommand)}
 	r.Register(&configSubcommand{})
-	r.Register(&freeSubcommand{})
 	r.Register(&nextSubcommand{})
 	r.Register(&completionSubcommand{})
 	return r

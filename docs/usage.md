@@ -605,24 +605,6 @@ $ portlens @dev --kill --yes    # stop them all
 
 ---
 
-## Freeing ports — `portlens free <port...>`
-
-Quickly resolve `EADDRINUSE` conflicts by terminating occupying processes:
-
-```bash
-$ portlens free 3000
-Free port 3000 (process node, pid 48102)? [y/N] y
-Sending SIGTERM...
-Port 3000 is now free
-
-$ portlens free 3000 8080 --yes          # free multiple ports without prompts
-$ portlens free 3000-3005 --force --yes  # force SIGKILL across a range
-```
-
-If the port is already unoccupied, PortLens cleanly reports `Port <port> is already free`.
-
----
-
 ## Finding the next free port — `portlens next [start]`
 
 ```bash
