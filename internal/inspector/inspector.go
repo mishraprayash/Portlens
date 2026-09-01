@@ -17,7 +17,16 @@ import (
 )
 
 // ErrPortNotFound is returned when nothing is listening on the requested port.
-var ErrPortNotFound = fmt.Errorf("no process is listening on this port")
+var ErrPortNotFound = model.ErrPortNotFound
+
+// PortInspector defines the contract for inspecting ports and listeners.
+type PortInspector interface {
+	Inspect(ctx context.Context, port int32, protocol model.Protocol) (*model.Report, error)
+	InspectDepth(ctx context.Context, port int32, protocol model.Protocol, depth Depth) (*model.Report, error)
+	List(ctx context.Context) ([]model.PortEntry, error)
+	SearchByPID(ctx context.Context, pid int32) ([]model.PortEntry, error)
+	SearchByName(ctx context.Context, query string) ([]model.PortEntry, error)
+}
 
 // Depth controls how much inspection InspectDepth performs. The fast path
 // resolves port ownership plus only what the compact summary displays; the
@@ -38,13 +47,51 @@ type Inspector struct {
 	EnableProbe bool
 }
 
-// New builds an Inspector with the given platform and default detectors.
-func New(p *platform.Platform) *Inspector {
-	return &Inspector{
+// Option defines a functional option for configuring an Inspector.
+type Option func(*Inspector)
+
+// WithPlatform configures the underlying OS platform abstraction.
+func WithPlatform(p *platform.Platform) Option {
+	return func(i *Inspector) {
+		i.Platform = p
+	}
+}
+
+// WithProjectDetector configures the heuristic project detector.
+func WithProjectDetector(d detect.ProjectDetector) Option {
+	return func(i *Inspector) {
+		i.Projects = d
+	}
+}
+
+// WithProbe enables or disables HTTP endpoint probing.
+func WithProbe(enable bool) Option {
+	return func(i *Inspector) {
+		i.EnableProbe = enable
+	}
+}
+
+// WithTimeFunc configures the clock function used for timestamps.
+func WithTimeFunc(now func() time.Time) Option {
+	return func(i *Inspector) {
+		i.Now = now
+	}
+}
+
+// New builds an Inspector with the given platform and functional options.
+func New(p *platform.Platform, opts ...Option) *Inspector {
+	if p == nil {
+		p = platform.New()
+	}
+	insp := &Inspector{
 		Platform: p,
 		Projects: detect.NewProjectDetector(),
 		Now:      time.Now,
 	}
+	for _, opt := range opts {
+		opt(insp)
+	}
+	return insp
 }
 
 // Inspect produces a full report for a single port.

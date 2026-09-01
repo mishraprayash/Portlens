@@ -74,6 +74,7 @@ internal/            Non-exported implementation packages
   platform/          OS abstraction: interfaces + darwin/linux providers
   inspector/         Orchestrates platform providers into a Report; process search
   detect/            Project/runtime/framework detection heuristics
+  service/           Application service facade coordinating domain use cases
   render/            Human output (summary, report, tree, connections, JSON)
   actions/           State-changing operations (kill, restart, open, copy)
   config/            User config: named port groups (@name)

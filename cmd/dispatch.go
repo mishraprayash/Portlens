@@ -69,14 +69,14 @@ type listSubcommand struct{}
 func (c *listSubcommand) Name() string        { return "list" }
 func (c *listSubcommand) Aliases() []string   { return []string{"ls"} }
 func (c *listSubcommand) Description() string { return "List active listening ports" }
-func (c *listSubcommand) Run(_ context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
+func (c *listSubcommand) Run(ctx context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	for _, a := range args {
 		if a == "--help" || a == "-h" || a == "help" {
 			printListUsage(stdout)
 			return exitcode.Success
 		}
 	}
-	return executeCore(append(preFlags, args...), stdout, stderr, stdin)
+	return executeCore(ctx, append(preFlags, args...), stdout, stderr, stdin)
 }
 
 // inspectSubcommand handles `portlens inspect <port...> [flags]`.
@@ -87,7 +87,7 @@ func (c *inspectSubcommand) Aliases() []string { return []string{"info", "show"}
 func (c *inspectSubcommand) Description() string {
 	return "Inspect port(s) with process details and exposure"
 }
-func (c *inspectSubcommand) Run(_ context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
+func (c *inspectSubcommand) Run(ctx context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	for _, a := range args {
 		if a == "--help" || a == "-h" || a == "help" {
 			printInspectUsage(stdout)
@@ -99,7 +99,7 @@ func (c *inspectSubcommand) Run(_ context.Context, args []string, preFlags []str
 		fmt.Fprintln(stderr, "Run 'portlens inspect --help' for usage.")
 		return exitcode.InvalidArguments
 	}
-	return executeCore(append(preFlags, args...), stdout, stderr, stdin)
+	return executeCore(ctx, append(preFlags, args...), stdout, stderr, stdin)
 }
 
 // killSubcommand handles `portlens kill <port...> [flags]`.
@@ -110,7 +110,7 @@ func (c *killSubcommand) Aliases() []string { return []string{"stop", "term"} }
 func (c *killSubcommand) Description() string {
 	return "Gracefully terminate process on port(s) (SIGTERM)"
 }
-func (c *killSubcommand) Run(_ context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
+func (c *killSubcommand) Run(ctx context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	for _, a := range args {
 		if a == "--help" || a == "-h" || a == "help" {
 			printKillUsage(stdout)
@@ -129,7 +129,7 @@ func (c *killSubcommand) Run(_ context.Context, args []string, preFlags []string
 		fmt.Fprintln(stderr, "Run 'portlens kill --help' for usage.")
 		return exitcode.InvalidArguments
 	}
-	return executeCore(append(preFlags, append([]string{"--kill"}, args...)...), stdout, stderr, stdin)
+	return executeCore(ctx, append(preFlags, append([]string{"--kill"}, args...)...), stdout, stderr, stdin)
 }
 
 // restartSubcommand handles `portlens restart <port> [flags]`.
@@ -138,7 +138,7 @@ type restartSubcommand struct{}
 func (c *restartSubcommand) Name() string        { return "restart" }
 func (c *restartSubcommand) Aliases() []string   { return nil }
 func (c *restartSubcommand) Description() string { return "Restart process if launch command is known" }
-func (c *restartSubcommand) Run(_ context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
+func (c *restartSubcommand) Run(ctx context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	for _, a := range args {
 		if a == "--help" || a == "-h" || a == "help" {
 			printRestartUsage(stdout)
@@ -157,7 +157,7 @@ func (c *restartSubcommand) Run(_ context.Context, args []string, preFlags []str
 		fmt.Fprintln(stderr, "Run 'portlens restart --help' for usage.")
 		return exitcode.InvalidArguments
 	}
-	return executeCore(append(preFlags, append([]string{"--restart"}, args...)...), stdout, stderr, stdin)
+	return executeCore(ctx, append(preFlags, append([]string{"--restart"}, args...)...), stdout, stderr, stdin)
 }
 
 // openSubcommand handles `portlens open <port> [flags]`.
@@ -166,7 +166,7 @@ type openSubcommand struct{}
 func (c *openSubcommand) Name() string        { return "open" }
 func (c *openSubcommand) Aliases() []string   { return nil }
 func (c *openSubcommand) Description() string { return "Open service in your default web browser" }
-func (c *openSubcommand) Run(_ context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
+func (c *openSubcommand) Run(ctx context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	for _, a := range args {
 		if a == "--help" || a == "-h" || a == "help" {
 			printOpenUsage(stdout)
@@ -185,7 +185,7 @@ func (c *openSubcommand) Run(_ context.Context, args []string, preFlags []string
 		fmt.Fprintln(stderr, "Run 'portlens open --help' for usage.")
 		return exitcode.InvalidArguments
 	}
-	return executeCore(append(preFlags, append([]string{"--open"}, args...)...), stdout, stderr, stdin)
+	return executeCore(ctx, append(preFlags, append([]string{"--open"}, args...)...), stdout, stderr, stdin)
 }
 
 // treeSubcommand handles `portlens tree <port> [flags]`.
@@ -196,7 +196,7 @@ func (c *treeSubcommand) Aliases() []string { return nil }
 func (c *treeSubcommand) Description() string {
 	return "Display process ancestor and descendant hierarchy"
 }
-func (c *treeSubcommand) Run(_ context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
+func (c *treeSubcommand) Run(ctx context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	for _, a := range args {
 		if a == "--help" || a == "-h" || a == "help" {
 			printTreeUsage(stdout)
@@ -215,7 +215,7 @@ func (c *treeSubcommand) Run(_ context.Context, args []string, preFlags []string
 		fmt.Fprintln(stderr, "Run 'portlens tree --help' for usage.")
 		return exitcode.InvalidArguments
 	}
-	return executeCore(append(preFlags, append([]string{"--tree"}, args...)...), stdout, stderr, stdin)
+	return executeCore(ctx, append(preFlags, append([]string{"--tree"}, args...)...), stdout, stderr, stdin)
 }
 
 // connSubcommand handles `portlens conn <port> [flags]`.
@@ -226,7 +226,7 @@ func (c *connSubcommand) Aliases() []string { return []string{"connections", "ne
 func (c *connSubcommand) Description() string {
 	return "Show active network connections for the process"
 }
-func (c *connSubcommand) Run(_ context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
+func (c *connSubcommand) Run(ctx context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	for _, a := range args {
 		if a == "--help" || a == "-h" || a == "help" {
 			printConnUsage(stdout)
@@ -245,7 +245,7 @@ func (c *connSubcommand) Run(_ context.Context, args []string, preFlags []string
 		fmt.Fprintln(stderr, "Run 'portlens conn --help' for usage.")
 		return exitcode.InvalidArguments
 	}
-	return executeCore(append(preFlags, append([]string{"--connections"}, args...)...), stdout, stderr, stdin)
+	return executeCore(ctx, append(preFlags, append([]string{"--connections"}, args...)...), stdout, stderr, stdin)
 }
 
 // watchSubcommand handles `portlens watch [port...] [flags]`.
@@ -256,14 +256,14 @@ func (c *watchSubcommand) Aliases() []string { return nil }
 func (c *watchSubcommand) Description() string {
 	return "Live-monitor port states with desktop notifications"
 }
-func (c *watchSubcommand) Run(_ context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
+func (c *watchSubcommand) Run(ctx context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	for _, a := range args {
 		if a == "--help" || a == "-h" || a == "help" {
 			printWatchUsage(stdout)
 			return exitcode.Success
 		}
 	}
-	return executeCore(append(preFlags, append([]string{"--watch"}, args...)...), stdout, stderr, stdin)
+	return executeCore(ctx, append(preFlags, append([]string{"--watch"}, args...)...), stdout, stderr, stdin)
 }
 
 // findSubcommand handles `portlens find <query> [flags]`.
@@ -272,7 +272,7 @@ type findSubcommand struct{}
 func (c *findSubcommand) Name() string        { return "find" }
 func (c *findSubcommand) Aliases() []string   { return []string{"search"} }
 func (c *findSubcommand) Description() string { return "Find ports by process name/command or PID" }
-func (c *findSubcommand) Run(_ context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
+func (c *findSubcommand) Run(ctx context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	for _, a := range args {
 		if a == "--help" || a == "-h" || a == "help" {
 			printFindUsage(stdout)
@@ -318,7 +318,7 @@ func (c *findSubcommand) Run(_ context.Context, args []string, preFlags []string
 			extraFlags = append([]string{"--name", query}, extraFlags...)
 		}
 	}
-	return executeCore(append(preFlags, extraFlags...), stdout, stderr, stdin)
+	return executeCore(ctx, append(preFlags, extraFlags...), stdout, stderr, stdin)
 }
 
 // extractSubcommand scans args to see if a registered subcommand is the first

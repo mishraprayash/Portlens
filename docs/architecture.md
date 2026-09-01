@@ -8,7 +8,10 @@ build-tagged files; the rest of the codebase is OS-independent.
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ cmd/                                                    │
-│   subcommand dispatch, parsing, exit codes, TUI loop    │
+│   subcommand dispatch, CLI parsing, exit codes, TUI loop │
+├─────────────────────────────────────────────────────────┤
+│ internal/service/                                       │
+│   PortService application domain facade                 │
 ├─────────────────────────────────────────────────────────┤
 │ internal/render/        internal/actions/                │
 │   terminal UI, tables,   kill / restart / open / copy     │
@@ -21,7 +24,7 @@ build-tagged files; the rest of the codebase is OS-independent.
 │   project / runtime / framework detection               │
 ├─────────────────────────────────────────────────────────┤
 │ internal/model/                                          │
-│   shared OS-independent data types                        │
+│   shared OS-independent data types & sentinel errors    │
 ├─────────────────────────────────────────────────────────┤
 │ internal/platform/  (the OS abstraction)                 │
 │   PortResolver          ProcessInspector                 │
