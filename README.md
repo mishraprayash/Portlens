@@ -150,57 +150,44 @@ also matches the service and origin columns.
 ## 4. Command reference
 
 ```
+portlens                           List active listening ports
+portlens list, ls                  List active listening ports
 portlens <port>...                 Inspect port(s) — compact summary by default
-portlens <port>... --verbose       Full detailed report (-v)
-portlens 4000-4010                 Scan a range: only in-use ports are printed,
-                                   with live progress, ETA, and a final summary
-portlens @dev                      Inspect a named group from your config
-portlens                           List interesting listening ports
-portlens <port>... --tree          Show the complete process hierarchy
-portlens <port>... --connections   Show network connections, grouped & summarized
-portlens <port>... --json          JSON output — for a range/multiple ports this
-                                   emits the in-use ports as an array (progress
-                                   and ETA on stderr, so stdout stays pipeable)
-portlens <port>... --log <file>    Write this command's output to <file> — works
-                                   for any command, including --json; plain text,
-                                   no progress lines, interactive mode disabled
-portlens <port>... --kill          Gracefully terminate the owning process(es) (SIGTERM)
-portlens <port>... --kill --force  Force termination (SIGKILL)
-portlens <port>... --restart       Restart the process if the launch command is known
-portlens <port>... --history       Show previously observed activity on this port
-portlens <port>... --open          Open the service in your browser
-portlens --all                     Act on every listening port (e.g. --all --kill)
-portlens --pid <pid>               Find the listening ports owned by a process (incl. descendants)
-portlens --name <query>            Find ports by process name/command (regex with /.../)
-portlens <port>... --watch         Re-render every --interval seconds until Ctrl-C
-portlens <port>... --watch --notify  Notify when a port goes up, down, or changes
-portlens next [start]              Find the lowest available/free port (default 3000)
-portlens completion <shell>        Generate shell autocompletion script (bash, zsh, fish)
+portlens inspect <port>...         Inspect port(s) with process & project details
+portlens kill <port>...            Gracefully terminate owning process(es) (SIGTERM)
+portlens kill <port>... --force    Force termination (SIGKILL)
+portlens kill --all                Terminate all listening processes
+portlens restart <port>            Restart process if launch command is known
+portlens open <port>               Open service in your default browser
+portlens tree <port>               Show complete process hierarchy
+portlens conn <port>               Show network connections, grouped & summarized
+portlens watch [port...]           Live-monitor ports; optional --notify
+portlens find <query|pid>          Find ports by process name or PID (--pid)
+portlens next [start]              Find lowest available/free port (default 3000)
 portlens config                    Manage named port groups (@name)
+portlens completion <shell>        Generate shell autocompletion (bash, zsh, fish)
+portlens 4000-4010                 Scan a range (only in-use ports printed)
+portlens @dev                      Inspect a named group from your config
 portlens --version                 Print the version
 portlens --help                    Show help
 ```
 
-Listing flags: `--sort <port|process|project|runtime>`, `--filter <text>`,
-`--tcp`.
+General flags: `-v`/`--verbose` (full detailed report), `-j`/`--json` (JSON output),
+`-y`/`--yes` (skip confirmations), `-f`/`--force` (SIGKILL termination),
+`-p`/`--probe` (probe HTTP status, title, server header), `-d`/`--debug` (debug logging;
+also honors `PORTLENS_DEBUG=1`), `--protocol <tcp|udp>`, `--no-color`, `--no-docker`
+(skip container detection).
 
-Watch flags: `--interval <secs>` (default 1), `--notify` (desktop notification
-on state change; requires `--watch`).
+Listing flags: `--sort <port|process|project|runtime>`, `--filter <text>`, `--tcp`.
 
-General flags: `--protocol <tcp|udp>`, `--yes`/`-y` (skip confirmations),
-`--verbose`/`-v` (full detailed report instead of the compact summary),
-`--probe`/`-p` (probe HTTP endpoint for status, HTML title, and Server header),
-`--debug`/`-d` (structured diagnostic logging to stderr; also honors `PORTLENS_DEBUG=1`),
-`--log <path>` (capture any command's stdout to a file; plain text, disables
-interactive mode, incompatible with `--watch`), `--no-color`, `--no-record`
-(skip history recording), `--no-docker` (skip container detection).
+Watch flags: `--interval <secs>` (default 1), `--notify` (desktop notification on state change).
 
 ## 4.1 Usage & use cases
 
 For step-by-step examples and a use case for **every** feature — inspection,
-listing, tree, connections, JSON, kill/force-kill, restart, open, history,
+listing, tree, connections, JSON, kill/force-kill, restart, open,
 clipboard, interactive keys, exit codes, UDP, **port-range scanning with
-progress/ETA and `--log`**, and Docker awareness — see the
+progress/ETA**, and Docker awareness — see the
 [Usage guide & use cases](docs/usage.md).
 
 ## 4.2 Docker & Podman container awareness
@@ -257,8 +244,8 @@ PortLens is **local-first** by design:
 - **No privilege escalation.** If a process requires elevated privileges to
   inspect or signal, PortLens reports the permission problem rather than trying
   to escalate.
-- **Local history only.** History is stored in a local, owner-only (0600)
-  JSONL log file under your OS data directory and is never transmitted.
+- **Completely stateless.** PortLens performs real-time queries and leaves zero
+  disk footprint. No background daemon, no history files, and no telemetry.
 
 ## 7. Architecture overview
 
@@ -276,7 +263,6 @@ internal/platform/   The abstraction layer (interfaces + factories)
   linux_*.go         Linux implementations (/proc, xclip/wl-copy, syscall)
 internal/inspector/  Orchestrates providers into a Report (+ risk assessment)
 internal/detect/     Project / runtime / framework detection (filesystem + argv)
-internal/history/    Local owner-only JSONL history log
 internal/actions/    Kill / restart / open / copy (with confirmation)
 internal/render/     Terminal UI, tables, tree, JSON output
 tests/               Integration tests using controlled processes

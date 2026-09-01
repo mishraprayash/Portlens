@@ -15,7 +15,6 @@ import (
 
 	"github.com/portlens/portlens/internal/actions"
 	"github.com/portlens/portlens/internal/exitcode"
-	"github.com/portlens/portlens/internal/history"
 	"github.com/portlens/portlens/internal/inspector"
 	"github.com/portlens/portlens/internal/model"
 	"github.com/portlens/portlens/internal/platform"
@@ -95,7 +94,7 @@ func scanMode(opts *options) bool {
 	return len(opts.ports) > 1 &&
 		!opts.jsonOut &&
 		!opts.kill && !opts.restart && !opts.open &&
-		!opts.tree && !opts.connections && !opts.history
+		!opts.tree && !opts.connections
 }
 
 // progressInterval is how often the live progress line is refreshed.
@@ -112,7 +111,7 @@ func scanHeader(ports []int32) string {
 // than errors, and calls progress (when non-nil) after each port so callers can
 // show a live count, ETA, and found-so-far without duplicating the loop. It
 // returns the in-use reports and the most severe exit code seen.
-func scanPorts(ctx context.Context, stderr io.Writer, insp *inspector.Inspector, proto model.Protocol, ports []int32, noRecord bool, progress func(done, total, found int, elapsed time.Duration)) ([]*model.Report, int) {
+func scanPorts(ctx context.Context, stderr io.Writer, insp *inspector.Inspector, proto model.Protocol, ports []int32, progress func(done, total, found int, elapsed time.Duration)) ([]*model.Report, int) {
 	if len(ports) == 0 {
 		return nil, exitcode.Success
 	}
@@ -148,9 +147,6 @@ func scanPorts(ctx context.Context, stderr io.Writer, insp *inspector.Inspector,
 		report, err := insp.InspectDepth(ctx, p, proto, inspector.DepthFast)
 		switch {
 		case err == nil:
-			if !noRecord {
-				recordHistory(report)
-			}
 			if report.Status == "listening" {
 				found = append(found, report)
 			}
@@ -234,9 +230,6 @@ func scanPorts(ctx context.Context, stderr io.Writer, insp *inspector.Inspector,
 						return
 					}
 					report, err := insp.InspectDepth(ctx, job.port, proto, inspector.DepthFast)
-					if err == nil && !noRecord {
-						recordHistory(report)
-					}
 					results[job.index] = scanResult{report: report, err: err}
 					doneCount.Add(1)
 					if report != nil && report.Status == "listening" {
@@ -315,7 +308,7 @@ func runScan(ctx context.Context, stdout, stderr io.Writer, opts *options) int {
 	fmt.Fprintf(stdout, "%s\n", scanHeader(opts.ports))
 
 	reporter := newScanProgressReporter(stderr)
-	found, worst := scanPorts(ctx, stderr, insp, proto, opts.ports, opts.noRecord, reporter.Report)
+	found, worst := scanPorts(ctx, stderr, insp, proto, opts.ports, reporter.Report)
 	reporter.Finish()
 	elapsed := time.Since(start)
 
@@ -389,18 +382,6 @@ func formatElapsed(d time.Duration) string {
 	return model.FormatDuration(d)
 }
 
-// teeLog wraps w so everything written to it is also appended to the file at
-// path, returning the combined writer and the open file handle. Callers must
-// close the handle. It is the single mechanism behind --log, so any command can
-// capture its output without per-command plumbing.
-func teeLog(w io.Writer, path string) (io.Writer, *os.File, error) {
-	f, err := os.Create(path)
-	if err != nil {
-		return nil, nil, err
-	}
-	return io.MultiWriter(w, f), f, nil
-}
-
 // runPortsJSON inspects every requested port and emits a single JSON array of
 // the in-use reports on stdout. Idle ports are omitted, matching scan mode.
 // The scan preamble and live progress go to stderr so stdout stays a pure JSON
@@ -414,7 +395,7 @@ func runPortsJSON(ctx context.Context, stdout, stderr io.Writer, opts *options) 
 	fmt.Fprintln(stderr, scanHeader(opts.ports))
 
 	reporter := newScanProgressReporter(stderr)
-	found, worst := scanPorts(ctx, stderr, insp, proto, opts.ports, opts.noRecord, reporter.Report)
+	found, worst := scanPorts(ctx, stderr, insp, proto, opts.ports, reporter.Report)
 	reporter.Finish()
 	elapsed := time.Since(start)
 
@@ -456,10 +437,6 @@ func runPort(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, opt
 
 	proto := protocolFrom(opts)
 
-	if opts.history {
-		return runHistory(stdout, stderr, opts, port)
-	}
-
 	report, err := insp.InspectDepth(ctx, port, proto, inspectDepth(opts))
 	if err != nil {
 		if errors.Is(err, inspector.ErrPortNotFound) {
@@ -473,10 +450,6 @@ func runPort(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, opt
 		}
 		fmt.Fprintf(stderr, "portlens: %v\n", err)
 		return mapError(err)
-	}
-
-	if !opts.noRecord {
-		recordHistory(report)
 	}
 
 	r := render.New(stdout, !opts.noColor)
@@ -549,50 +522,6 @@ func runOpen(ctx context.Context, mgr *actions.Manager, report *model.Report) in
 		return mapError(err)
 	}
 	return exitcode.Success
-}
-
-func runHistory(stdout, stderr io.Writer, opts *options, port int32) int {
-	store, err := history.New()
-	if err != nil {
-		fmt.Fprintf(stderr, "portlens: unable to open history: %v\n", err)
-		return exitcode.GeneralError
-	}
-	defer store.Close()
-
-	entries, err := store.Query(context.Background(), port, 20)
-	if err != nil {
-		fmt.Fprintf(stderr, "portlens: %v\n", err)
-		return exitcode.GeneralError
-	}
-	r := render.New(stdout, !opts.noColor)
-	r.History(port, entries)
-	return exitcode.Success
-}
-
-func recordHistory(report *model.Report) {
-	if report.Process == nil {
-		return
-	}
-	store, err := history.New()
-	if err != nil {
-		return
-	}
-	defer store.Close()
-
-	project := ""
-	if report.Project != nil {
-		project = report.Project.Name
-	}
-	_ = store.Record(context.Background(), model.HistoryEntry{
-		Port:       report.Port,
-		ObservedAt: time.Now(),
-		PID:        report.Process.PID,
-		Process:    report.Process.Name,
-		Project:    project,
-		Command:    report.Process.Command,
-		Address:    report.Address,
-		Status:     "seen",
-	})
 }
 
 func mapError(err error) int {

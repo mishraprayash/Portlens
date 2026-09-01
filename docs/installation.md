@@ -148,7 +148,7 @@ $ portlens 3000          # inspects a specific port
 # Remove the binary
 rm -f "$(command -v portlens)"
 
-# Remove local history (optional)
+# Remove configuration (optional)
 rm -rf "$HOME/Library/Application Support/portlens"   # macOS
 rm -rf "$HOME/.local/share/portlens"                  # Linux
 ```

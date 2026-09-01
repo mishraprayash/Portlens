@@ -8,19 +8,18 @@ build-tagged files; the rest of the codebase is OS-independent.
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ cmd/                                                    │
-│   argument parsing, dispatch, exit-code mapping, TUI loop│
+│   subcommand dispatch, parsing, exit codes, TUI loop    │
 ├─────────────────────────────────────────────────────────┤
 │ internal/render/        internal/actions/                │
 │   terminal UI, tables,   kill / restart / open / copy     │
-│   tree, JSON, history                                     │
+│   tree, JSON                                            │
 ├─────────────────────────────────────────────────────────┤
 │ internal/inspector/                                      │
 │   orchestrates providers → model.Report (+ risk)          │
-├──────────────────────────┬──────────────────────────────┤
-│ internal/detect/         │ internal/history/             │
-│   project/runtime/       │   owner-only JSONL log        │
-│   framework detection    │                               │
-├──────────────────────────┴──────────────────────────────┤
+├─────────────────────────────────────────────────────────┤
+│ internal/detect/                                        │
+│   project / runtime / framework detection               │
+├─────────────────────────────────────────────────────────┤
 │ internal/model/                                          │
 │   shared OS-independent data types                        │
 ├─────────────────────────────────────────────────────────┤

@@ -38,7 +38,6 @@ type options struct {
 	force       bool
 	restart     bool
 	open        bool
-	history     bool
 
 	sortBy  string
 	filter  string
@@ -47,8 +46,6 @@ type options struct {
 	all  bool
 	pid  int
 	name string
-
-	logPath string
 
 	watch    bool
 	interval int
@@ -59,7 +56,6 @@ type options struct {
 	probe   bool
 
 	yes      bool
-	noRecord bool
 	noColor  bool
 	noDocker bool
 	help     bool
@@ -85,20 +81,13 @@ func Execute(args []string, stdout, stderr io.Writer, stdin io.Reader) int {
 
 	reg := defaultSubcommandRegistry()
 	if subCmd, subArgs, preFlags := extractSubcommand(args, reg); subCmd != nil {
-		for i := 0; i < len(preFlags); i++ {
-			f := preFlags[i]
-			if (f == "--log" || f == "-log") && i+1 < len(preFlags) {
-				w, file, err := teeLog(stdout, preFlags[i+1])
-				if err == nil {
-					defer file.Close()
-					stdout = w
-				}
-				i++
-			}
-		}
-		return subCmd.Run(context.Background(), subArgs, stdout, stderr, stdin)
+		return subCmd.Run(context.Background(), subArgs, preFlags, stdout, stderr, stdin)
 	}
 
+	return executeCore(args, stdout, stderr, stdin)
+}
+
+func executeCore(args []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	expanded, err := expandGroups(args, configGroupLookup)
 	if err != nil {
 		fmt.Fprintf(stderr, "portlens: %v\n", err)
@@ -123,21 +112,6 @@ func Execute(args []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	if opts.showVer {
 		fmt.Fprintf(stdout, "portlens %s\n", version.Version)
 		return exitcode.Success
-	}
-
-	// --log tees stdout to a file, so any command's output can be captured with
-	// one mechanism instead of per-command plumbing. Progress and diagnostics
-	// (stderr) are intentionally not captured, and wrapping stdout disables
-	// color and interactive mode so the log stays plain and complete.
-	if opts.logPath != "" {
-		w, f, err := teeLog(stdout, opts.logPath)
-		if err != nil {
-			fmt.Fprintf(stderr, "portlens: cannot create log file: %v\n", err)
-			return exitcode.GeneralError
-		}
-		defer f.Close()
-		stdout = w
-		fmt.Fprintf(stderr, "portlens: logging output to %s\n", opts.logPath)
 	}
 
 	// Dynamic port sources resolve at runtime: --all, --pid, and --name.
@@ -167,6 +141,7 @@ func parseArgs(args []string) (*options, error) {
 	fs.BoolVar(&opts.connections, "connections", false, "")
 	fs.BoolVar(&opts.connections, "n", false, "")
 	fs.BoolVar(&opts.jsonOut, "json", false, "")
+	fs.BoolVar(&opts.jsonOut, "j", false, "")
 	fs.BoolVar(&opts.kill, "kill", false, "")
 	fs.BoolVar(&opts.kill, "k", false, "")
 	fs.BoolVar(&opts.force, "force", false, "")
@@ -175,10 +150,8 @@ func parseArgs(args []string) (*options, error) {
 	fs.BoolVar(&opts.restart, "r", false, "")
 	fs.BoolVar(&opts.open, "open", false, "")
 	fs.BoolVar(&opts.open, "o", false, "")
-	fs.BoolVar(&opts.history, "history", false, "")
 	fs.BoolVar(&opts.yes, "yes", false, "")
 	fs.BoolVar(&opts.yes, "y", false, "")
-	fs.BoolVar(&opts.noRecord, "no-record", false, "")
 	fs.BoolVar(&opts.noColor, "no-color", false, "")
 	fs.BoolVar(&opts.noDocker, "no-docker", false, "")
 	fs.BoolVar(&opts.onlyTCP, "tcp", false, "")
@@ -201,7 +174,6 @@ func parseArgs(args []string) (*options, error) {
 	fs.StringVar(&opts.protocol, "protocol", "", "")
 	fs.StringVar(&opts.sortBy, "sort", "port", "")
 	fs.StringVar(&opts.filter, "filter", "", "")
-	fs.StringVar(&opts.logPath, "log", "", "")
 
 	reordered := reorderArgs(args)
 	if err := fs.Parse(reordered.flags); err != nil {
@@ -266,10 +238,6 @@ func parseArgs(args []string) (*options, error) {
 		return nil, fmt.Errorf("--force requires --kill")
 	}
 
-	if opts.logPath != "" && opts.watch {
-		return nil, fmt.Errorf("--log cannot be used with --watch")
-	}
-
 	return opts, nil
 }
 
@@ -304,7 +272,7 @@ type argSplit struct {
 }
 
 var valueFlags = map[string]bool{
-	"protocol": true, "sort": true, "filter": true, "name": true, "pid": true, "interval": true, "log": true,
+	"protocol": true, "sort": true, "filter": true, "name": true, "pid": true, "interval": true,
 }
 
 func reorderArgs(args []string) argSplit {

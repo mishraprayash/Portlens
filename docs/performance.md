@@ -145,9 +145,8 @@ Inspection micro-benchmarks (live port, owned by the benchmark process):
 **Bottleneck #3 — dependency weight and hidden `ps`.**
 - *Change:* removed gopsutil and modernc/sqlite entirely. Process metadata is
   now native (`sysctl` + raw `__sysctl` + libproc on macOS; `/proc` on Linux);
-  history is an owner-only JSONL log with atomic `O_APPEND` appends instead of
-  an embedded SQLite database. Binary shrank **9.3 MB → 5.9 MB** and go.mod
-  went from ~19 modules to 3 (purego, x/sys, x/term).
+  binary size shrank significantly and go.mod went from ~19 modules to 3 (purego,
+  x/sys, x/term).
 - *Change:* the macOS listing now issues **one** lsof call for both TCP LISTEN
   and UDP sockets (`-FpctnT`, with `TST=` distinguishing the protocol) instead
   of two.
