@@ -9,8 +9,10 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/portlens/portlens/internal/config"
 	"github.com/portlens/portlens/internal/exitcode"
@@ -62,8 +64,15 @@ type options struct {
 	showVer  bool
 }
 
-// Execute runs the CLI and returns a process exit code.
+// Execute runs the CLI with signal cancellation context and returns a process exit code.
 func Execute(args []string, stdout, stderr io.Writer, stdin io.Reader) int {
+	ctx, cancel := osSignalContext()
+	defer cancel()
+	return ExecuteContext(ctx, args, stdout, stderr, stdin)
+}
+
+// ExecuteContext runs the CLI within the given context and returns a process exit code.
+func ExecuteContext(ctx context.Context, args []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	debug := os.Getenv("PORTLENS_DEBUG") != ""
 	for _, a := range args {
 		if a == "--debug" || a == "-debug" || a == "-d" {
@@ -81,13 +90,13 @@ func Execute(args []string, stdout, stderr io.Writer, stdin io.Reader) int {
 
 	reg := defaultSubcommandRegistry()
 	if subCmd, subArgs, preFlags := extractSubcommand(args, reg); subCmd != nil {
-		return subCmd.Run(context.Background(), subArgs, preFlags, stdout, stderr, stdin)
+		return subCmd.Run(ctx, subArgs, preFlags, stdout, stderr, stdin)
 	}
 
-	return executeCore(args, stdout, stderr, stdin)
+	return executeCore(ctx, args, stdout, stderr, stdin)
 }
 
-func executeCore(args []string, stdout, stderr io.Writer, stdin io.Reader) int {
+func executeCore(ctx context.Context, args []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	expanded, err := expandGroups(args, configGroupLookup)
 	if err != nil {
 		fmt.Fprintf(stderr, "portlens: %v\n", err)
@@ -116,19 +125,19 @@ func executeCore(args []string, stdout, stderr io.Writer, stdin io.Reader) int {
 
 	// Dynamic port sources resolve at runtime: --all, --pid, and --name.
 	if opts.all || opts.pid > 0 || opts.name != "" {
-		if code := resolveDynamicPorts(stdout, stderr, opts); code != exitcode.Success {
+		if code := resolveDynamicPorts(ctx, stdout, stderr, opts); code != exitcode.Success {
 			return code
 		}
 	}
 
 	if opts.watch {
-		return runWatch(context.Background(), stdout, stderr, opts)
+		return runWatch(ctx, stdout, stderr, opts)
 	}
 
 	if len(opts.ports) == 0 {
-		return runListing(stdout, stderr, opts)
+		return runListing(ctx, stdout, stderr, opts)
 	}
-	return runPorts(context.Background(), stdout, stderr, stdin, opts)
+	return runPorts(ctx, stdout, stderr, stdin, opts)
 }
 
 func parseArgs(args []string) (*options, error) {
@@ -363,15 +372,18 @@ func expandGroups(args []string, lookup groupLookup) ([]string, error) {
 	return out, nil
 }
 
+func osSignalContext() (context.Context, context.CancelFunc) {
+	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+}
+
 // resolveDynamicPorts fills opts.ports from --all, --pid, or --name. It returns
 // exitcode.Success on success or a nonzero exit code on failure.
-func resolveDynamicPorts(stdout, stderr io.Writer, opts *options) int {
+func resolveDynamicPorts(ctx context.Context, stdout, stderr io.Writer, opts *options) int {
 	if len(opts.ports) > 0 {
 		fmt.Fprintf(stderr, "portlens: cannot combine explicit ports with --all/--pid/--name\n")
 		return exitcode.InvalidArguments
 	}
 	insp := newInspector(opts)
-	ctx := context.Background()
 	var entries []model.PortEntry
 	var err error
 	switch {

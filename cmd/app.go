@@ -5,12 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
-	"runtime"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/portlens/portlens/internal/actions"
@@ -19,6 +15,7 @@ import (
 	"github.com/portlens/portlens/internal/model"
 	"github.com/portlens/portlens/internal/platform"
 	"github.com/portlens/portlens/internal/render"
+	"github.com/portlens/portlens/internal/service"
 )
 
 // newInspector builds an inspector honoring the --no-docker escape hatch: when
@@ -28,18 +25,34 @@ func newInspector(opts *options) *inspector.Inspector {
 	if opts != nil && opts.noDocker {
 		plat.Containers = nil
 	}
-	insp := inspector.New(plat)
+	var inspOpts []inspector.Option
 	if opts != nil && opts.probe {
-		insp.EnableProbe = true
+		inspOpts = append(inspOpts, inspector.WithProbe(true))
 	}
-	return insp
+	return inspector.New(plat, inspOpts...)
 }
 
-func runListing(stdout, stderr io.Writer, opts *options) int {
-	insp := newInspector(opts)
-	ctx := context.Background()
+func newService(opts *options, out io.Writer, confirm actions.ConfirmFunc) *service.PortService {
+	plat := platform.New()
+	if opts != nil && opts.noDocker {
+		plat.Containers = nil
+	}
+	var inspOpts []inspector.Option
+	if opts != nil && opts.probe {
+		inspOpts = append(inspOpts, inspector.WithProbe(true))
+	}
+	insp := inspector.New(plat, inspOpts...)
+	act := actions.NewManager(plat, out, confirm)
+	return service.New(
+		service.WithPlatform(plat),
+		service.WithInspector(insp),
+		service.WithActions(act),
+	)
+}
 
-	entries, err := insp.List(ctx)
+func runListing(ctx context.Context, stdout, stderr io.Writer, opts *options) int {
+	svc := newService(opts, stdout, nil)
+	entries, err := svc.List(ctx, opts.onlyTCP)
 	if err != nil {
 		fmt.Fprintf(stderr, "portlens: %v\n", err)
 		return mapError(err)
@@ -48,7 +61,7 @@ func runListing(stdout, stderr io.Writer, opts *options) int {
 		_ = render.JSONList(stdout, entries)
 		return exitcode.Success
 	}
-	r := render.New(stdout, !opts.noColor)
+	r := render.NewRenderer(stdout, render.WithColor(!opts.noColor))
 	r.List(entries, render.ListOptions{SortBy: opts.sortBy, Filter: opts.filter, OnlyTCP: opts.onlyTCP})
 	return exitcode.Success
 }
@@ -115,148 +128,13 @@ func scanPorts(ctx context.Context, stderr io.Writer, insp *inspector.Inspector,
 	if len(ports) == 0 {
 		return nil, exitcode.Success
 	}
-	found := make([]*model.Report, 0, len(ports))
-	worst := exitcode.Success
-	start := time.Now()
-
-	// Performance optimization: when scanning multiple ports, query the host's
-	// active listeners once to build a filter set. This avoids spawning thousands
-	// of external processes (e.g. lsof on macOS) or repeatedly re-reading /proc tables.
-	var activePorts map[uint16]bool
-	if len(ports) > 1 && insp != nil && insp.Platform != nil && insp.Platform.Ports != nil {
-		if allListeners, err := insp.Platform.Ports.Listeners(ctx); err == nil {
-			activePorts = make(map[uint16]bool, len(allListeners))
-			normProto := proto.Normalize()
-			for _, l := range allListeners {
-				if normProto == "" || l.Protocol.Normalize() == normProto {
-					activePorts[l.Port] = true
-				}
-			}
-		}
+	svc := service.New(service.WithInspector(insp))
+	found, err := svc.Scan(ctx, ports, proto, progress)
+	if err != nil {
+		fmt.Fprintf(stderr, "portlens: %v\n", err)
+		return nil, mapError(err)
 	}
-
-	// Single port fast path: avoid goroutine synchronization overhead.
-	if len(ports) == 1 {
-		p := ports[0]
-		if activePorts != nil && !activePorts[uint16(p)] {
-			if progress != nil {
-				progress(1, 1, 0, time.Since(start))
-			}
-			return nil, exitcode.Success
-		}
-		report, err := insp.InspectDepth(ctx, p, proto, inspector.DepthFast)
-		switch {
-		case err == nil:
-			if report.Status == "listening" {
-				found = append(found, report)
-			}
-		case errors.Is(err, inspector.ErrPortNotFound):
-		default:
-			fmt.Fprintf(stderr, "portlens: %v\n", err)
-			worst = maxExit(worst, mapError(err))
-		}
-		if progress != nil {
-			progress(1, 1, len(found), time.Since(start))
-		}
-		return found, worst
-	}
-
-	type scanResult struct {
-		report *model.Report
-		err    error
-	}
-
-	type portJob struct {
-		index int
-		port  int32
-	}
-
-	results := make([]scanResult, len(ports))
-	var toInspect []portJob
-	var idleCount int
-
-	for i, p := range ports {
-		if activePorts != nil && !activePorts[uint16(p)] {
-			idleCount++
-		} else {
-			toInspect = append(toInspect, portJob{index: i, port: p})
-		}
-	}
-
-	var doneCount atomic.Int64
-	var foundCount atomic.Int64
-	var progressMu sync.Mutex
-
-	reportProgress := func() {
-		if progress == nil {
-			return
-		}
-		progressMu.Lock()
-		defer progressMu.Unlock()
-		progress(int(doneCount.Load()), len(ports), int(foundCount.Load()), time.Since(start))
-	}
-
-	if idleCount > 0 {
-		doneCount.Add(int64(idleCount))
-		reportProgress()
-	}
-
-	if len(toInspect) > 0 {
-		workers := runtime.NumCPU() * 2
-		if workers > 16 {
-			workers = 16
-		}
-		if workers > len(toInspect) {
-			workers = len(toInspect)
-		}
-		if workers < 1 {
-			workers = 1
-		}
-		slog.DebugContext(ctx, "starting concurrent scan", "total_ports", len(ports), "to_inspect", len(toInspect), "workers", workers)
-
-		jobs := make(chan portJob, len(toInspect))
-		for _, job := range toInspect {
-			jobs <- job
-		}
-		close(jobs)
-
-		var wg sync.WaitGroup
-		for w := 0; w < workers; w++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for job := range jobs {
-					if ctx.Err() != nil {
-						return
-					}
-					report, err := insp.InspectDepth(ctx, job.port, proto, inspector.DepthFast)
-					results[job.index] = scanResult{report: report, err: err}
-					doneCount.Add(1)
-					if report != nil && report.Status == "listening" {
-						foundCount.Add(1)
-					}
-					reportProgress()
-				}
-			}()
-		}
-		wg.Wait()
-	}
-
-	for _, res := range results {
-		switch {
-		case res.report != nil:
-			if res.report.Status == "listening" {
-				found = append(found, res.report)
-			}
-		case res.err == nil || errors.Is(res.err, inspector.ErrPortNotFound):
-			// Idle or skipped port
-		default:
-			fmt.Fprintf(stderr, "portlens: %v\n", res.err)
-			worst = maxExit(worst, mapError(res.err))
-		}
-	}
-
-	return found, worst
+	return found, exitcode.Success
 }
 
 // scanProgressReporter renders live scan progress to a stream (stderr). On a
@@ -525,14 +403,7 @@ func runOpen(ctx context.Context, mgr *actions.Manager, report *model.Report) in
 }
 
 func mapError(err error) int {
-	switch {
-	case errors.Is(err, platform.ErrPermissionDenied):
-		return exitcode.PermissionDenied
-	case errors.Is(err, platform.ErrProcessNotFound):
-		return exitcode.PortNotFound
-	default:
-		return exitcode.GeneralError
-	}
+	return model.MapExitCode(err)
 }
 
 func isTerminal(w io.Writer) bool {
