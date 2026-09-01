@@ -13,11 +13,9 @@ never leaks information about your machine.
   browser to a local URL.)
 - **No data exfiltration.** Process names, commands, environment data, and
   working directories never leave your machine.
-- **Local history only.** Optional port history is stored in an owner-only
-  (0600) JSONL log under your OS data directory (`~/Library/Application
-  Support/portlens` on macOS, `$XDG_DATA_HOME/portlens` or
-  `~/.local/share/portlens` on Linux). Nothing is transmitted. Disable
-  recording with `--no-record`.
+- **Completely stateless.** PortLens performs real-time queries and leaves zero
+  disk footprint. No inspection logs, process histories, or socket traces are
+  stored on disk.
 
 ## Secret handling
 

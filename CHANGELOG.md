@@ -20,9 +20,16 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Changed
 
+- **Standard open-source subcommand CLI architecture**: Elevated primary actions to intuitive, first-class subcommands (`portlens kill`, `portlens list`/`ls`, `portlens inspect`, `portlens watch`, `portlens find`, `portlens tree`, `portlens conn`, `portlens open`, `portlens restart`) while preserving 100% backward compatibility with flag-based invocations (`portlens 3000 --kill`, `portlens 3000 -t`).
+- **Structured and modernized help output**: Redesigned `portlens --help` and added subcommand-specific `--help` usage screens following open-source CLI standards.
 - **Parallel multi-port and range scan inspection**: Replaced sequential port inspection in `scanPorts` with a concurrent worker pool (`min(2*NumCPU, 16)` workers), parallelizing inspection across active ports while maintaining exact input order and thread-safe progress reporting.
 - **Multi-port and range scan bulk pre-filtering**: Scans (`portlens 3000-8000`) now query the host's active listener table once in bulk and filter in memory, reducing 5,000-port scan times from ~42s down to ~20ms by avoiding thousands of redundant `lsof` process spawns on macOS and `/proc` parsing passes on Linux.
 - **Refined exposure risk classification**: Accurately distinguishes private LAN/VPN addresses (RFC 1918 / RFC 4193 / link-local) from public internet-routable WAN interfaces.
+
+### Removed
+
+- **Removed `--log <file>`**: Removed internal stdout-teeing flag in favor of standard Unix redirection and pipes (`portlens 3000 > out.txt`, `portlens 3000 | tee out.txt`), simplifying flag handling and adhering to Unix philosophy.
+- **Removed local observation history (`--history`, `--no-record`, `internal/history`)**: Removed disk-based invocation logging, making PortLens completely stateless and zero-footprint, eliminating disk write overhead during scans, and removing privacy concerns around saving command arguments to disk.
 
 ### Added
 

@@ -17,10 +17,29 @@ import (
 type nextSubcommand struct{}
 
 func (n *nextSubcommand) Name() string        { return "next" }
-func (n *nextSubcommand) Aliases() []string   { return nil }
-func (n *nextSubcommand) Description() string { return "Find the next available listening port" }
-func (n *nextSubcommand) Run(ctx context.Context, args []string, stdout, stderr io.Writer, stdin io.Reader) int {
-	return runNext(ctx, args, stdout, stderr)
+func (n *nextSubcommand) Aliases() []string   { return []string{"free"} }
+func (n *nextSubcommand) Description() string { return "Find the lowest available/free port" }
+func (n *nextSubcommand) Run(ctx context.Context, args []string, preFlags []string, stdout, stderr io.Writer, _ io.Reader) int {
+	for _, a := range args {
+		if a == "--help" || a == "-h" || a == "help" {
+			printNextUsage(stdout)
+			return exitcode.Success
+		}
+	}
+	return runNext(ctx, append(preFlags, args...), stdout, stderr)
+}
+
+func printNextUsage(w io.Writer) {
+	fmt.Fprint(w, `portlens next — Find the lowest available/free port
+
+USAGE
+  portlens next [start-port] [flags]
+  portlens free [start-port] [flags]
+
+FLAGS
+      --protocol <p> Protocol to check: tcp or udp (default: tcp)
+  -h, --help         Show this help
+`)
 }
 
 func runNext(ctx context.Context, args []string, stdout, stderr io.Writer) int {

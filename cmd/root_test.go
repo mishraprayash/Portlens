@@ -295,47 +295,6 @@ func TestParseArgsForceRequiresKill(t *testing.T) {
 	}
 }
 
-func TestParseArgsLog(t *testing.T) {
-	opts, err := parseArgs([]string{"3000-3010", "--log", "scan.txt"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if opts.logPath != "scan.txt" {
-		t.Errorf("logPath = %q, want scan.txt", opts.logPath)
-	}
-	if !scanMode(opts) {
-		t.Error("expected scan mode for a range with --log")
-	}
-}
-
-func TestParseArgsLogGeneral(t *testing.T) {
-	cases := []struct {
-		in   []string
-		want string
-	}{
-		{[]string{"3000", "--log", "x.txt"}, "x.txt"},
-		{[]string{"3000", "4000", "--log", "x.txt", "--json"}, "x.txt"},
-		{[]string{"3000", "4000", "--log", "x.txt", "--tree"}, "x.txt"},
-		{[]string{"--log", "x.txt"}, "x.txt"},
-	}
-	for _, c := range cases {
-		opts, err := parseArgs(c.in)
-		if err != nil {
-			t.Errorf("parseArgs(%v): unexpected error %v", c.in, err)
-			continue
-		}
-		if opts.logPath != c.want {
-			t.Errorf("parseArgs(%v) logPath = %q, want %q", c.in, opts.logPath, c.want)
-		}
-	}
-}
-
-func TestParseArgsLogRejectsWatch(t *testing.T) {
-	if _, err := parseArgs([]string{"3000", "--log", "x.txt", "--watch"}); err == nil {
-		t.Error("expected error for --log with --watch")
-	}
-}
-
 func TestScanMode(t *testing.T) {
 	cases := []struct {
 		name string
@@ -352,7 +311,6 @@ func TestScanMode(t *testing.T) {
 		{"open", &options{ports: []int32{3000, 4000}, open: true}, false},
 		{"tree", &options{ports: []int32{3000, 4000}, tree: true}, false},
 		{"connections", &options{ports: []int32{3000, 4000}, connections: true}, false},
-		{"history", &options{ports: []int32{3000, 4000}, history: true}, false},
 	}
 	for _, c := range cases {
 		if got := scanMode(c.opts); got != c.want {

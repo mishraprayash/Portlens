@@ -4,10 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"net"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -37,7 +34,7 @@ func TestRunScanReportsOnlyInUsePorts(t *testing.T) {
 	inUse, idle := runScanTest(t)
 
 	var out, errBuf bytes.Buffer
-	opts := &options{ports: []int32{inUse, idle}, protocol: "tcp", noRecord: true, sortBy: "port"}
+	opts := &options{ports: []int32{inUse, idle}, protocol: "tcp", sortBy: "port"}
 	code := runScan(context.Background(), &out, &errBuf, opts)
 	if code != exitcode.Success {
 		t.Fatalf("runScan returned %d, want 0 (stderr: %s)", code, errBuf.String())
@@ -56,97 +53,11 @@ func TestRunScanReportsOnlyInUsePorts(t *testing.T) {
 	}
 }
 
-func TestRunScanWritesLogViaTee(t *testing.T) {
-	inUse, idle := runScanTest(t)
-	logPath := filepath.Join(t.TempDir(), "scan.log")
-
-	var out, errBuf bytes.Buffer
-	w, f, err := teeLog(&out, logPath)
-	if err != nil {
-		t.Fatalf("teeLog: %v", err)
-	}
-	defer f.Close()
-	opts := &options{ports: []int32{inUse, idle}, protocol: "tcp", noRecord: true, sortBy: "port"}
-	code := runScan(context.Background(), w, &errBuf, opts)
-	if code != exitcode.Success {
-		t.Fatalf("runScan returned %d, want 0 (stderr: %s)", code, errBuf.String())
-	}
-
-	data, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("reading log: %v", err)
-	}
-	got := string(data)
-	for _, want := range []string{
-		fmt.Sprintf("Scanning 2 ports (%d-%d)...", inUse, idle),
-		fmt.Sprintf("%d", inUse),
-		fmt.Sprintf("Found "),
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("log missing %q:\n%s", want, got)
-		}
-	}
-	if strings.Contains(got, "Scanning 2/2") {
-		t.Errorf("progress should not be logged (it goes to stderr):\n%s", got)
-	}
-}
-
-func TestTeeLog(t *testing.T) {
-	logPath := filepath.Join(t.TempDir(), "out.log")
-	var buf bytes.Buffer
-	w, f, err := teeLog(&buf, logPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fmt.Fprintln(w, "hello")
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if buf.String() != "hello\n" {
-		t.Errorf("tee target output = %q, want %q", buf.String(), "hello\n")
-	}
-	data, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(data) != "hello\n" {
-		t.Errorf("log file = %q, want %q", string(data), "hello\n")
-	}
-}
-
-func TestTeeLogError(t *testing.T) {
-	_, _, err := teeLog(io.Discard, filepath.Join(t.TempDir(), "no-such-dir", "out.log"))
-	if err == nil {
-		t.Error("expected error for unwritable log path")
-	}
-}
-
-func TestExecuteLogsOutput(t *testing.T) {
-	inUse, _ := runScanTest(t)
-	logPath := filepath.Join(t.TempDir(), "out.log")
-
-	var out, errBuf bytes.Buffer
-	code := Execute([]string{fmt.Sprint(inUse), "--no-record", "--log", logPath}, &out, &errBuf, strings.NewReader(""))
-	if code != exitcode.Success {
-		t.Fatalf("Execute returned %d, want 0 (stderr: %s)", code, errBuf.String())
-	}
-	if !strings.Contains(errBuf.String(), "logging output to "+logPath) {
-		t.Errorf("stderr should announce the log file:\n%s", errBuf.String())
-	}
-	data, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(data), fmt.Sprintf("PORT %d", inUse)) {
-		t.Errorf("log should contain the report output:\n%s", string(data))
-	}
-}
-
 func TestRunPortsJSONOnlyInUse(t *testing.T) {
 	inUse, idle := runScanTest(t)
 
 	var out, errBuf bytes.Buffer
-	opts := &options{ports: []int32{inUse, idle}, protocol: "tcp", jsonOut: true, noRecord: true}
+	opts := &options{ports: []int32{inUse, idle}, protocol: "tcp", jsonOut: true}
 	code := runPortsJSON(context.Background(), &out, &errBuf, opts)
 	if code != exitcode.Success {
 		t.Fatalf("runPortsJSON returned %d, want 0 (stderr: %s)", code, errBuf.String())
@@ -210,7 +121,6 @@ func TestRunScanMultipleActivePortsParallel(t *testing.T) {
 	opts := &options{
 		ports:    []int32{p1, idle1, p2, idle2},
 		protocol: "tcp",
-		noRecord: true,
 		sortBy:   "port",
 	}
 	code := runScan(context.Background(), &out, &errBuf, opts)

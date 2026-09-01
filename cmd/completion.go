@@ -19,7 +19,7 @@ func (c *completionSubcommand) Aliases() []string { return nil }
 func (c *completionSubcommand) Description() string {
 	return "Generate shell autocompletion script (bash, zsh, fish)"
 }
-func (c *completionSubcommand) Run(_ context.Context, args []string, stdout, stderr io.Writer, _ io.Reader) int {
+func (c *completionSubcommand) Run(_ context.Context, args []string, _ []string, stdout, stderr io.Writer, _ io.Reader) int {
 	return runCompletion(args, stdout, stderr)
 }
 
@@ -56,12 +56,14 @@ func runCompletePorts(stdout io.Writer) int {
 	if err != nil {
 		return exitcode.Success
 	}
+
 	seen := make(map[uint16]bool)
 	for _, l := range listeners {
 		if seen[l.Port] {
 			continue
 		}
 		seen[l.Port] = true
+
 		desc := l.Process
 		if desc == "" {
 			desc = detect.LookupService(l.Port)
@@ -97,12 +99,12 @@ _portlens_completions() {
     fi
 
     if [[ "$cur" == -* ]]; then
-        local flags="--verbose -v --probe -p --tree --connections --json --kill --restart --history --open --watch --notify --yes -y --force -f --no-color --no-docker --debug -d --help -h --version --all --tcp --sort --filter"
+        local flags="--verbose -v --probe -p --tree --connections --json -j --kill -k --restart -r --open -o --watch -w --notify --yes -y --force -f --no-color --no-docker --debug -d --help -h --version --all --tcp --sort --filter"
         COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
         return 0
     fi
 
-    local subcmds="config next completion"
+    local subcmds="list ls inspect kill restart open tree conn connections watch find next config completion"
     local ports=$(portlens --_complete_ports 2>/dev/null | cut -d: -f1)
     COMPREPLY=( $(compgen -W "$subcmds $ports" -- "$cur") )
 }
@@ -129,8 +131,19 @@ _portlens() {
 
     local -a subcommands
     subcommands=(
+        'list:List active listening ports'
+        'ls:List active listening ports'
+        'inspect:Inspect port(s) with process details and exposure'
+        'kill:Gracefully terminate process on port(s)'
+        'restart:Restart process if launch command is known'
+        'open:Open service in default browser'
+        'tree:Display process hierarchy'
+        'conn:Show active network connections'
+        'connections:Show active network connections'
+        'watch:Live-monitor port states with desktop notifications'
+        'find:Find ports by process name or PID'
+        'next:Find lowest available/free port'
         'config:Manage named port groups (@name)'
-        'next:Find the next available listening port'
         'completion:Generate shell autocompletion script'
     )
 
@@ -143,11 +156,15 @@ _portlens() {
         '--tree[Show complete process hierarchy]'
         '--connections[Show network connections]'
         '--json[JSON output]'
+        '-j[JSON output]'
         '--kill[Gracefully terminate the owning process]'
+        '-k[Gracefully terminate the owning process]'
         '--restart[Restart the process if launch command is known]'
-        '--history[Show previously observed activity]'
+        '-r[Restart the process]'
         '--open[Open service in browser]'
+        '-o[Open service in browser]'
         '--watch[Re-render every interval]'
+        '-w[Re-render every interval]'
         '--notify[Desktop notification on state change]'
         '--yes[Skip confirmations]'
         '-y[Skip confirmations]'
@@ -202,23 +219,32 @@ end
 
 complete -c portlens -f
 complete -c portlens -n '__fish_use_subcommand' -a '(__portlens_ports)' -d 'Listening port'
-complete -c portlens -n '__fish_use_subcommand' -a 'config' -d 'Manage named port groups'
+complete -c portlens -n '__fish_use_subcommand' -a 'list' -d 'List active listening ports'
+complete -c portlens -n '__fish_use_subcommand' -a 'inspect' -d 'Inspect port details'
+complete -c portlens -n '__fish_use_subcommand' -a 'kill' -d 'Terminate process on port'
+complete -c portlens -n '__fish_use_subcommand' -a 'restart' -d 'Restart process'
+complete -c portlens -n '__fish_use_subcommand' -a 'open' -d 'Open in browser'
+complete -c portlens -n '__fish_use_subcommand' -a 'tree' -d 'Show process hierarchy'
+complete -c portlens -n '__fish_use_subcommand' -a 'conn' -d 'Show network connections'
+complete -c portlens -n '__fish_use_subcommand' -a 'watch' -d 'Live monitor ports'
+complete -c portlens -n '__fish_use_subcommand' -a 'find' -d 'Find ports by name or PID'
 complete -c portlens -n '__fish_use_subcommand' -a 'next' -d 'Find next available port'
+complete -c portlens -n '__fish_use_subcommand' -a 'config' -d 'Manage named port groups'
 complete -c portlens -n '__fish_use_subcommand' -a 'completion' -d 'Generate completion script'
 complete -c portlens -l verbose -s v -d 'Full detailed report'
 complete -c portlens -l probe -s p -d 'Probe HTTP endpoint'
 complete -c portlens -l tree -d 'Show process hierarchy'
 complete -c portlens -l connections -d 'Show network connections'
-complete -c portlens -l json -d 'JSON output'
-complete -c portlens -l kill -d 'Gracefully terminate owning process'
-complete -c portlens -l restart -d 'Restart process'
-complete -c portlens -l watch -d 'Watch mode'
+complete -c portlens -l json -s j -d 'JSON output'
+complete -c portlens -l kill -s k -d 'Gracefully terminate owning process'
+complete -c portlens -l restart -s r -d 'Restart process'
+complete -c portlens -l open -s o -d 'Open in browser'
+complete -c portlens -l watch -s w -d 'Watch mode'
 complete -c portlens -l notify -d 'Desktop notification'
 complete -c portlens -l yes -s y -d 'Skip confirmations'
 complete -c portlens -l force -s f -d 'Force SIGKILL'
 complete -c portlens -l no-color -d 'Plain output'
 complete -c portlens -l no-docker -d 'Disable container detection'
-complete -c portlens -l debug -s d -d 'Debug logging'
 complete -c portlens -l help -s h -d 'Show help'
 complete -c portlens -l version -d 'Show version'
 `

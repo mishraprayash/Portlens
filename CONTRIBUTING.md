@@ -74,9 +74,8 @@ internal/            Non-exported implementation packages
   platform/          OS abstraction: interfaces + darwin/linux providers
   inspector/         Orchestrates platform providers into a Report; process search
   detect/            Project/runtime/framework detection heuristics
-  render/            Human output (summary, report, tree, connections, JSON, history)
+  render/            Human output (summary, report, tree, connections, JSON)
   actions/           State-changing operations (kill, restart, open, copy)
-  history/           Local SQLite-backed observation history
   config/            User config: named port groups (@name)
   exitcode/          Process exit codes
   version/           Build version
@@ -146,8 +145,8 @@ When writing tests:
   short forms, keep them documented in `cmd/usage.go`, and validate
   combinations in `parseArgs` (see existing `--force`/`--kill` checks).
 - **No shelling out** except inside `internal/platform` build-tagged files.
-- **No secrets, ever.** The history database and config are user-local; keep
-  them that way and never log their contents.
+- **No secrets, ever.** The user configuration is user-local; keep it that way
+  and never log its contents.
 
 ## How to add a feature
 

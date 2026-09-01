@@ -1,7 +1,7 @@
 # Security Policy
 
 PortLens is a local-first developer utility. It reads process and network state
-from the machine it runs on, keeps history and configuration on that machine,
+from the machine it runs on, keeps configuration on that machine,
 and never transmits data anywhere.
 
 ## Reporting a vulnerability

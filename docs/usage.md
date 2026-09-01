@@ -353,39 +353,6 @@ before opening, rather than silently launching a browser at a DB port.
 
 ---
 
-## Port history — `portlens <port> --history`
-
-```bash
-$ portlens 3000 --history
-PORT 3000 — HISTORY
-────────────────────────────────────────────
-2026-08-27 21:41
-PID       48231
-Process   node
-Project   orbit-backend
-Command   pnpm dev
-Status    seen
-
-2026-08-26 18:12
-PID       39122
-Process   node
-Project   orbit-backend
-Command   npm run dev
-Status    seen
-```
-
-**Use case — "what was running on 3000 last week?"** History records every
-inspection (PID, process, project, command) in a local owner-only (0600) JSONL
-log.
-
-**Use case — "track a service changing over time."** Spot that the launch
-command changed from `npm run dev` to `pnpm dev`.
-
-History is stored locally and never transmitted. Disable recording with
-`--no-record`, or per-invocation. Location: `~/Library/Application
-Support/portlens` (macOS) or `~/.local/share/portlens` (Linux).
-
----
 
 ## Copy to clipboard (interactive)
 
@@ -457,10 +424,11 @@ reported as `BOUND` (there is no UDP listen state). `--protocol` accepts
 
 | Flag              | Effect                                          |
 |-------------------|-------------------------------------------------|
+| `--json` / `-j`   | Machine-readable JSON output                    |
 | `--yes` / `-y`    | Skip confirmations (still graceful)             |
-| `--force` / `-f`  | With `--kill`: force SIGKILL, skip confirmation |
+| `--force` / `-f`  | With `kill`: force SIGKILL, skip confirmation   |
 | `--no-color`      | Plain output (no ANSI escapes)                  |
-| `--no-record`     | Do not record this inspection to history        |
+| `--no-docker`     | Disable container detection                     |
 | `--probe` / `-p`  | Probe HTTP endpoint for status, title, & server |
 | `--debug` / `-d`  | Structured diagnostic debug logging to stderr   |
 | `--protocol`      | Restrict to `tcp` or `udp`                      |
@@ -470,16 +438,16 @@ clean, parseable output.
 
 ---
 
-## Port ranges, scanning, and `--log`
+## Port ranges and scanning
 
 Multiple ports, ranges, and named groups can be mixed in one invocation:
 
 ```bash
 $ portlens 3000 4000 5000            # a few ports
 $ portlens 3000-3010                 # a range
-$ portlens 4000-4010 --kill --yes    # kill everything in a range
+$ portlens kill 4000-4010 --yes      # kill everything in a range
 $ portlens @dev                      # a group from your config
-$ portlens --all --kill --force      # stop every listening process
+$ portlens kill --all --force        # stop every listening process
 ```
 
 ### Scan mode
@@ -506,51 +474,30 @@ Found 2 of 5001 ports in use in 42.1s.
 - **Ports can span the whole range** `1-65535`; ports outside `1-65535` (e.g.
   `1-99999`) still fail fast before any work starts.
 - Abort anytime with Ctrl-C.
-
-### Logging output to a file — `--log <path>`
-
-`--log <path>` captures **this command's output** to a file, so any invocation
-can be logged with one flag — no per-command plumbing:
-
-```bash
-$ portlens 3000-8000 --log scan.txt     # capture the scan results table
-$ portlens 5432 --log report.txt        # capture a single-port report
-$ portlens --log inventory.txt          # capture the full listing
-$ portlens 4000-4010 --json --log scan.json   # pure JSON array in the file
-```
-
-- The file contains exactly what stdout prints: the report, table, JSON, or
-  summary. **Progress, ETA, and diagnostics are never written** (they go to
-  stderr), so the log is clean.
-- Output in a log is **plain text** (no color codes), and interactive mode is
-  disabled, so a `--log` invocation always produces a single complete result.
-- `--log` cannot be combined with `--watch`.
-
-**Use case — "find what's actually using my port block."** During development
-you often occupy a small slice of a large range. Scan `3000-8000 --log
-scan.txt`: watch the ETA on screen, then keep the results table for later or
-diff it between runs.
+- Standard Unix redirection (`portlens 3000-8000 > scan.txt` or `| tee scan.txt`)
+  captures stdout cleanly because progress and ETA lines stream to stderr.
 
 ---
 
-## Finding ports by process — `--pid` and `--name`
+## Finding ports by process — `portlens find` (or `--pid` / `--name`)
 
 Instead of guessing a port, start from the process:
 
 ```bash
-$ portlens --pid 48231               # all ports owned by PID 48231 (incl. descendants)
-$ portlens --name python             # ports owned by processes matching "python"
-$ portlens --name "/next|vite/"      # regex match on name/command/exe
-$ portlens --name postgres --kill --yes
+$ portlens find 48231                # all ports owned by PID 48231 (incl. descendants)
+$ portlens find python               # ports owned by processes matching "python"
+$ portlens find "/next|vite/"        # regex match on name/command/exe
+$ portlens find postgres --kill -y   # terminate matching processes
+$ portlens --pid 48231               # flag equivalent
+$ portlens --name python             # flag equivalent
 ```
 
 **Use case — "which process owns these ports?"** A supervisor (like `node`, a
 dev server, or a container runtime) often spawns children that actually bind.
-`--pid` matches the given process *or any of its descendants*; `--name` matches
-case-insensitively against the process name, full command line, and executable
-path. Wrap the query in `/.../` to use a regular expression. The resulting ports
-behave exactly like a multi-port invocation, so every flag (`--kill`,
-`--restart`, `--json`, ...) works.
+`portlens find` matches process names, commands, executable paths, or PIDs
+(including descendants). Wrap the query in `/.../` to use a regular expression.
+The resulting ports behave exactly like a multi-port invocation, so every flag
+(`--kill`, `--restart`, `--json`, ...) works.
 
 ---
 

@@ -60,10 +60,9 @@ func (r *Renderer) renderNotListening(report *model.Report) {
 	r.writeln(r.bold(fmt.Sprintf("PORT %d", report.Port)))
 	r.writeln(r.hr())
 	r.writeln(r.yellow("No process is currently listening on this port."))
-	r.writeln("")
 	r.writeln(r.dim("Try:"))
-	r.writeln(r.dim("  portlens            list interesting listening ports"))
-	r.writeln(r.dim(fmt.Sprintf("  portlens %d --history   view past activity on this port", report.Port)))
+	r.writeln(r.dim("  portlens            list active listening ports"))
+	r.writeln(r.dim("  portlens next       find the next available port"))
 }
 
 func (r *Renderer) renderProcess(report *model.Report) {

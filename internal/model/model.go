@@ -225,18 +225,6 @@ type PortEntry struct {
 	Origin    Origin     `json:"origin,omitempty"` // system | user (heuristic)
 }
 
-// HistoryEntry is a single observation of a port over time.
-type HistoryEntry struct {
-	Port       int32     `json:"port"`
-	ObservedAt time.Time `json:"observed_at"`
-	PID        int32     `json:"pid,omitempty"`
-	Process    string    `json:"process,omitempty"`
-	Project    string    `json:"project,omitempty"`
-	Command    string    `json:"command,omitempty"`
-	Address    string    `json:"address,omitempty"`
-	Status     string    `json:"status"` // started, exited, seen
-}
-
 // FormatDuration renders a duration in a compact human-friendly form.
 func FormatDuration(d time.Duration) string {
 	if d < time.Minute {
