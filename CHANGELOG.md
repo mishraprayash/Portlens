@@ -16,6 +16,7 @@ All notable changes to PortLens are documented here. The format is based on
 - **Watch mode immediate signal cancellation**: Migrated `runWatch` to `signal.NotifyContext` so `Ctrl-C` or `SIGTERM` cancels in-flight inspection passes immediately instead of blocking until the current tick finishes.
 - **Unbounded `lsof` execution timeout**: Added a 10-second safety deadline to macOS `runLsof` when invoked with an unbounded context, preventing indefinite blocking on unresponsive network mounts (NFS/SMB).
 - **Linux `/proc` socket link slice bounds safety**: Added defensive validation for socket symlinks in `/proc/<pid>/fd`, eliminating potential slice out-of-bounds panics on malformed symlinks.
+- **macOS `lsof` exit code 1 handling**: Fixed `runLsof` to treat exit code 1 as successful even when partial output is emitted alongside non-fatal warnings (e.g. unprivileged execution), preventing `portlens list` from failing on unprivileged runner environments.
 - **Non-blocking browser launching on Linux**: Launched browser processes asynchronously via `cmd.Start()`, preventing foreground browser processes from locking the PortLens CLI.
 
 ### Changed

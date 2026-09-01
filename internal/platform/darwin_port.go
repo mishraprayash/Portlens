@@ -34,12 +34,14 @@ func runLsof(ctx context.Context, args ...string) (string, error) {
 	out, err := cmd.Output()
 	if err != nil {
 		slog.DebugContext(ctx, "lsof command returned error", "args", args, "error", err)
-		// lsof exits 1 when nothing matches; that is a valid empty result.
-		if _, ok := err.(*exec.ExitError); ok && len(out) == 0 {
-			return "", nil
-		}
 		if ctx.Err() != nil {
 			return "", ctx.Err()
+		}
+		// lsof exits 1 when nothing matches or when partial output is emitted
+		// alongside non-fatal warnings (e.g. unprivileged execution). Both cases
+		// provide valid output.
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return string(out), nil
 		}
 		return "", err
 	}
