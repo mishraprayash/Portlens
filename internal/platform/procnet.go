@@ -72,8 +72,25 @@ func parseProcNetBytes(data []byte) []procNetRow {
 		if len(line) == 0 || line[0] == '\n' {
 			continue
 		}
-		fields := bytes.Fields(line)
-		if len(fields) < 10 {
+		var fields [10][]byte
+		restLine := line
+		count := 0
+		for len(restLine) > 0 && count < 10 {
+			for len(restLine) > 0 && restLine[0] == ' ' {
+				restLine = restLine[1:]
+			}
+			if len(restLine) == 0 {
+				break
+			}
+			end := 0
+			for end < len(restLine) && restLine[end] != ' ' {
+				end++
+			}
+			fields[count] = restLine[:end]
+			restLine = restLine[end:]
+			count++
+		}
+		if count < 10 {
 			continue
 		}
 		local := fields[1]
