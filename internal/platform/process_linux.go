@@ -202,11 +202,15 @@ func linuxUser(pid int32) string {
 		if !bytes.HasPrefix(line, []byte("Uid:")) {
 			continue
 		}
-		f := bytes.Fields(line[4:])
-		if len(f) == 0 {
+		rest := trimLeftSpace(line[4:])
+		if len(rest) == 0 {
 			return ""
 		}
-		return uidToName(f[0])
+		end := 0
+		for end < len(rest) && rest[end] != ' ' && rest[end] != '	' {
+			end++
+		}
+		return uidToName(rest[:end])
 	}
 	return ""
 }
@@ -236,11 +240,19 @@ func linuxRSS(pid int32) uint64 {
 		return 0
 	}
 	// statm: size resident shared text lib data dt — resident pages is field 2.
-	f := bytes.Fields(data)
-	if len(f) < 2 {
+	rest := skipToken(data)
+	if len(rest) == 0 {
 		return 0
 	}
-	pages, err := strconv.ParseUint(string(f[1]), 10, 64)
+	rest = trimLeftSpace(rest)
+	if len(rest) == 0 {
+		return 0
+	}
+	end := 0
+	for end < len(rest) && rest[end] >= '0' && rest[end] <= '9' {
+		end++
+	}
+	pages, err := strconv.ParseUint(string(rest[:end]), 10, 64)
 	if err != nil {
 		return 0
 	}
@@ -270,10 +282,18 @@ func isProcessAlive(pid int32) bool {
 // splitNUL splits a NUL-separated byte slice into its non-empty parts.
 func splitNUL(b []byte) []string {
 	var out []string
-	for _, part := range bytes.Split(b, []byte{0}) {
-		if len(part) > 0 {
-			out = append(out, string(part))
+	for {
+		i := bytes.IndexByte(b, 0)
+		if i < 0 {
+			if len(b) > 0 {
+				out = append(out, string(b))
+			}
+			break
 		}
+		if i > 0 {
+			out = append(out, string(b[:i]))
+		}
+		b = b[i+1:]
 	}
 	return out
 }
