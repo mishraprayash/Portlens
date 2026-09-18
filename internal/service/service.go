@@ -30,6 +30,16 @@ type PortService struct {
 }
 
 // Option configures a PortService.
+type scanResult struct {
+	report *model.Report
+	err    error
+}
+
+type portJob struct {
+	index int
+	port  int32
+}
+
 type Option func(*PortService)
 
 // WithInspector configures the port inspector implementation.
@@ -117,16 +127,6 @@ func (s *PortService) Scan(ctx context.Context, ports []int32, protocol model.Pr
 		}
 	}
 
-	type scanResult struct {
-		report *model.Report
-		err    error
-	}
-
-	type portJob struct {
-		index int
-		port  int32
-	}
-
 	results := make([]scanResult, len(ports))
 	var toInspect []portJob
 	var idleCount int
@@ -183,18 +183,7 @@ func (s *PortService) Scan(ctx context.Context, ports []int32, protocol model.Pr
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				for job := range jobs {
-					if ctx.Err() != nil {
-						return
-					}
-					report, err := s.inspector.InspectDepth(ctx, job.port, protocol, inspector.DepthFast)
-					results[job.index] = scanResult{report: report, err: err}
-					doneCount.Add(1)
-					if report != nil && report.Status == "listening" {
-						foundCount.Add(1)
-					}
-					reportProgress()
-				}
+				s.runScanWorker(ctx, protocol, jobs, results, &doneCount, &foundCount, reportProgress)
 			}()
 		}
 		wg.Wait()
@@ -312,4 +301,37 @@ func (s *PortService) NextAvailable(ctx context.Context, startPort int32) (int32
 		}
 	}
 	return 0, fmt.Errorf("%w: no available ports found above %d", model.ErrPortNotFound, startPort)
+}
+
+func (s *PortService) runScanWorker(
+	ctx context.Context,
+	protocol model.Protocol,
+	jobs <-chan portJob,
+	results []scanResult,
+	doneCount, foundCount *atomic.Int64,
+	reportProgress func(),
+) {
+	for job := range jobs {
+		if ctx.Err() != nil {
+			return
+		}
+		s.inspectPortJob(ctx, protocol, job, results, doneCount, foundCount, reportProgress)
+	}
+}
+
+func (s *PortService) inspectPortJob(
+	ctx context.Context,
+	protocol model.Protocol,
+	job portJob,
+	results []scanResult,
+	doneCount, foundCount *atomic.Int64,
+	reportProgress func(),
+) {
+	report, err := s.inspector.InspectDepth(ctx, job.port, protocol, inspector.DepthFast)
+	results[job.index] = scanResult{report: report, err: err}
+	doneCount.Add(1)
+	if report != nil && report.Status == "listening" {
+		foundCount.Add(1)
+	}
+	reportProgress()
 }
