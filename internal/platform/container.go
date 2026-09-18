@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/portlens/portlens/internal/model"
@@ -35,6 +36,11 @@ type dockerProvider struct {
 	// field so tests can inject a deterministic value instead of reading the
 	// host's /proc.
 	cgroupForPID func(pid int32) string
+
+	mu         sync.Mutex
+	cacheTTL   time.Duration
+	cachedAt   time.Time
+	cachedList []containerSummary
 }
 
 // newDockerProvider builds a provider dialing the daemon over a unix socket.
@@ -42,6 +48,7 @@ func newDockerProvider(socket string) *dockerProvider {
 	return &dockerProvider{
 		base:         "http://docker",
 		socket:       socket,
+		cacheTTL:     2 * time.Second,
 		cgroupForPID: containerIDForPID,
 		client: &http.Client{Transport: &http.Transport{
 			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
@@ -219,15 +226,25 @@ func (d *dockerProvider) FindByPID(ctx context.Context, pid int32) (*model.Conta
 	return &model.Container{ID: id}, nil
 }
 
+func (d *dockerProvider) invalidateCache() {
+	d.mu.Lock()
+	d.cachedAt = time.Time{}
+	d.cachedList = nil
+	d.mu.Unlock()
+}
+
 func (d *dockerProvider) Stop(ctx context.Context, containerID string, timeout time.Duration) error {
+	defer d.invalidateCache()
 	return d.post(ctx, pathForContainer(containerID)+"/stop", dockerActionTimeout, "t="+fmt.Sprintf("%d", int(timeout.Seconds())))
 }
 
 func (d *dockerProvider) Kill(ctx context.Context, containerID string) error {
+	defer d.invalidateCache()
 	return d.post(ctx, pathForContainer(containerID)+"/kill", dockerActionTimeout, "signal=SIGKILL")
 }
 
 func (d *dockerProvider) Restart(ctx context.Context, containerID string, timeout time.Duration) error {
+	defer d.invalidateCache()
 	return d.post(ctx, pathForContainer(containerID)+"/restart", dockerActionTimeout, "t="+fmt.Sprintf("%d", int(timeout.Seconds())))
 }
 
@@ -236,12 +253,26 @@ func pathForContainer(containerID string) string {
 }
 
 func (d *dockerProvider) list(ctx context.Context) ([]containerSummary, error) {
+	d.mu.Lock()
+	if d.cacheTTL > 0 && time.Since(d.cachedAt) < d.cacheTTL && d.cachedList != nil {
+		res := d.cachedList
+		d.mu.Unlock()
+		return res, nil
+	}
+	d.mu.Unlock()
+
 	ctx, cancel := context.WithTimeout(ctx, dockerSocketTimeout)
 	defer cancel()
 	var out []containerSummary
 	if err := d.get(ctx, "/containers/json", &out); err != nil {
 		return nil, err
 	}
+
+	d.mu.Lock()
+	d.cachedAt = time.Now()
+	d.cachedList = out
+	d.mu.Unlock()
+
 	return out, nil
 }
 
