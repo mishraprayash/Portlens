@@ -269,6 +269,65 @@ func TestContainerActions(t *testing.T) {
 	}
 }
 
+func TestContainerListCache(t *testing.T) {
+	var requestCount atomic.Int64
+	sock := startDockerServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/containers/json" {
+			requestCount.Add(1)
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, testContainerJSON())
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/stop") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	d := newDockerProvider(sock)
+	d.cacheTTL = 50 * time.Millisecond
+	ctx := context.Background()
+
+	// 1st call - hits HTTP endpoint
+	_, err := d.FindByPorts(ctx, []uint16{8080}, model.ProtocolTCP)
+	if err != nil {
+		t.Fatalf("FindByPorts 1: %v", err)
+	}
+	if got := requestCount.Load(); got != 1 {
+		t.Fatalf("requests = %d, want 1", got)
+	}
+
+	// 2nd call - within TTL, should serve from cache
+	_, err = d.FindByPorts(ctx, []uint16{8080}, model.ProtocolTCP)
+	if err != nil {
+		t.Fatalf("FindByPorts 2: %v", err)
+	}
+	if got := requestCount.Load(); got != 1 {
+		t.Fatalf("requests = %d, want 1 (cache hit)", got)
+	}
+
+	// 3rd call - invalidate cache via action
+	_ = d.Stop(ctx, "abc123", 1*time.Second)
+	_, err = d.FindByPorts(ctx, []uint16{8080}, model.ProtocolTCP)
+	if err != nil {
+		t.Fatalf("FindByPorts 3: %v", err)
+	}
+	if got := requestCount.Load(); got != 2 {
+		t.Fatalf("requests = %d, want 2 (after cache invalidation)", got)
+	}
+
+	// Wait for TTL expiration
+	time.Sleep(60 * time.Millisecond)
+	_, err = d.FindByPorts(ctx, []uint16{8080}, model.ProtocolTCP)
+	if err != nil {
+		t.Fatalf("FindByPorts 4: %v", err)
+	}
+	if got := requestCount.Load(); got != 3 {
+		t.Fatalf("requests = %d, want 3 (after TTL expiration)", got)
+	}
+}
+
 func TestDockerHTTPError(t *testing.T) {
 	resp := &http.Response{StatusCode: http.StatusInternalServerError, Status: "500 Internal Server Error"}
 	body := http.NoBody
@@ -280,3 +339,38 @@ func TestDockerHTTPError(t *testing.T) {
 }
 
 var _ ContainerProvider = (*dockerProvider)(nil)
+
+func BenchmarkFindByPorts(b *testing.B) {
+	sock := startDockerServerBench(b, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/containers/json" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, testContainerJSON())
+	}))
+	d := newDockerProvider(sock)
+	ctx := context.Background()
+	ports := []uint16{8080, 6379, 9999}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := d.FindByPorts(ctx, ports, model.ProtocolTCP)
+		if err != nil {
+			b.Fatalf("FindByPorts: %v", err)
+		}
+	}
+}
+
+func startDockerServerBench(b *testing.B, h http.Handler) string {
+	b.Helper()
+	sock := filepath.Join(os.TempDir(), fmt.Sprintf("pl-bench-%d.sock", sockSeq.Add(1)))
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		b.Fatalf("unix listen: %v", err)
+	}
+	srv := &http.Server{Handler: h}
+	go func() { _ = srv.Serve(ln) }()
+	b.Cleanup(func() { _ = ln.Close(); _ = srv.Close(); _ = os.Remove(sock) })
+	return sock
+}
