@@ -63,16 +63,7 @@ func (m *Manager) Restart(ctx context.Context, report *model.Report) error {
 			return fmt.Errorf("failed to stop existing process %d: %w", report.Process.PID, err)
 		}
 		// Brief wait for the port socket to be fully released by the OS.
-		if m.Platform != nil && m.Platform.Ports != nil && report.Port > 0 {
-			deadline := time.Now().Add(2 * time.Second)
-			for time.Now().Before(deadline) {
-				listeners, err := m.Platform.Ports.ResolvePort(ctx, uint16(report.Port), report.Protocol)
-				if err != nil || len(listeners) == 0 {
-					break
-				}
-				time.Sleep(100 * time.Millisecond)
-			}
-		}
+		m.waitForPortRelease(ctx, report.Port, report.Protocol)
 	}
 
 	starter := m.Starter
@@ -85,6 +76,21 @@ func (m *Manager) Restart(ctx context.Context, report *model.Report) error {
 	}
 	fmt.Fprintf(m.Out, "Restarted with pid %d (running detached)\n", newPID)
 	return nil
+}
+
+// waitForPortRelease waits briefly for the OS to fully release the given port socket.
+func (m *Manager) waitForPortRelease(ctx context.Context, port int32, protocol model.Protocol) {
+	if m.Platform == nil || m.Platform.Ports == nil || port <= 0 {
+		return
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		listeners, err := m.Platform.Ports.ResolvePort(ctx, uint16(port), protocol)
+		if err != nil || len(listeners) == 0 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 // defaultProcessStarter spawns a process detached from the current terminal
