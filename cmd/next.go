@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/portlens/portlens/internal/exitcode"
+	"github.com/portlens/portlens/internal/inspector"
 	"github.com/portlens/portlens/internal/model"
 )
 
@@ -73,17 +74,7 @@ func runNext(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 
 	insp := newInspector(&options{})
-	inUse := make(map[uint16]bool)
-	if insp.Platform != nil && insp.Platform.Ports != nil {
-		if listeners, err := insp.Platform.Ports.Listeners(ctx); err == nil {
-			normProto := proto.Normalize()
-			for _, l := range listeners {
-				if normProto == "" || l.Protocol.Normalize() == normProto {
-					inUse[l.Port] = true
-				}
-			}
-		}
-	}
+	inUse := getInUsePorts(ctx, insp, proto)
 
 	for p := startPort; p <= 65535; p++ {
 		if inUse[uint16(p)] {
@@ -110,4 +101,22 @@ func runNext(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 	fmt.Fprintf(stderr, "portlens next: no available %s ports found starting from %d\n", network, startPort)
 	return exitcode.PortNotFound
+}
+
+func getInUsePorts(ctx context.Context, insp *inspector.Inspector, proto model.Protocol) map[uint16]bool {
+	inUse := make(map[uint16]bool)
+	if insp == nil || insp.Platform == nil || insp.Platform.Ports == nil {
+		return inUse
+	}
+	listeners, err := insp.Platform.Ports.Listeners(ctx)
+	if err != nil {
+		return inUse
+	}
+	normProto := proto.Normalize()
+	for _, l := range listeners {
+		if normProto == "" || l.Protocol.Normalize() == normProto {
+			inUse[l.Port] = true
+		}
+	}
+	return inUse
 }
