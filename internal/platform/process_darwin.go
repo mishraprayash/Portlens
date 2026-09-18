@@ -79,6 +79,56 @@ func (darwinProcessInspector) InfoBasic(ctx context.Context, pid int32) (*model.
 	return darwinProcInfo(pid, false)
 }
 
+func (darwinProcessInspector) InfoBasicBatch(ctx context.Context, pids []int32) (map[int32]*model.ProcessInfo, error) {
+	out := make(map[int32]*model.ProcessInfo, len(pids))
+	if len(pids) == 0 {
+		return out, nil
+	}
+
+	lib, close, err := libprocPath()
+	var pathFn func(pid int32, buf uintptr, bufsize uint32) int32
+	var infoFn func(pid, flavor int32, arg uint64, buf uintptr, bufsize int32) int32
+	if err == nil {
+		defer close()
+		pathFn = libprocPIDPathFn(lib)
+		infoFn = libprocPIDInfoFn(lib)
+	}
+
+	for _, pid := range pids {
+		if pid <= 0 {
+			continue
+		}
+		kp, err := unix.SysctlKinfoProc("kern.proc.pid", int(pid))
+		if err != nil {
+			continue
+		}
+
+		info := &model.ProcessInfo{PID: pid, PPID: kp.Eproc.Ppid}
+		info.Name = darwinProcName(pid, cstring(kp.Proc.P_comm[:]))
+
+		exe, cmdline, err := darwinArgs(pid)
+		if err == nil {
+			if pathFn != nil {
+				info.Exe = darwinExePathWithFn(pid, exe, pathFn)
+			} else {
+				info.Exe = exe
+			}
+			info.Cmdline = cmdline
+			info.Command = commandFromCmdline(cmdline, info.Name)
+		}
+
+		if infoFn != nil {
+			if cwd := darwinCwdWithFn(pid, infoFn); cwd != "" {
+				info.CWD = cwd
+			}
+		}
+
+		out[pid] = info
+	}
+
+	return out, nil
+}
+
 func (darwinProcessInspector) Exists(_ context.Context, pid int32) bool {
 	return isProcessAlive(pid)
 }
@@ -229,7 +279,10 @@ func darwinExePath(pid int32, argvExe string) string {
 		return argvExe
 	}
 	defer close()
-	fn := libprocPIDPathFn(lib)
+	return darwinExePathWithFn(pid, argvExe, libprocPIDPathFn(lib))
+}
+
+func darwinExePathWithFn(pid int32, argvExe string, fn func(pid int32, buf uintptr, bufsize uint32) int32) string {
 	buf := make([]byte, procPathInfoMax)
 	n := fn(pid, uintptr(unsafe.Pointer(&buf[0])), uint32(len(buf)))
 	if n <= 0 || n >= int32(len(buf)) {
@@ -246,7 +299,10 @@ func darwinCwd(pid int32) string {
 		return ""
 	}
 	defer close()
-	fn := libprocPIDInfoFn(lib)
+	return darwinCwdWithFn(pid, libprocPIDInfoFn(lib))
+}
+
+func darwinCwdWithFn(pid int32, fn func(pid, flavor int32, arg uint64, buf uintptr, bufsize int32) int32) string {
 	var vpi vnodePathInfo
 	const size = int32(unsafe.Sizeof(vpi))
 	n := fn(pid, procPidInfoPath, 0, uintptr(unsafe.Pointer(&vpi)), size)
@@ -263,7 +319,10 @@ func darwinRSS(pid int32) uint64 {
 		return 0
 	}
 	defer close()
-	fn := libprocPIDInfoFn(lib)
+	return darwinRSSWithFn(pid, libprocPIDInfoFn(lib))
+}
+
+func darwinRSSWithFn(pid int32, fn func(pid, flavor int32, arg uint64, buf uintptr, bufsize int32) int32) uint64 {
 	var ti procTaskInfo
 	const size = int32(unsafe.Sizeof(ti))
 	n := fn(pid, procPidTaskInfo, 0, uintptr(unsafe.Pointer(&ti)), size)

@@ -49,6 +49,10 @@ type ProcessInspector interface {
 	// call for fields the fast path never displays.
 	InfoBasic(ctx context.Context, pid int32) (*model.ProcessInfo, error)
 
+	// InfoBasicBatch returns metadata for a slice of PIDs in a single batch
+	// operation. PIDs that are inaccessible or exited are omitted from the map.
+	InfoBasicBatch(ctx context.Context, pids []int32) (map[int32]*model.ProcessInfo, error)
+
 	// Exists reports whether the process is still alive.
 	Exists(ctx context.Context, pid int32) bool
 }

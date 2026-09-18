@@ -68,23 +68,33 @@ func (i *Inspector) SearchByPID(ctx context.Context, pid int32) ([]model.PortEnt
 	return entries, nil
 }
 
-// processInfos resolves process metadata for each unique listener PID. It uses
-// InfoBasic, which never spawns external commands and fetches only the fields
-// the listing displays.
+// processInfos resolves process metadata for each unique listener PID using a bulk query.
 func (i *Inspector) processInfos(ctx context.Context, listeners []model.Listener) map[int32]*model.ProcessInfo {
-	out := map[int32]*model.ProcessInfo{}
+	if i == nil || i.Platform == nil || i.Platform.Processes == nil {
+		return map[int32]*model.ProcessInfo{}
+	}
+	pids := make([]int32, 0, len(listeners))
+	seen := make(map[int32]bool, len(listeners))
 	for _, l := range listeners {
-		if l.PID <= 0 {
-			continue
-		}
-		if _, ok := out[l.PID]; ok {
-			continue
-		}
-		if p, err := i.Platform.Processes.InfoBasic(ctx, l.PID); err == nil {
-			out[l.PID] = p
+		if l.PID > 0 && !seen[l.PID] {
+			seen[l.PID] = true
+			pids = append(pids, l.PID)
 		}
 	}
-	return out
+	if len(pids) == 0 {
+		return map[int32]*model.ProcessInfo{}
+	}
+	infos, err := i.Platform.Processes.InfoBasicBatch(ctx, pids)
+	if err != nil || infos == nil {
+		out := map[int32]*model.ProcessInfo{}
+		for _, pid := range pids {
+			if p, err := i.Platform.Processes.InfoBasic(ctx, pid); err == nil {
+				out[pid] = p
+			}
+		}
+		return out
+	}
+	return infos
 }
 
 // buildEntries deduplicates listeners by family+port, enriches them into

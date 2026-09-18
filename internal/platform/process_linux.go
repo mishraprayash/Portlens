@@ -32,6 +32,19 @@ func (linuxProcessInspector) InfoBasic(ctx context.Context, pid int32) (*model.P
 	return linuxProcInfo(pid, false)
 }
 
+func (linuxProcessInspector) InfoBasicBatch(ctx context.Context, pids []int32) (map[int32]*model.ProcessInfo, error) {
+	out := make(map[int32]*model.ProcessInfo, len(pids))
+	for _, pid := range pids {
+		if pid <= 0 {
+			continue
+		}
+		if p, err := linuxProcInfo(pid, false); err == nil {
+			out[pid] = p
+		}
+	}
+	return out, nil
+}
+
 func (linuxProcessInspector) Exists(_ context.Context, pid int32) bool {
 	return isProcessAlive(pid)
 }
