@@ -41,26 +41,50 @@ func (i *Inspector) SearchByPID(ctx context.Context, pid int32) ([]model.PortEnt
 		return nil, err
 	}
 	infos := i.processInfos(ctx, listeners)
-	ancestors := map[int32]bool{}
+
+	descendants := map[int32]bool{pid: true}
+	if tree, err := i.Platform.Tree.Descendants(ctx, pid); err == nil && tree != nil {
+		var collect func(node *model.ProcessTree)
+		collect = func(node *model.ProcessTree) {
+			if node == nil {
+				return
+			}
+			descendants[node.Process.PID] = true
+			for _, child := range node.Children {
+				collect(child)
+			}
+		}
+		collect(tree)
+	}
+
+	ancestorsCache := map[int32]bool{}
 	contains := func(owner int32) bool {
-		if owner == pid {
+		if descendants[owner] {
 			return true
 		}
-		if hit, ok := ancestors[owner]; ok {
+		if hit, ok := ancestorsCache[owner]; ok {
 			return hit
 		}
 		hit := false
 		if chain, err := i.Platform.Tree.Ancestors(ctx, owner); err == nil {
+			seenTarget := false
 			for _, a := range chain {
-				if a != nil && a.PID == pid {
-					hit = true
-					break
+				if a == nil {
+					continue
+				}
+				if a.PID == pid {
+					seenTarget = true
+				}
+				if seenTarget {
+					descendants[a.PID] = true
 				}
 			}
+			hit = seenTarget
 		}
-		ancestors[owner] = hit
+		ancestorsCache[owner] = hit
 		return hit
 	}
+
 	entries := i.buildEntries(ctx, listeners, infos, func(p *model.ProcessInfo) bool {
 		return p != nil && contains(p.PID)
 	})

@@ -6,6 +6,7 @@ import (
 
 	"github.com/portlens/portlens/internal/detect"
 	"github.com/portlens/portlens/internal/model"
+	"github.com/portlens/portlens/internal/platform"
 )
 
 func TestCompileProcessMatcher(t *testing.T) {
@@ -86,6 +87,122 @@ func TestBuildEntries(t *testing.T) {
 	})
 	if len(kept) != 2 || kept[0].Port != 3000 || kept[1].Port != 3000 {
 		t.Errorf("keep filter: got %+v, want two port 3000 entries (tcp+udp)", kept)
+	}
+}
+
+type mockTreeProvider struct {
+	ancestors   map[int32][]*model.ProcessInfo
+	descendants map[int32]*model.ProcessTree
+}
+
+func (m *mockTreeProvider) Ancestors(_ context.Context, pid int32) ([]*model.ProcessInfo, error) {
+	if chain, ok := m.ancestors[pid]; ok {
+		return chain, nil
+	}
+	return nil, nil
+}
+
+func (m *mockTreeProvider) Children(_ context.Context, _ int32) ([]*model.ProcessInfo, error) {
+	return nil, nil
+}
+
+func (m *mockTreeProvider) Descendants(_ context.Context, pid int32) (*model.ProcessTree, error) {
+	if tree, ok := m.descendants[pid]; ok {
+		return tree, nil
+	}
+	return nil, nil
+}
+
+type mockPortResolver struct {
+	listeners []model.Listener
+}
+
+func (m *mockPortResolver) Listeners(_ context.Context) ([]model.Listener, error) {
+	return m.listeners, nil
+}
+
+func (m *mockPortResolver) ResolvePort(_ context.Context, _ uint16, _ model.Protocol) ([]model.Listener, error) {
+	return nil, nil
+}
+
+type mockProcessInspector struct {
+	infos map[int32]*model.ProcessInfo
+}
+
+func (m *mockProcessInspector) Info(_ context.Context, pid int32) (*model.ProcessInfo, error) {
+	return m.infos[pid], nil
+}
+
+func (m *mockProcessInspector) InfoBasic(_ context.Context, pid int32) (*model.ProcessInfo, error) {
+	return m.infos[pid], nil
+}
+
+func (m *mockProcessInspector) Exists(_ context.Context, _ int32) bool {
+	return true
+}
+
+func TestSearchByPID(t *testing.T) {
+	// Root process 100 -> Child 101 -> Grandchild 102
+	// Independent process 200
+	tree100 := &model.ProcessTree{
+		Process: model.ProcessInfo{PID: 100, Name: "root"},
+		Children: []*model.ProcessTree{
+			{
+				Process: model.ProcessInfo{PID: 101, PPID: 100, Name: "child"},
+				Children: []*model.ProcessTree{
+					{
+						Process: model.ProcessInfo{PID: 102, PPID: 101, Name: "grandchild"},
+					},
+				},
+			},
+		},
+	}
+
+	ancestors102 := []*model.ProcessInfo{
+		{PID: 100, Name: "root"},
+		{PID: 101, PPID: 100, Name: "child"},
+		{PID: 102, PPID: 101, Name: "grandchild"},
+	}
+
+	ancestors200 := []*model.ProcessInfo{
+		{PID: 1, Name: "init"},
+		{PID: 200, PPID: 1, Name: "independent"},
+	}
+
+	plat := &platform.Platform{
+		Ports: &mockPortResolver{
+			listeners: []model.Listener{
+				{Protocol: model.ProtocolTCP, Address: "127.0.0.1", Port: 8000, State: "LISTEN", PID: 102, Process: "grandchild"},
+				{Protocol: model.ProtocolTCP, Address: "127.0.0.1", Port: 9000, State: "LISTEN", PID: 200, Process: "independent"},
+			},
+		},
+		Processes: &mockProcessInspector{
+			infos: map[int32]*model.ProcessInfo{
+				102: {PID: 102, Name: "grandchild"},
+				200: {PID: 200, Name: "independent"},
+			},
+		},
+		Tree: &mockTreeProvider{
+			descendants: map[int32]*model.ProcessTree{
+				100: tree100,
+			},
+			ancestors: map[int32][]*model.ProcessInfo{
+				102: ancestors102,
+				200: ancestors200,
+			},
+		},
+	}
+
+	insp := New(plat)
+	entries, err := insp.SearchByPID(context.Background(), 100)
+	if err != nil {
+		t.Fatalf("SearchByPID(100) error: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d: %+v", len(entries), entries)
+	}
+	if entries[0].PID != 102 || entries[0].Port != 8000 {
+		t.Errorf("unexpected entry: %+v", entries[0])
 	}
 }
 
