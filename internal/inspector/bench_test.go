@@ -39,6 +39,21 @@ func BenchmarkInspectPort(b *testing.B) {
 	}
 }
 
+// BenchmarkSearchByPID exercises SearchByPID against the system process tree.
+func BenchmarkSearchByPID(b *testing.B) {
+	insp := New(platform.New())
+	ctx := context.Background()
+	// PID 1 is typically init / launchd or system root.
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := insp.SearchByPID(ctx, 1)
+		if err != nil {
+			b.Fatalf("SearchByPID: %v", err)
+		}
+	}
+}
+
 // BenchmarkInspectPortFast measures the default fast path that `portlens <port>`
 // uses: ownership, minimal process info, project, exposure — no process tree or
 // network connections.
