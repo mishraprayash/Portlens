@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"bytes"
+	"context"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestDiffWatch(t *testing.T) {
@@ -23,6 +26,55 @@ func TestDiffWatch(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("diffWatch = %+v, want %+v", got, want)
 	}
+}
+
+func TestWaitWatchTick(t *testing.T) {
+	t.Run("tick received", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		tickCh := make(chan time.Time, 1)
+		tickCh <- time.Now()
+
+		buf := &bytes.Buffer{}
+		got := waitWatchTick(ctx, buf, true, tickCh)
+		if !got {
+			t.Errorf("waitWatchTick() = false, want true")
+		}
+		if buf.Len() != 0 {
+			t.Errorf("expected no output on tick, got %q", buf.String())
+		}
+	})
+
+	t.Run("context cancelled interactive", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		tickCh := make(chan time.Time)
+		buf := &bytes.Buffer{}
+		got := waitWatchTick(ctx, buf, true, tickCh)
+		if got {
+			t.Errorf("waitWatchTick() = true, want false")
+		}
+		if buf.String() != "\n" {
+			t.Errorf("expected newline output, got %q", buf.String())
+		}
+	})
+
+	t.Run("context cancelled non-interactive", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		tickCh := make(chan time.Time)
+		buf := &bytes.Buffer{}
+		got := waitWatchTick(ctx, buf, false, tickCh)
+		if got {
+			t.Errorf("waitWatchTick() = true, want false")
+		}
+		if buf.Len() != 0 {
+			t.Errorf("expected no output, got %q", buf.String())
+		}
+	})
 }
 
 func TestDiffWatchDown(t *testing.T) {

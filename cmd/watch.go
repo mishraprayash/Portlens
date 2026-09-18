@@ -70,13 +70,8 @@ func runWatch(ctx context.Context, stdout, stderr io.Writer, opts *options) int 
 			// Transient failure: keep the previous snapshot so a single bad
 			// tick does not report every target as down.
 			first = false
-			select {
-			case <-ctx.Done():
-				if interactive {
-					fmt.Fprintln(stdout)
-				}
+			if !waitWatchTick(ctx, stdout, interactive, ticker.C) {
 				return exitcode.Success
-			case <-ticker.C:
 			}
 			continue
 		}
@@ -89,14 +84,24 @@ func runWatch(ctx context.Context, stdout, stderr io.Writer, opts *options) int 
 		prev = cur
 		first = false
 
-		select {
-		case <-ctx.Done():
-			if interactive {
-				fmt.Fprintln(stdout)
-			}
+		if !waitWatchTick(ctx, stdout, interactive, ticker.C) {
 			return exitcode.Success
-		case <-ticker.C:
 		}
+	}
+}
+
+// waitWatchTick blocks until either the context is done or a ticker tick occurs.
+// It returns false if the context was cancelled (and prints a trailing newline
+// if interactive), or true if a tick was received.
+func waitWatchTick(ctx context.Context, stdout io.Writer, interactive bool, tick <-chan time.Time) bool {
+	select {
+	case <-ctx.Done():
+		if interactive {
+			fmt.Fprintln(stdout)
+		}
+		return false
+	case <-tick:
+		return true
 	}
 }
 
