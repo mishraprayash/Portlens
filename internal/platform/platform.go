@@ -53,6 +53,16 @@ type ProcessInspector interface {
 	Exists(ctx context.Context, pid int32) bool
 }
 
+// BatchProcessInspector is an optional extension interface for ProcessInspector
+// implementations that support bulk process metadata resolution in a single operation.
+type BatchProcessInspector interface {
+	ProcessInspector
+
+	// InfoBasicBatch returns metadata for a slice of PIDs in a single batch
+	// operation. PIDs that are inaccessible or exited are omitted from the map.
+	InfoBasicBatch(ctx context.Context, pids []int32) (map[int32]*model.ProcessInfo, error)
+}
+
 // ProcessTreeProvider builds process hierarchies.
 type ProcessTreeProvider interface {
 	// Ancestors returns the chain of parents from the PID up to the root

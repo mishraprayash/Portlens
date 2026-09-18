@@ -3,6 +3,7 @@ package inspector
 import (
 	"context"
 	"net"
+	"os"
 	"testing"
 
 	"github.com/portlens/portlens/internal/model"
@@ -36,6 +37,38 @@ func BenchmarkInspectPort(b *testing.B) {
 		if report.Status != "listening" {
 			b.Fatalf("status = %s", report.Status)
 		}
+	}
+}
+
+func BenchmarkList(b *testing.B) {
+	insp := New(platform.New())
+	ctx := context.Background()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_, err := insp.List(ctx)
+		if err != nil {
+			b.Fatalf("List: %v", err)
+		}
+	}
+}
+
+func BenchmarkProcessInfos(b *testing.B) {
+	insp := New(platform.New())
+	ctx := context.Background()
+	pid := int32(os.Getpid())
+	listeners := []model.Listener{
+		{Protocol: model.ProtocolTCP, Address: "127.0.0.1", Port: 8080, PID: pid},
+		{Protocol: model.ProtocolTCP, Address: "127.0.0.1", Port: 8081, PID: pid},
+		{Protocol: model.ProtocolTCP, Address: "127.0.0.1", Port: 8082, PID: 1},
+		{Protocol: model.ProtocolUDP, Address: "0.0.0.0", Port: 53, PID: 1},
+	}
+	if live, err := insp.Platform.Ports.Listeners(ctx); err == nil && len(live) > 0 {
+		listeners = append(listeners, live...)
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = insp.processInfos(ctx, listeners)
 	}
 }
 

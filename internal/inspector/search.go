@@ -9,6 +9,7 @@ import (
 
 	"github.com/portlens/portlens/internal/detect"
 	"github.com/portlens/portlens/internal/model"
+	"github.com/portlens/portlens/internal/platform"
 )
 
 // SearchByName returns the listening ports owned by processes whose name,
@@ -68,20 +69,31 @@ func (i *Inspector) SearchByPID(ctx context.Context, pid int32) ([]model.PortEnt
 	return entries, nil
 }
 
-// processInfos resolves process metadata for each unique listener PID. It uses
-// InfoBasic, which never spawns external commands and fetches only the fields
-// the listing displays.
+// processInfos resolves process metadata for each unique listener PID using a bulk query.
 func (i *Inspector) processInfos(ctx context.Context, listeners []model.Listener) map[int32]*model.ProcessInfo {
-	out := map[int32]*model.ProcessInfo{}
+	if i == nil || i.Platform == nil || i.Platform.Processes == nil {
+		return map[int32]*model.ProcessInfo{}
+	}
+	pids := make([]int32, 0, len(listeners))
+	seen := make(map[int32]bool, len(listeners))
 	for _, l := range listeners {
-		if l.PID <= 0 {
-			continue
+		if l.PID > 0 && !seen[l.PID] {
+			seen[l.PID] = true
+			pids = append(pids, l.PID)
 		}
-		if _, ok := out[l.PID]; ok {
-			continue
+	}
+	if len(pids) == 0 {
+		return map[int32]*model.ProcessInfo{}
+	}
+	if batch, ok := i.Platform.Processes.(platform.BatchProcessInspector); ok {
+		if infos, err := batch.InfoBasicBatch(ctx, pids); err == nil && infos != nil {
+			return infos
 		}
-		if p, err := i.Platform.Processes.InfoBasic(ctx, l.PID); err == nil {
-			out[l.PID] = p
+	}
+	out := map[int32]*model.ProcessInfo{}
+	for _, pid := range pids {
+		if p, err := i.Platform.Processes.InfoBasic(ctx, pid); err == nil {
+			out[pid] = p
 		}
 	}
 	return out

@@ -89,6 +89,21 @@ func TestLinuxProcInfoBasicSkipsHeavyFields(t *testing.T) {
 	}
 }
 
+func TestLinuxProcInfoBasicBatch(t *testing.T) {
+	insp := linuxProcessInspector{}
+	pids := []int32{int32(os.Getpid()), 1, 99999999}
+	res, err := insp.InfoBasicBatch(context.Background(), pids)
+	if err != nil {
+		t.Fatalf("InfoBasicBatch failed: %v", err)
+	}
+	if self, ok := res[int32(os.Getpid())]; !ok || self.Name == "" {
+		t.Errorf("expected info for self PID, got %+v", self)
+	}
+	if _, ok := res[99999999]; ok {
+		t.Error("nonexistent PID should be omitted from batch result")
+	}
+}
+
 func TestLinuxProcessTable(t *testing.T) {
 	rows, err := loadProcessTable()
 	if err != nil {

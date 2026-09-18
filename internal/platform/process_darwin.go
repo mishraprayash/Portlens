@@ -79,6 +79,63 @@ func (darwinProcessInspector) InfoBasic(ctx context.Context, pid int32) (*model.
 	return darwinProcInfo(pid, false)
 }
 
+func (darwinProcessInspector) InfoBasicBatch(ctx context.Context, pids []int32) (map[int32]*model.ProcessInfo, error) {
+	out := make(map[int32]*model.ProcessInfo, len(pids))
+	if len(pids) == 0 {
+		return out, nil
+	}
+
+	lib, close, err := libprocPath()
+	var pathFn func(pid int32, buf uintptr, bufsize uint32) int32
+	var infoFn func(pid, flavor int32, arg uint64, buf uintptr, bufsize int32) int32
+	if err == nil {
+		defer close()
+		pathFn = libprocPIDPathFn(lib)
+		infoFn = libprocPIDInfoFn(lib)
+	}
+
+	buf := make([]byte, procPathInfoMax)
+	var vpi vnodePathInfo
+	const vpiSize = int32(unsafe.Sizeof(vpi))
+
+	for _, pid := range pids {
+		if pid <= 0 {
+			continue
+		}
+		kp, err := unix.SysctlKinfoProc("kern.proc.pid", int(pid))
+		if err != nil {
+			continue
+		}
+
+		info := &model.ProcessInfo{PID: pid, PPID: kp.Eproc.Ppid}
+		info.Name = darwinProcName(pid, cstring(kp.Proc.P_comm[:]))
+
+		exe, cmdline, err := darwinArgs(pid)
+		if err == nil {
+			info.Exe = exe
+			if pathFn != nil {
+				n := pathFn(pid, uintptr(unsafe.Pointer(&buf[0])), uint32(len(buf)))
+				if n > 0 && n < int32(len(buf)) {
+					info.Exe = cstring(buf[:n])
+				}
+			}
+			info.Cmdline = cmdline
+			info.Command = commandFromCmdline(cmdline, info.Name)
+		}
+
+		if infoFn != nil {
+			n := infoFn(pid, procPidInfoPath, 0, uintptr(unsafe.Pointer(&vpi)), vpiSize)
+			if n == vpiSize {
+				info.CWD = cstring(vpi.vipPath[:])
+			}
+		}
+
+		out[pid] = info
+	}
+
+	return out, nil
+}
+
 func (darwinProcessInspector) Exists(_ context.Context, pid int32) bool {
 	return isProcessAlive(pid)
 }
