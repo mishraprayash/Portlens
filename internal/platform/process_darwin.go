@@ -94,6 +94,10 @@ func (darwinProcessInspector) InfoBasicBatch(ctx context.Context, pids []int32) 
 		infoFn = libprocPIDInfoFn(lib)
 	}
 
+	buf := make([]byte, procPathInfoMax)
+	var vpi vnodePathInfo
+	const vpiSize = int32(unsafe.Sizeof(vpi))
+
 	for _, pid := range pids {
 		if pid <= 0 {
 			continue
@@ -108,18 +112,21 @@ func (darwinProcessInspector) InfoBasicBatch(ctx context.Context, pids []int32) 
 
 		exe, cmdline, err := darwinArgs(pid)
 		if err == nil {
+			info.Exe = exe
 			if pathFn != nil {
-				info.Exe = darwinExePathWithFn(pid, exe, pathFn)
-			} else {
-				info.Exe = exe
+				n := pathFn(pid, uintptr(unsafe.Pointer(&buf[0])), uint32(len(buf)))
+				if n > 0 && n < int32(len(buf)) {
+					info.Exe = cstring(buf[:n])
+				}
 			}
 			info.Cmdline = cmdline
 			info.Command = commandFromCmdline(cmdline, info.Name)
 		}
 
 		if infoFn != nil {
-			if cwd := darwinCwdWithFn(pid, infoFn); cwd != "" {
-				info.CWD = cwd
+			n := infoFn(pid, procPidInfoPath, 0, uintptr(unsafe.Pointer(&vpi)), vpiSize)
+			if n == vpiSize {
+				info.CWD = cstring(vpi.vipPath[:])
 			}
 		}
 
@@ -279,10 +286,7 @@ func darwinExePath(pid int32, argvExe string) string {
 		return argvExe
 	}
 	defer close()
-	return darwinExePathWithFn(pid, argvExe, libprocPIDPathFn(lib))
-}
-
-func darwinExePathWithFn(pid int32, argvExe string, fn func(pid int32, buf uintptr, bufsize uint32) int32) string {
+	fn := libprocPIDPathFn(lib)
 	buf := make([]byte, procPathInfoMax)
 	n := fn(pid, uintptr(unsafe.Pointer(&buf[0])), uint32(len(buf)))
 	if n <= 0 || n >= int32(len(buf)) {
@@ -299,10 +303,7 @@ func darwinCwd(pid int32) string {
 		return ""
 	}
 	defer close()
-	return darwinCwdWithFn(pid, libprocPIDInfoFn(lib))
-}
-
-func darwinCwdWithFn(pid int32, fn func(pid, flavor int32, arg uint64, buf uintptr, bufsize int32) int32) string {
+	fn := libprocPIDInfoFn(lib)
 	var vpi vnodePathInfo
 	const size = int32(unsafe.Sizeof(vpi))
 	n := fn(pid, procPidInfoPath, 0, uintptr(unsafe.Pointer(&vpi)), size)
@@ -319,10 +320,7 @@ func darwinRSS(pid int32) uint64 {
 		return 0
 	}
 	defer close()
-	return darwinRSSWithFn(pid, libprocPIDInfoFn(lib))
-}
-
-func darwinRSSWithFn(pid int32, fn func(pid, flavor int32, arg uint64, buf uintptr, bufsize int32) int32) uint64 {
+	fn := libprocPIDInfoFn(lib)
 	var ti procTaskInfo
 	const size = int32(unsafe.Sizeof(ti))
 	n := fn(pid, procPidTaskInfo, 0, uintptr(unsafe.Pointer(&ti)), size)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/portlens/portlens/internal/detect"
 	"github.com/portlens/portlens/internal/model"
+	"github.com/portlens/portlens/internal/platform"
 )
 
 // SearchByName returns the listening ports owned by processes whose name,
@@ -84,17 +85,18 @@ func (i *Inspector) processInfos(ctx context.Context, listeners []model.Listener
 	if len(pids) == 0 {
 		return map[int32]*model.ProcessInfo{}
 	}
-	infos, err := i.Platform.Processes.InfoBasicBatch(ctx, pids)
-	if err != nil || infos == nil {
-		out := map[int32]*model.ProcessInfo{}
-		for _, pid := range pids {
-			if p, err := i.Platform.Processes.InfoBasic(ctx, pid); err == nil {
-				out[pid] = p
-			}
+	if batch, ok := i.Platform.Processes.(platform.BatchProcessInspector); ok {
+		if infos, err := batch.InfoBasicBatch(ctx, pids); err == nil && infos != nil {
+			return infos
 		}
-		return out
 	}
-	return infos
+	out := map[int32]*model.ProcessInfo{}
+	for _, pid := range pids {
+		if p, err := i.Platform.Processes.InfoBasic(ctx, pid); err == nil {
+			out[pid] = p
+		}
+	}
+	return out
 }
 
 // buildEntries deduplicates listeners by family+port, enriches them into
