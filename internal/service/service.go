@@ -22,6 +22,16 @@ import (
 // ProgressFunc reports scan progress in a thread-safe manner.
 type ProgressFunc func(done, total, found int, elapsed time.Duration)
 
+type scanResult struct {
+	report *model.Report
+	err    error
+}
+
+type portJob struct {
+	index int
+	port  int32
+}
+
 // PortService defines the business domain facade.
 type PortService struct {
 	inspector inspector.PortInspector
@@ -117,16 +127,6 @@ func (s *PortService) Scan(ctx context.Context, ports []int32, protocol model.Pr
 		}
 	}
 
-	type scanResult struct {
-		report *model.Report
-		err    error
-	}
-
-	type portJob struct {
-		index int
-		port  int32
-	}
-
 	results := make([]scanResult, len(ports))
 	var toInspect []portJob
 	var idleCount int
@@ -160,58 +160,76 @@ func (s *PortService) Scan(ctx context.Context, ports []int32, protocol model.Pr
 		reportProgress()
 	}
 
-	if len(toInspect) > 0 {
-		workers := runtime.NumCPU() * 2
-		if workers > 16 {
-			workers = 16
-		}
-		if workers > len(toInspect) {
-			workers = len(toInspect)
-		}
-		if workers < 1 {
-			workers = 1
-		}
-
-		jobs := make(chan portJob, len(toInspect))
-		for _, job := range toInspect {
-			jobs <- job
-		}
-		close(jobs)
-
-		var wg sync.WaitGroup
-		for w := 0; w < workers; w++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for job := range jobs {
-					if ctx.Err() != nil {
-						return
-					}
-					report, err := s.inspector.InspectDepth(ctx, job.port, protocol, inspector.DepthFast)
-					results[job.index] = scanResult{report: report, err: err}
-					doneCount.Add(1)
-					if report != nil && report.Status == "listening" {
-						foundCount.Add(1)
-					}
-					reportProgress()
-				}
-			}()
-		}
-		wg.Wait()
-	}
+	s.runScanWorkers(ctx, toInspect, protocol, results, &doneCount, &foundCount, reportProgress)
 
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 
+	return collectScanResults(results), nil
+}
+
+// runScanWorkers manages worker goroutines to perform parallel port inspection and progress tracking.
+func (s *PortService) runScanWorkers(
+	ctx context.Context,
+	toInspect []portJob,
+	protocol model.Protocol,
+	results []scanResult,
+	doneCount, foundCount *atomic.Int64,
+	reportProgress func(),
+) {
+	if len(toInspect) == 0 {
+		return
+	}
+
+	workers := runtime.NumCPU() * 2
+	if workers > 16 {
+		workers = 16
+	}
+	if workers > len(toInspect) {
+		workers = len(toInspect)
+	}
+	if workers < 1 {
+		workers = 1
+	}
+
+	jobs := make(chan portJob, len(toInspect))
+	for _, job := range toInspect {
+		jobs <- job
+	}
+	close(jobs)
+
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for job := range jobs {
+				if ctx.Err() != nil {
+					return
+				}
+				report, err := s.inspector.InspectDepth(ctx, job.port, protocol, inspector.DepthFast)
+				results[job.index] = scanResult{report: report, err: err}
+				doneCount.Add(1)
+				if report != nil && report.Status == "listening" {
+					foundCount.Add(1)
+				}
+				reportProgress()
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+// collectScanResults extracts active listening reports from scan results.
+func collectScanResults(results []scanResult) []*model.Report {
 	var found []*model.Report
 	for _, res := range results {
 		if res.err == nil && res.report != nil && res.report.Status == "listening" {
 			found = append(found, res.report)
 		}
 	}
-
-	return found, nil
+	return found
 }
 
 // Kill terminates the process owning the port or specified report.
