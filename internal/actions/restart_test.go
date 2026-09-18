@@ -141,3 +141,45 @@ func TestRestartUnavailable(t *testing.T) {
 		t.Fatalf("expected ErrRestartUnavailable, got %v", err)
 	}
 }
+
+type stubPortResolver struct {
+	listeners []model.Listener
+	calls     int
+}
+
+func (s *stubPortResolver) Listeners(_ context.Context) ([]model.Listener, error) {
+	return s.listeners, nil
+}
+
+func (s *stubPortResolver) ResolvePort(_ context.Context, _ uint16, _ model.Protocol) ([]model.Listener, error) {
+	s.calls++
+	if s.calls == 1 {
+		return s.listeners, nil
+	}
+	return nil, nil
+}
+
+func TestWaitForPortRelease(t *testing.T) {
+	t.Run("nil platform or port <= 0", func(t *testing.T) {
+		mgr := NewManager(nil, &bytes.Buffer{}, nil)
+		mgr.waitForPortRelease(context.Background(), 3000, model.ProtocolTCP)
+
+		mgr = NewManager(&platform.Platform{}, &bytes.Buffer{}, nil)
+		mgr.waitForPortRelease(context.Background(), 0, model.ProtocolTCP)
+	})
+
+	t.Run("port released", func(t *testing.T) {
+		resolver := &stubPortResolver{
+			listeners: []model.Listener{{Port: 3000}},
+		}
+		plat := &platform.Platform{
+			Ports: resolver,
+		}
+		mgr := NewManager(plat, &bytes.Buffer{}, nil)
+		mgr.waitForPortRelease(context.Background(), 3000, model.ProtocolTCP)
+
+		if resolver.calls != 2 {
+			t.Fatalf("expected 2 calls to ResolvePort, got %d", resolver.calls)
+		}
+	})
+}
