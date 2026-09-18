@@ -60,7 +60,16 @@ func commandFromCmdline(cmdline []string, name string) string {
 		}
 	}
 	args = stripLaunchEnv(args)
-	return strings.TrimSpace(strings.Join(append([]string{prog}, args...), " "))
+	if len(args) == 0 {
+		return prog
+	}
+	var b strings.Builder
+	b.WriteString(prog)
+	for _, a := range args {
+		b.WriteByte(' ')
+		b.WriteString(a)
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // stripLaunchEnv removes launchd/systemd-style environment assignments that

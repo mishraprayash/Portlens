@@ -66,17 +66,22 @@ func linuxBootTime() time.Time {
 	return bootTime
 }
 
-func procDir(pid int32) string {
-	return "/proc/" + strconv.Itoa(int(pid))
+// formatProcPath formats "/proc/<pid>/<suffix>" without allocation overhead.
+func formatProcPath(pid int32, suffix string) string {
+	b := make([]byte, 0, 6+10+1+len(suffix))
+	b = append(b, "/proc/"...)
+	b = strconv.AppendInt(b, int64(pid), 10)
+	b = append(b, '/')
+	b = append(b, suffix...)
+	return string(b)
 }
 
 // linuxProcInfo assembles a ProcessInfo for a PID. full controls whether the
 // slower fields (start time, user, memory) are fetched.
 func linuxProcInfo(pid int32, full bool) (*model.ProcessInfo, error) {
 	info := &model.ProcessInfo{PID: pid}
-	dir := procDir(pid)
 
-	stat, err := os.ReadFile(dir + "/stat")
+	stat, err := os.ReadFile(formatProcPath(pid, "stat"))
 	if err != nil {
 		return nil, ErrProcessNotFound
 	}
@@ -88,17 +93,17 @@ func linuxProcInfo(pid int32, full bool) (*model.ProcessInfo, error) {
 	info.PPID = row.ppid
 	info.IsZombie = row.zombie
 
-	if cmdline, err := os.ReadFile(dir + "/cmdline"); err == nil {
+	if cmdline, err := os.ReadFile(formatProcPath(pid, "cmdline")); err == nil {
 		info.Cmdline = splitNUL(cmdline)
 		if len(info.Cmdline) > 0 {
 			info.Exe = info.Cmdline[0]
 		}
 		info.Command = commandFromCmdline(info.Cmdline, info.Name)
 	}
-	if exe, err := os.Readlink(dir + "/exe"); err == nil {
+	if exe, err := os.Readlink(formatProcPath(pid, "exe")); err == nil {
 		info.Exe = exe
 	}
-	if cwd, err := os.Readlink(dir + "/cwd"); err == nil {
+	if cwd, err := os.Readlink(formatProcPath(pid, "cwd")); err == nil {
 		info.CWD = cwd
 	}
 
@@ -146,7 +151,7 @@ func parseStatRow(data []byte) (statRow, bool) {
 // ticks per second on essentially all platforms.
 func linuxStartTime(pid int32) (time.Time, bool) {
 	const userHz = 100
-	data, err := os.ReadFile(procDir(pid) + "/stat")
+	data, err := os.ReadFile(formatProcPath(pid, "stat"))
 	if err != nil {
 		return time.Time{}, false
 	}
@@ -194,7 +199,7 @@ var (
 // linuxUser resolves the owning user name from /proc/<pid>/status, cached per
 // invocation.
 func linuxUser(pid int32) string {
-	data, err := os.ReadFile(procDir(pid) + "/status")
+	data, err := os.ReadFile(formatProcPath(pid, "status"))
 	if err != nil {
 		return ""
 	}
@@ -235,24 +240,25 @@ func uidToName(uidBytes []byte) string {
 
 // linuxRSS reads the resident set size (in bytes) from /proc/<pid>/statm.
 func linuxRSS(pid int32) uint64 {
-	data, err := os.ReadFile(procDir(pid) + "/statm")
+	data, err := os.ReadFile(formatProcPath(pid, "statm"))
 	if err != nil {
 		return 0
 	}
 	// statm: size resident shared text lib data dt — resident pages is field 2.
-	rest := skipToken(data)
-	if len(rest) == 0 {
+	firstSpace := bytes.IndexByte(data, ' ')
+	if firstSpace < 0 {
 		return 0
 	}
-	rest = trimLeftSpace(rest)
-	if len(rest) == 0 {
-		return 0
+	rest := data[firstSpace+1:]
+	secondSpace := bytes.IndexByte(rest, ' ')
+	var pagesBytes []byte
+	if secondSpace < 0 {
+		pagesBytes = rest
+	} else {
+		pagesBytes = rest[:secondSpace]
 	}
-	end := 0
-	for end < len(rest) && rest[end] >= '0' && rest[end] <= '9' {
-		end++
-	}
-	pages, err := strconv.ParseUint(string(rest[:end]), 10, 64)
+
+	pages, err := strconv.ParseUint(string(pagesBytes), 10, 64)
 	if err != nil {
 		return 0
 	}
@@ -267,7 +273,7 @@ func isProcessAlive(pid int32) bool {
 	if err := syscall.Kill(int(pid), 0); err != nil {
 		return false
 	}
-	data, err := os.ReadFile(procDir(pid) + "/stat")
+	data, err := os.ReadFile(formatProcPath(pid, "stat"))
 	if err != nil {
 		return true
 	}
@@ -281,19 +287,28 @@ func isProcessAlive(pid int32) bool {
 
 // splitNUL splits a NUL-separated byte slice into its non-empty parts.
 func splitNUL(b []byte) []string {
-	var out []string
-	for {
-		i := bytes.IndexByte(b, 0)
-		if i < 0 {
-			if len(b) > 0 {
-				out = append(out, string(b))
-			}
-			break
-		}
-		if i > 0 {
-			out = append(out, string(b[:i]))
+	if len(b) == 0 {
+		return nil
+	}
+	count := 0
+	for _, c := range b {
+		if c == 0 {
+			count++
 		}
 		b = b[i+1:]
+	}
+	out := make([]string, 0, count)
+	start := 0
+	for i, c := range b {
+		if c == 0 {
+			if i > start {
+				out = append(out, string(b[start:i]))
+			}
+			start = i + 1
+		}
+	}
+	if start < len(b) {
+		out = append(out, string(b[start:]))
 	}
 	return out
 }

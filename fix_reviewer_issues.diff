@@ -1,0 +1,43 @@
+<<<<<<< SEARCH
+// formatProcPath formats "/proc/<pid>/<suffix>" without allocation overhead.
+func formatProcPath(pid int32, suffix string) string {
+	// A typical 32-bit PID is up to 10 digits. "/proc//\x00" is 8, plus suffix length.
+	// 32 bytes is plenty.
+	var buf [32]byte
+	n := copy(buf[:], "/proc/")
+	n += appendDecimal(buf[n:], uint64(pid))
+	buf[n] = '/'
+	n++
+	n += copy(buf[n:], suffix)
+	return string(buf[:n])
+}
+=======
+// formatProcPath formats "/proc/<pid>/<suffix>" without allocation overhead.
+func formatProcPath(pid int32, suffix string) string {
+	b := make([]byte, 0, 6+10+1+len(suffix))
+	b = append(b, "/proc/"...)
+	b = strconv.AppendInt(b, int64(pid), 10)
+	b = append(b, '/')
+	b = append(b, suffix...)
+	return string(b)
+}
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+	var b strings.Builder
+	b.WriteString(prog)
+	for _, a := range args {
+		b.WriteByte(' ')
+		b.WriteString(a)
+	}
+	return b.String()
+}
+=======
+	var b strings.Builder
+	b.WriteString(prog)
+	for _, a := range args {
+		b.WriteByte(' ')
+		b.WriteString(a)
+	}
+	return strings.TrimSpace(b.String())
+}
+>>>>>>> REPLACE
