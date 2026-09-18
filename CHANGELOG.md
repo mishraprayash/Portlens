@@ -21,6 +21,7 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Changed
 
+- **Refactored watch command loop**: Extracted `waitWatchTick` helper function to reduce nesting and simplify tick event selection and context cancellation handling in `cmd/watch.go`.
 - **Enterprise-grade Clean Architecture and Functional Options**: Decoupled core business domain from CLI delivery through a new `internal/service.PortService` facade. Refactored `inspector.New` and `render.NewRenderer` to use Functional Options and consumer-defined interfaces (`PortInspector`). Centralized domain sentinel errors in `internal/model/errors.go` and threaded signal context cancellation (`osSignalContext` / `ExecuteContext`) through all I/O and worker pool boundaries.
 - **Standard open-source subcommand CLI architecture**: Elevated primary actions to intuitive, first-class subcommands (`portlens kill`, `portlens list`/`ls`, `portlens inspect`, `portlens watch`, `portlens find`, `portlens tree`, `portlens conn`, `portlens open`, `portlens restart`) while preserving 100% backward compatibility with flag-based invocations (`portlens 3000 --kill`, `portlens 3000 -t`).
 - **Structured and modernized help output**: Redesigned `portlens --help` and added subcommand-specific `--help` usage screens following open-source CLI standards.
