@@ -144,45 +144,7 @@ func parseArgs(args []string) (*options, error) {
 	opts := &options{}
 	fs := flag.NewFlagSet("portlens", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-
-	fs.BoolVar(&opts.tree, "tree", false, "")
-	fs.BoolVar(&opts.tree, "t", false, "")
-	fs.BoolVar(&opts.connections, "connections", false, "")
-	fs.BoolVar(&opts.connections, "n", false, "")
-	fs.BoolVar(&opts.jsonOut, "json", false, "")
-	fs.BoolVar(&opts.jsonOut, "j", false, "")
-	fs.BoolVar(&opts.kill, "kill", false, "")
-	fs.BoolVar(&opts.kill, "k", false, "")
-	fs.BoolVar(&opts.force, "force", false, "")
-	fs.BoolVar(&opts.force, "f", false, "")
-	fs.BoolVar(&opts.restart, "restart", false, "")
-	fs.BoolVar(&opts.restart, "r", false, "")
-	fs.BoolVar(&opts.open, "open", false, "")
-	fs.BoolVar(&opts.open, "o", false, "")
-	fs.BoolVar(&opts.yes, "yes", false, "")
-	fs.BoolVar(&opts.yes, "y", false, "")
-	fs.BoolVar(&opts.noColor, "no-color", false, "")
-	fs.BoolVar(&opts.noDocker, "no-docker", false, "")
-	fs.BoolVar(&opts.onlyTCP, "tcp", false, "")
-	fs.BoolVar(&opts.all, "all", false, "")
-	fs.BoolVar(&opts.watch, "watch", false, "")
-	fs.BoolVar(&opts.watch, "w", false, "")
-	fs.BoolVar(&opts.notify, "notify", false, "")
-	fs.BoolVar(&opts.verbose, "verbose", false, "")
-	fs.BoolVar(&opts.verbose, "v", false, "")
-	fs.BoolVar(&opts.debug, "debug", false, "")
-	fs.BoolVar(&opts.debug, "d", false, "")
-	fs.BoolVar(&opts.probe, "probe", false, "")
-	fs.BoolVar(&opts.probe, "p", false, "")
-	fs.IntVar(&opts.interval, "interval", 0, "")
-	fs.IntVar(&opts.pid, "pid", 0, "")
-	fs.StringVar(&opts.name, "name", "", "")
-	fs.BoolVar(&opts.help, "help", false, "")
-	fs.BoolVar(&opts.help, "h", false, "")
-	fs.BoolVar(&opts.showVer, "version", false, "")
-	fs.StringVar(&opts.protocol, "protocol", "", "")
-	fs.StringVar(&opts.sortBy, "sort", "port", "")
-	fs.StringVar(&opts.filter, "filter", "", "")
+	registerFlags(fs, opts)
 
 	reordered := reorderArgs(args)
 	if err := fs.Parse(reordered.flags); err != nil {
@@ -197,33 +159,81 @@ func parseArgs(args []string) (*options, error) {
 	provided := map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { provided[f.Name] = true })
 
-	if provided["pid"] && opts.pid <= 0 {
-		return nil, fmt.Errorf("--pid must be a positive process ID")
-	}
-	if provided["name"] && strings.TrimSpace(opts.name) == "" {
-		return nil, fmt.Errorf("--name must not be empty")
-	}
-	if provided["interval"] && opts.interval <= 0 {
-		return nil, fmt.Errorf("--interval must be a positive number of seconds")
-	}
-	if opts.interval > 0 && !opts.watch {
-		return nil, fmt.Errorf("--interval requires --watch")
-	}
-	if opts.notify && !opts.watch {
-		return nil, fmt.Errorf("--notify requires --watch")
+	if err := validateAndPopulateOptions(opts, provided, reordered.positional); err != nil {
+		return nil, err
 	}
 
-	rest := reordered.positional
-	if len(rest) > 0 && (opts.all || opts.pid > 0 || opts.name != "") {
-		return nil, fmt.Errorf("cannot combine explicit ports with --all, --pid, or --name")
+	return opts, nil
+}
+
+// registerFlags defines all command-line flags and aliases on the given FlagSet.
+func registerFlags(fs *flag.FlagSet, opts *options) {
+	boolFlags := []struct {
+		target *bool
+		names  []string
+	}{
+		{&opts.tree, []string{"tree", "t"}},
+		{&opts.connections, []string{"connections", "n"}},
+		{&opts.jsonOut, []string{"json", "j"}},
+		{&opts.kill, []string{"kill", "k"}},
+		{&opts.force, []string{"force", "f"}},
+		{&opts.restart, []string{"restart", "r"}},
+		{&opts.open, []string{"open", "o"}},
+		{&opts.yes, []string{"yes", "y"}},
+		{&opts.noColor, []string{"no-color"}},
+		{&opts.noDocker, []string{"no-docker"}},
+		{&opts.onlyTCP, []string{"tcp"}},
+		{&opts.all, []string{"all"}},
+		{&opts.watch, []string{"watch", "w"}},
+		{&opts.notify, []string{"notify"}},
+		{&opts.verbose, []string{"verbose", "v"}},
+		{&opts.debug, []string{"debug", "d"}},
+		{&opts.probe, []string{"probe", "p"}},
+		{&opts.help, []string{"help", "h"}},
+		{&opts.showVer, []string{"version"}},
 	}
-	for _, arg := range rest {
+	for _, bf := range boolFlags {
+		for _, name := range bf.names {
+			fs.BoolVar(bf.target, name, false, "")
+		}
+	}
+
+	fs.IntVar(&opts.interval, "interval", 0, "")
+	fs.IntVar(&opts.pid, "pid", 0, "")
+	fs.StringVar(&opts.name, "name", "", "")
+	fs.StringVar(&opts.protocol, "protocol", "", "")
+	fs.StringVar(&opts.sortBy, "sort", "port", "")
+	fs.StringVar(&opts.filter, "filter", "", "")
+}
+
+// validateAndPopulateOptions checks parsed flag constraints and parses positional port arguments.
+func validateAndPopulateOptions(opts *options, provided map[string]bool, positional []string) error {
+	if provided["pid"] && opts.pid <= 0 {
+		return fmt.Errorf("--pid must be a positive process ID")
+	}
+	if provided["name"] && strings.TrimSpace(opts.name) == "" {
+		return fmt.Errorf("--name must not be empty")
+	}
+	if provided["interval"] && opts.interval <= 0 {
+		return fmt.Errorf("--interval must be a positive number of seconds")
+	}
+	if opts.interval > 0 && !opts.watch {
+		return fmt.Errorf("--interval requires --watch")
+	}
+	if opts.notify && !opts.watch {
+		return fmt.Errorf("--notify requires --watch")
+	}
+
+	if len(positional) > 0 && (opts.all || opts.pid > 0 || opts.name != "") {
+		return fmt.Errorf("cannot combine explicit ports with --all, --pid, or --name")
+	}
+	for _, arg := range positional {
 		if strings.HasPrefix(arg, "@") {
-			return nil, fmt.Errorf("unknown port group %q", arg)
+			return fmt.Errorf("unknown port group %q", arg)
 		}
 		ports, err := parsePortArg(arg)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		opts.ports = append(opts.ports, ports...)
 	}
@@ -236,7 +246,7 @@ func parseArgs(args []string) (*options, error) {
 		}
 	case "udp", "udp4", "udp6":
 	default:
-		return nil, fmt.Errorf("invalid --protocol %q (must be tcp or udp)", opts.protocol)
+		return fmt.Errorf("invalid --protocol %q (must be tcp or udp)", opts.protocol)
 	}
 
 	if opts.onlyTCP && opts.protocol == "" {
@@ -244,10 +254,10 @@ func parseArgs(args []string) (*options, error) {
 	}
 
 	if opts.force && !opts.kill {
-		return nil, fmt.Errorf("--force requires --kill")
+		return fmt.Errorf("--force requires --kill")
 	}
 
-	return opts, nil
+	return nil
 }
 
 // parsePortArg parses a single port or a port range: "3000", "3000-3010", or
