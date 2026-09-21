@@ -34,25 +34,33 @@ func newNetworkInspector() NetworkInspector { return &linuxNetworkInspector{} }
 // socket file descriptors on the system. It is built once per invocation.
 func socketInodeMap() map[uint64]int32 {
 	m := map[uint64]int32{}
-	entries, err := os.ReadDir("/proc")
+	procFile, err := os.Open("/proc")
 	if err != nil {
 		return m
 	}
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		pid, err := strconv.Atoi(e.Name())
+	defer procFile.Close()
+
+	entries, err := procFile.Readdirnames(-1)
+	if err != nil {
+		return m
+	}
+	for _, name := range entries {
+		pid, err := strconv.Atoi(name)
 		if err != nil || pid <= 0 {
 			continue
 		}
-		fdDir := filepath.Join("/proc", e.Name(), "fd")
-		fds, err := os.ReadDir(fdDir)
+		fdDir := filepath.Join("/proc", name, "fd")
+		fdFile, err := os.Open(fdDir)
+		if err != nil {
+			continue
+		}
+		fds, err := fdFile.Readdirnames(-1)
+		fdFile.Close()
 		if err != nil {
 			continue
 		}
 		for _, fd := range fds {
-			link, err := os.Readlink(filepath.Join(fdDir, fd.Name()))
+			link, err := os.Readlink(filepath.Join(fdDir, fd))
 			if err != nil || !strings.HasPrefix(link, "socket:[") || !strings.HasSuffix(link, "]") || len(link) <= len("socket:[]") {
 				continue
 			}

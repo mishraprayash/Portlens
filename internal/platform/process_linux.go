@@ -52,7 +52,7 @@ var (
 // invocation; it is combined with each process's start ticks.
 func linuxBootTime() time.Time {
 	bootOnce.Do(func() {
-		if data, err := os.ReadFile("/proc/stat"); err == nil {
+		if data, err := readProcFile("/proc/stat"); err == nil {
 			for _, line := range bytes.Split(data, []byte{'\n'}) {
 				if bytes.HasPrefix(line, []byte("btime ")) {
 					if n, err := strconv.ParseInt(string(line[6:]), 10, 64); err == nil {
@@ -81,7 +81,7 @@ func formatProcPath(pid int32, suffix string) string {
 func linuxProcInfo(pid int32, full bool) (*model.ProcessInfo, error) {
 	info := &model.ProcessInfo{PID: pid}
 
-	stat, err := os.ReadFile(formatProcPath(pid, "stat"))
+	stat, err := readProcFile(formatProcPath(pid, "stat"))
 	if err != nil {
 		return nil, ErrProcessNotFound
 	}
@@ -93,7 +93,7 @@ func linuxProcInfo(pid int32, full bool) (*model.ProcessInfo, error) {
 	info.PPID = row.ppid
 	info.IsZombie = row.zombie
 
-	if cmdline, err := os.ReadFile(formatProcPath(pid, "cmdline")); err == nil {
+	if cmdline, err := readProcFile(formatProcPath(pid, "cmdline")); err == nil {
 		info.Cmdline = splitNUL(cmdline)
 		if len(info.Cmdline) > 0 {
 			info.Exe = info.Cmdline[0]
@@ -151,7 +151,7 @@ func parseStatRow(data []byte) (statRow, bool) {
 // ticks per second on essentially all platforms.
 func linuxStartTime(pid int32) (time.Time, bool) {
 	const userHz = 100
-	data, err := os.ReadFile(formatProcPath(pid, "stat"))
+	data, err := readProcFile(formatProcPath(pid, "stat"))
 	if err != nil {
 		return time.Time{}, false
 	}
@@ -199,7 +199,7 @@ var (
 // linuxUser resolves the owning user name from /proc/<pid>/status, cached per
 // invocation.
 func linuxUser(pid int32) string {
-	data, err := os.ReadFile(formatProcPath(pid, "status"))
+	data, err := readProcFile(formatProcPath(pid, "status"))
 	if err != nil {
 		return ""
 	}
@@ -236,7 +236,7 @@ func uidToName(uidBytes []byte) string {
 
 // linuxRSS reads the resident set size (in bytes) from /proc/<pid>/statm.
 func linuxRSS(pid int32) uint64 {
-	data, err := os.ReadFile(formatProcPath(pid, "statm"))
+	data, err := readProcFile(formatProcPath(pid, "statm"))
 	if err != nil {
 		return 0
 	}
@@ -269,7 +269,7 @@ func isProcessAlive(pid int32) bool {
 	if err := syscall.Kill(int(pid), 0); err != nil {
 		return false
 	}
-	data, err := os.ReadFile(formatProcPath(pid, "stat"))
+	data, err := readProcFile(formatProcPath(pid, "stat"))
 	if err != nil {
 		return true
 	}
