@@ -37,7 +37,7 @@ var tcpStateNames = map[string]string{
 }
 
 func parseProcNet(path string) ([]procNetRow, error) {
-	data, err := os.ReadFile(path)
+	data, err := readProcFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil

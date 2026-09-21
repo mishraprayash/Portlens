@@ -37,7 +37,7 @@ func loadProcessTable() ([]processRow, error) {
 // contain spaces and parentheses, so the name runs between the first '(' and
 // the last ')' and the parent PID is the second token after that.
 func readStatRow(pid int32) (processRow, bool) {
-	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(int(pid)), "stat"))
+	data, err := readProcFile(filepath.Join("/proc", strconv.Itoa(int(pid)), "stat"))
 	if err != nil {
 		return processRow{}, false
 	}
