@@ -181,8 +181,15 @@ func Render(m *Model) string {
 	var sb strings.Builder
 	sb.WriteString("\x1b[H") // Move to home
 	for i, line := range lines {
-		// Truncate to terminal width to guarantee no line wrap artifacts
-		sb.WriteString(truncateVisible(line, w))
+		// Truncate to terminal width to guarantee no line wrap artifacts.
+		// On the very last cell of the terminal screen, writing to column w
+		// triggers terminal auto-wrap, causing the screen to scroll up 1 line!
+		// Truncating the bottom row to w-1 prevents auto-wrap on any terminal.
+		maxW := w
+		if i == len(lines)-1 {
+			maxW = w - 1
+		}
+		sb.WriteString(truncateVisible(line, maxW))
 		if i < len(lines)-1 {
 			sb.WriteString("\r\n")
 		}

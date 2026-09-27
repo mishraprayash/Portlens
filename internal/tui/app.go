@@ -110,12 +110,13 @@ func (a *App) Run(ctx context.Context) (retErr error) {
 	signal.Notify(winchChan, syscall.SIGWINCH)
 	defer signal.Stop(winchChan)
 
-	// Background key event channel
-	keyChan := make(chan Key)
+	// Background key event channel (buffered so reader never blocks)
+	keyChan := make(chan Key, 32)
 	errChan := make(chan error, 1)
 	go func() {
+		kr := NewKeyReader(stdinFile)
 		for {
-			k, kErr := ReadKeyEvent(stdinFile)
+			k, kErr := kr.ReadKey()
 			if kErr != nil {
 				errChan <- kErr
 				return
@@ -163,8 +164,8 @@ func (a *App) Run(ctx context.Context) (retErr error) {
 		case entries := <-listResultChan:
 			a.mu.Lock()
 			a.model.SetEntries(entries)
+			a.ensureSelectedReportLocked(sigCtx, reportResultChan)
 			a.mu.Unlock()
-			a.ensureSelectedReport(sigCtx, reportResultChan)
 			a.draw()
 
 		case rep := <-reportResultChan:
@@ -209,10 +210,14 @@ func (a *App) refreshList(ctx context.Context, out chan<- []model.PortEntry) {
 
 func (a *App) ensureSelectedReport(ctx context.Context, out chan<- *model.Report) {
 	a.mu.Lock()
+	a.ensureSelectedReportLocked(ctx, out)
+	a.mu.Unlock()
+}
+
+func (a *App) ensureSelectedReportLocked(ctx context.Context, out chan<- *model.Report) {
 	sel := a.model.SelectedEntry()
 	if sel == nil {
 		a.model.SelectedReport = nil
-		a.mu.Unlock()
 		return
 	}
 	cached := a.model.ReportCache[sel.Port]
@@ -221,7 +226,6 @@ func (a *App) ensureSelectedReport(ctx context.Context, out chan<- *model.Report
 	}
 	port := sel.Port
 	proto := sel.Protocol
-	a.mu.Unlock()
 
 	go func() {
 		rep, err := a.cfg.Service.Inspect(ctx, port, proto, inspector.DepthFull)
@@ -337,15 +341,15 @@ func (a *App) handleFilterKey(k Key, reportChan chan<- *model.Report) bool {
 	case KeyEsc:
 		a.model.ViewMode = ModeNormal
 		a.model.SetFilter("")
-		a.ensureSelectedReport(context.Background(), reportChan)
+		a.ensureSelectedReportLocked(context.Background(), reportChan)
 	case KeyBackspace, KeyDelete:
 		if len(a.model.Filter) > 0 {
 			a.model.SetFilter(a.model.Filter[:len(a.model.Filter)-1])
-			a.ensureSelectedReport(context.Background(), reportChan)
+			a.ensureSelectedReportLocked(context.Background(), reportChan)
 		}
 	case KeyRune:
 		a.model.SetFilter(a.model.Filter + string(k.Rune))
-		a.ensureSelectedReport(context.Background(), reportChan)
+		a.ensureSelectedReportLocked(context.Background(), reportChan)
 	}
 	return false
 }
@@ -355,7 +359,7 @@ func (a *App) handleNormalKey(ctx context.Context, k Key, reportChan chan<- *mod
 	case KeyEsc:
 		if a.model.Filter != "" {
 			a.model.SetFilter("")
-			a.ensureSelectedReport(ctx, reportChan)
+			a.ensureSelectedReportLocked(ctx, reportChan)
 		}
 	case KeyRune:
 		switch k.Rune {
@@ -367,23 +371,20 @@ func (a *App) handleNormalKey(ctx context.Context, k Key, reportChan chan<- *mod
 			a.model.ViewMode = ModeFilter
 		case 'j':
 			a.model.MoveDown()
-			a.ensureSelectedReport(ctx, reportChan)
-		case 'k':
-			a.model.MoveUp()
-			a.ensureSelectedReport(ctx, reportChan)
+			a.ensureSelectedReportLocked(ctx, reportChan)
 		case 'g':
 			a.model.Home()
-			a.ensureSelectedReport(ctx, reportChan)
+			a.ensureSelectedReportLocked(ctx, reportChan)
 		case 'G':
 			a.model.End()
-			a.ensureSelectedReport(ctx, reportChan)
+			a.ensureSelectedReportLocked(ctx, reportChan)
 		case '1':
 			a.model.DetailTab = TabOverview
-		case '2', 't':
+		case '2', 't', 'T':
 			a.model.DetailTab = TabTree
-		case '3', 'n':
+		case '3', 'n', 'N':
 			a.model.DetailTab = TabConnections
-		case 'K': // Shift+K or hotkey for kill
+		case 'k', 'K': // Graceful kill
 			a.promptKill(false)
 		case 'f', 'F':
 			a.promptKill(true)
@@ -399,27 +400,27 @@ func (a *App) handleNormalKey(ctx context.Context, k Key, reportChan chan<- *mod
 
 	case KeyUp:
 		a.model.MoveUp()
-		a.ensureSelectedReport(ctx, reportChan)
+		a.ensureSelectedReportLocked(ctx, reportChan)
 
 	case KeyDown:
 		a.model.MoveDown()
-		a.ensureSelectedReport(ctx, reportChan)
+		a.ensureSelectedReportLocked(ctx, reportChan)
 
 	case KeyPgUp:
 		a.model.PageUp(a.model.Height - 6)
-		a.ensureSelectedReport(ctx, reportChan)
+		a.ensureSelectedReportLocked(ctx, reportChan)
 
 	case KeyPgDown:
 		a.model.PageDown(a.model.Height - 6)
-		a.ensureSelectedReport(ctx, reportChan)
+		a.ensureSelectedReportLocked(ctx, reportChan)
 
 	case KeyHome:
 		a.model.Home()
-		a.ensureSelectedReport(ctx, reportChan)
+		a.ensureSelectedReportLocked(ctx, reportChan)
 
 	case KeyEnd:
 		a.model.End()
-		a.ensureSelectedReport(ctx, reportChan)
+		a.ensureSelectedReportLocked(ctx, reportChan)
 	}
 
 	return false
