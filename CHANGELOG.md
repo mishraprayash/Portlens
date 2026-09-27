@@ -44,6 +44,7 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Added
 
+- **Full-Screen Interactive TUI Dashboard (`portlens top` / `portlens tui`)**: Added a zero-dependency, double-buffered full-screen terminal dashboard built directly on `golang.org/x/term` and standard ANSI escape sequences (`\x1b[?1049h`). Features split-pane navigation with real-time port selection, live search/filtering (`/`), instant tab switching (`1` Overview, `2`/`t` Process Tree, `3`/`n` Connections), safe in-place action triggers with confirmation modals (`k` graceful kill, `f` force kill, `r` restart, `o` browser open, `c`/`u` clipboard copy), background polling, responsive layout resizing on `SIGWINCH`, and guaranteed fail-safe terminal cleanup on any exit path.
 - **Shell autocompletion generator (`portlens completion <bash|zsh|fish>`)**: Generates dynamic shell autocompletion for bash, zsh, and fish that completes subcommands, flags, and currently active listening ports with their process names.
 - **HTTP health & HTML title probing (`--probe` / `-p`)**: Lightweight HTTP probing with a 300ms timeout extracts HTTP status, response latency, Server header, and HTML `<title>` to immediately identify the web application running behind generic process names.
 - **Process Memory RSS display**: Surfaced native process memory usage (formatted as human-friendly RSS units e.g. `128 MB`, `1.4 GB`) in both compact summary and full verbose reports.
