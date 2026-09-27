@@ -20,10 +20,10 @@ func LocalURL(report *model.Report) string {
 	case "127.0.0.1", "::1":
 		host = "localhost"
 	}
-	return fmt.Sprintf("http://%s:%d", joinHostPort(host, int(report.Port)), report.Port)
+	return fmt.Sprintf("http://%s:%d", formatHost(host), report.Port)
 }
 
-func joinHostPort(host string, port int) string {
+func formatHost(host string) string {
 	if strings.Contains(host, ":") {
 		return "[" + host + "]"
 	}

@@ -31,6 +31,7 @@ func TestContainerIDFromCgroup(t *testing.T) {
 		{"not in a container", "12:blkio:/", ""},
 		{"empty", "", ""},
 		{"embedded in longer hex", id + "a", ""},
+		{"sha512 128 hex", strings.Repeat("c", 128), ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -3,6 +3,7 @@ package render
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/portlens/portlens/internal/detect"
@@ -26,9 +27,15 @@ func (r *Renderer) List(entries []model.PortEntry, opts ListOptions) {
 	if opts.Filter != "" {
 		f := strings.ToLower(opts.Filter)
 		entries = filterEntries(entries, func(e model.PortEntry) bool {
-			hay := strings.ToLower(fmt.Sprintf("%d %s %s %s %s %s %s %s %s",
-				e.Port, e.Process, e.Project, e.Runtime, e.Address, e.Status, e.Service, e.Origin, containerFilterText(e.Container)))
-			return strings.Contains(hay, f)
+			return strings.Contains(strconv.Itoa(int(e.Port)), f) ||
+				strings.Contains(strings.ToLower(e.Process), f) ||
+				strings.Contains(strings.ToLower(e.Project), f) ||
+				strings.Contains(strings.ToLower(e.Runtime), f) ||
+				strings.Contains(strings.ToLower(e.Address), f) ||
+				strings.Contains(strings.ToLower(e.Status), f) ||
+				strings.Contains(strings.ToLower(e.Service), f) ||
+				strings.Contains(strings.ToLower(string(e.Origin)), f) ||
+				(e.Container != nil && strings.Contains(strings.ToLower(containerFilterText(e.Container)), f))
 		})
 	}
 

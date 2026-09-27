@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/portlens/portlens/internal/exitcode"
 )
 
 type mockSubcommand struct {
@@ -165,5 +167,15 @@ func TestSubcommandListExecution(t *testing.T) {
 	}
 	if !strings.HasPrefix(strings.TrimSpace(stdout.String()), "[") {
 		t.Errorf("expected json array from list, got: %s", stdout.String())
+	}
+}
+
+func TestFindSubcommandFlags(t *testing.T) {
+	// Should not fail validation with exit code 2 (InvalidArguments)
+	var stdout, stderr bytes.Buffer
+	code := Execute([]string{"find", "--name=nonexistent_dummy_process_12345"}, &stdout, &stderr, nil)
+	// It should reach search execution and return PortNotFound (3) rather than InvalidArguments (2)
+	if code != exitcode.PortNotFound {
+		t.Errorf("Execute(find --name=...) = %d, want %d (stderr: %s)", code, exitcode.PortNotFound, stderr.String())
 	}
 }

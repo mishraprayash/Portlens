@@ -103,7 +103,7 @@ func linuxProcInfo(pid int32, full bool) (*model.ProcessInfo, error) {
 	}
 
 	if full {
-		if st, ok := linuxStartTime(pid); ok {
+		if st, ok := linuxStartTimeFromStat(stat); ok {
 			info.StartTime = st
 		}
 		info.User = linuxUser(pid)
@@ -145,11 +145,15 @@ func parseStatRow(data []byte) (statRow, bool) {
 // time into a wall-clock start time. Linux schedules in USER_HZ (100) clock
 // ticks per second on essentially all platforms.
 func linuxStartTime(pid int32) (time.Time, bool) {
-	const userHz = 100
 	data, err := os.ReadFile(procDir(pid) + "/stat")
 	if err != nil {
 		return time.Time{}, false
 	}
+	return linuxStartTimeFromStat(data)
+}
+
+func linuxStartTimeFromStat(data []byte) (time.Time, bool) {
+	const userHz = 100
 	open := bytes.IndexByte(data, '(')
 	close := bytes.LastIndexByte(data, ')')
 	if open < 0 || close <= open {

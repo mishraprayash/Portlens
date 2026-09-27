@@ -301,7 +301,7 @@ func (i *Inspector) attachContainers(ctx context.Context, entries []model.PortEn
 	for _, e := range entries {
 		ports = append(ports, uint16(e.Port))
 	}
-	byPort, err := i.Platform.Containers.FindByPorts(ctx, ports, model.ProtocolTCP)
+	byPort, err := i.Platform.Containers.FindByPorts(ctx, ports, "")
 	if err != nil {
 		return
 	}

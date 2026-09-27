@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,7 +24,7 @@ func ProbeHTTP(ctx context.Context, addr string, port uint16) *model.HTTPProbe {
 		host = "127.0.0.1"
 	}
 
-	targetURL := fmt.Sprintf("http://%s:%d/", host, port)
+	targetURL := fmt.Sprintf("http://%s/", net.JoinHostPort(host, strconv.Itoa(int(port))))
 
 	probeCtx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
 	defer cancel()
@@ -36,6 +38,9 @@ func ProbeHTTP(ctx context.Context, addr string, port uint16) *model.HTTPProbe {
 
 	client := &http.Client{
 		Timeout: 300 * time.Millisecond,
+		Transport: &http.Transport{
+			DisableKeepAlives: true,
+		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 2 {
 				return http.ErrUseLastResponse

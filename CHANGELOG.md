@@ -8,6 +8,15 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Fixed
 
+- **`parseLsofFields` multi-process socket attribution**: Fixed a critical bug in `lsof` field parsing where `flush()` was not called upon encountering a new PID line, causing the trailing socket of any process to be misattributed to the subsequent process.
+- **Detached process termination on exit in `--restart`**: Replaced `exec.CommandContext` with `exec.Command` in `defaultProcessStarter` so that Go's runtime context monitor does not terminate the restarted detached process when PortLens completes execution.
+- **Interactive mode nil pointer dereference panic**: Guarded against nil `report.Process` when pressing `'c'` to copy PID, preventing panics on unprivileged or system listeners.
+- **IPv6 HTTP endpoint probing (`::1`)**: Used `net.JoinHostPort` to properly bracket IPv6 hosts in HTTP probe requests and enabled `DisableKeepAlives` on probe transports to prevent socket descriptor leaks.
+- **`mDNSResponder` origin identification and Linux `/home/` support**: Lowercased `"mdnsresponder"` in `systemProcessNames` to match case-folded process names, and added `"/home/"` to `userPathPrefixes` for Linux user binary detection.
+- **`find` subcommand `--pid=` and `--name=` flag support**: Added support for inline `--flag=value` syntax in `portlens find`.
+- **UDP container matching in port listings**: Relaxed protocol filtering in `attachContainers` so UDP-published container services are properly mapped to their container metadata in listings.
+- **Cgroup scanner false-positive matching on long hex strings**: Fixed `scanContainerID` offset tracking so that 128-hex tokens (such as SHA-512 hashes) are not partially matched as 64-hex container IDs.
+- **Performance optimizations in process inspection and rendering**: Eliminated redundant `/proc/<pid>/stat` reads on Linux, duplicate `darwinArgs` syscalls on macOS, duplicate dependency instantiation in `service.New`, shared the Linux socket inode cache between resolvers, and replaced string concatenation churn in `kv` rendering and list filtering with efficient implementations.
 - **`--restart` now gracefully terminates the existing process first**: Shuts down the running process tree and waits for the port to release before relaunching, eliminating `EADDRINUSE` socket conflicts. Stdio is detached into `/dev/null` so background logs do not corrupt the terminal session.
 - **`LaunchProcess` directly launched by shell**: Fixed detection so that when a process is the immediate child of an interactive shell, PortLens restarts the process itself rather than mistakenly trying to re-execute the parent shell.
 - **Subcommand routing with global flags**: `portlens [flags] config ...` (e.g. `portlens --no-color config list`) now dispatches to the config subcommand instead of erroring with an invalid port.

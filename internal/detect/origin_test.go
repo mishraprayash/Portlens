@@ -46,6 +46,8 @@ func TestProcessOrigin(t *testing.T) {
 		{"usr local brew", &model.ProcessInfo{Exe: "/usr/local/Cellar/redis/7/bin/redis-server"}, model.OriginUser},
 		{"app bundle", &model.ProcessInfo{Exe: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"}, model.OriginUser},
 		{"user home", &model.ProcessInfo{Exe: "/Users/prayash/.nvm/versions/node/v22/bin/node"}, model.OriginUser},
+		{"linux user home", &model.ProcessInfo{Exe: "/home/ubuntu/.local/bin/custom-server"}, model.OriginUser},
+		{"mDNSResponder name no exe", &model.ProcessInfo{Name: "mDNSResponder"}, model.OriginSystem},
 		{"user daemon name no exe", &model.ProcessInfo{Name: "postgres"}, model.OriginUser},
 		{"redis name no exe", &model.ProcessInfo{Name: "redis-server"}, model.OriginUser},
 		{"node name no exe", &model.ProcessInfo{Name: "node"}, model.OriginUser},
