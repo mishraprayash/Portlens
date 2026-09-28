@@ -8,6 +8,15 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Fixed
 
+- **`parseLsofFields` multi-process socket attribution**: Fixed a critical bug in `lsof` field parsing where `flush()` was not called upon encountering a new PID line, causing the trailing socket of any process to be misattributed to the subsequent process.
+- **Detached process termination on exit in `--restart`**: Replaced `exec.CommandContext` with `exec.Command` in `defaultProcessStarter` so that Go's runtime context monitor does not terminate the restarted detached process when PortLens completes execution.
+- **Interactive mode nil pointer dereference panic**: Guarded against nil `report.Process` when pressing `'c'` to copy PID, preventing panics on unprivileged or system listeners.
+- **IPv6 HTTP endpoint probing (`::1`)**: Used `net.JoinHostPort` to properly bracket IPv6 hosts in HTTP probe requests and enabled `DisableKeepAlives` on probe transports to prevent socket descriptor leaks.
+- **`mDNSResponder` origin identification and Linux `/home/` support**: Lowercased `"mdnsresponder"` in `systemProcessNames` to match case-folded process names, and added `"/home/"` to `userPathPrefixes` for Linux user binary detection.
+- **`find` subcommand `--pid=` and `--name=` flag support**: Added support for inline `--flag=value` syntax in `portlens find`.
+- **UDP container matching in port listings**: Relaxed protocol filtering in `attachContainers` so UDP-published container services are properly mapped to their container metadata in listings.
+- **Cgroup scanner false-positive matching on long hex strings**: Fixed `scanContainerID` offset tracking so that 128-hex tokens (such as SHA-512 hashes) are not partially matched as 64-hex container IDs.
+- **Performance optimizations in process inspection and rendering**: Eliminated redundant `/proc/<pid>/stat` reads on Linux, duplicate `darwinArgs` syscalls on macOS, duplicate dependency instantiation in `service.New`, shared the Linux socket inode cache between resolvers, and replaced string concatenation churn in `kv` rendering and list filtering with efficient implementations.
 - **`--restart` now gracefully terminates the existing process first**: Shuts down the running process tree and waits for the port to release before relaunching, eliminating `EADDRINUSE` socket conflicts. Stdio is detached into `/dev/null` so background logs do not corrupt the terminal session.
 - **`LaunchProcess` directly launched by shell**: Fixed detection so that when a process is the immediate child of an interactive shell, PortLens restarts the process itself rather than mistakenly trying to re-execute the parent shell.
 - **Subcommand routing with global flags**: `portlens [flags] config ...` (e.g. `portlens --no-color config list`) now dispatches to the config subcommand instead of erroring with an invalid port.
@@ -35,6 +44,7 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Added
 
+- **Full-Screen Interactive TUI Dashboard (`portlens top` / `portlens tui`)**: Added a zero-dependency, double-buffered full-screen terminal dashboard built directly on `golang.org/x/term` and standard ANSI escape sequences (`\x1b[?1049h`). Features split-pane navigation with real-time port selection, live search/filtering (`/`), instant tab switching (`1` Overview, `2`/`t` Process Tree, `3`/`n` Connections), safe in-place action triggers with confirmation modals (`k` graceful kill, `f` force kill, `r` restart, `o` browser open, `c`/`u` clipboard copy), background polling, responsive layout resizing on `SIGWINCH`, and guaranteed fail-safe terminal cleanup on any exit path.
 - **Shell autocompletion generator (`portlens completion <bash|zsh|fish>`)**: Generates dynamic shell autocompletion for bash, zsh, and fish that completes subcommands, flags, and currently active listening ports with their process names.
 - **HTTP health & HTML title probing (`--probe` / `-p`)**: Lightweight HTTP probing with a 300ms timeout extracts HTTP status, response latency, Server header, and HTML `<title>` to immediately identify the web application running behind generic process names.
 - **Process Memory RSS display**: Surfaced native process memory usage (formatted as human-friendly RSS units e.g. `128 MB`, `1.4 GB`) in both compact summary and full verbose reports.

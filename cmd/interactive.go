@@ -55,6 +55,10 @@ func runInteractive(
 		case '?':
 			printKeyHelp(stdout)
 		case 'c':
+			if report.Process == nil {
+				fmt.Fprintln(stdout, "no owning process PID available")
+				continue
+			}
 			copyText(ctx, mgr, stdout, fmt.Sprintf("%d", report.Process.PID), "PID")
 		case 'u':
 			copyText(ctx, mgr, stdout, actions.LocalURL(report), "URL")

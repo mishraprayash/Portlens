@@ -479,6 +479,35 @@ Found 2 of 5001 ports in use in 42.1s.
 
 ---
 
+## Full-screen interactive dashboard — `portlens top` (or `portlens tui`)
+
+`portlens top` provides a live, full-screen terminal dashboard displaying all active listening sockets with real-time selection, deep process inspection, tab switching, and instant action shortcuts without ever leaving your terminal.
+
+```bash
+$ portlens top
+$ portlens top --interval 1       # refresh every second (default: 2s)
+$ portlens top --tcp              # show only TCP listeners
+$ portlens tui                    # alias
+```
+
+### Dashboard Features
+- **Split-Pane View**: Left pane displays an interactive table of listening ports; right pane displays deep process details, project metadata, git repository state, and exposure risk.
+- **Tabbed Inspector**:
+  - `[1:Overview]`: Process PID, memory usage, runtime duration, full command, working directory, git repo/branch, framework, and exposure assessment.
+  - `[2:Tree]` (`t`): Full ancestor and descendant process hierarchy.
+  - `[3:Connections]` (`n`): Active TCP connections with remote addresses and socket states.
+- **Live Search & Filter (`/`)**: Type any string to instantly filter listeners by port, process name, service, container, or project.
+- **In-Place Actions**:
+  - `k`: Send graceful `SIGTERM` with confirmation modal.
+  - `f`: Send forced `SIGKILL` with confirmation modal.
+  - `r`: Restart process from detected launch command.
+  - `o`: Open service in default browser (`http://localhost:<port>`).
+  - `c`: Copy PID to clipboard.
+  - `u`: Copy URL to clipboard.
+- **Zero-Flicker & Fail-Safe**: Double-buffered ANSI frame rendering with guaranteed terminal state cleanup on any interrupt or exit.
+
+---
+
 ## Finding ports by process — `portlens find` (or `--pid` / `--name`)
 
 Instead of guessing a port, start from the process:

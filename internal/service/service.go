@@ -55,14 +55,18 @@ func WithActions(act *actions.Manager) Option {
 
 // New creates a new PortService instance with sensible defaults and functional options.
 func New(opts ...Option) *PortService {
-	plat := platform.New()
-	s := &PortService{
-		platform:  plat,
-		inspector: inspector.New(plat),
-		actions:   actions.NewManager(plat, nil, nil),
-	}
+	s := &PortService{}
 	for _, opt := range opts {
 		opt(s)
+	}
+	if s.platform == nil {
+		s.platform = platform.New()
+	}
+	if s.inspector == nil {
+		s.inspector = inspector.New(s.platform)
+	}
+	if s.actions == nil {
+		s.actions = actions.NewManager(s.platform, nil, nil)
 	}
 	return s
 }

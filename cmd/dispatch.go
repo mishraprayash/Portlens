@@ -35,6 +35,7 @@ func defaultSubcommandRegistry() *SubcommandRegistry {
 	r.Register(&watchSubcommand{})
 	r.Register(&findSubcommand{})
 	r.Register(&nextSubcommand{})
+	r.Register(&topSubcommand{})
 	r.Register(&configSubcommand{})
 	r.Register(&completionSubcommand{})
 	return r
@@ -290,10 +291,20 @@ func (c *findSubcommand) Run(ctx context.Context, args []string, preFlags []stri
 			i++
 			continue
 		}
+		if strings.HasPrefix(a, "--pid=") {
+			hasTarget = true
+			extraFlags = append(extraFlags, a)
+			continue
+		}
 		if a == "--name" && i+1 < len(args) {
 			hasTarget = true
 			extraFlags = append(extraFlags, a, args[i+1])
 			i++
+			continue
+		}
+		if strings.HasPrefix(a, "--name=") {
+			hasTarget = true
+			extraFlags = append(extraFlags, a)
 			continue
 		}
 		if strings.HasPrefix(a, "-") {

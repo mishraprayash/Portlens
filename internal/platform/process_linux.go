@@ -108,7 +108,7 @@ func linuxProcInfo(pid int32, full bool) (*model.ProcessInfo, error) {
 	}
 
 	if full {
-		if st, ok := linuxStartTime(pid); ok {
+		if st, ok := linuxStartTimeFromStat(stat); ok {
 			info.StartTime = st
 		}
 		info.User = linuxUser(pid)
@@ -155,6 +155,11 @@ func linuxStartTime(pid int32) (time.Time, bool) {
 	if err != nil {
 		return time.Time{}, false
 	}
+	return linuxStartTimeFromStat(data)
+}
+
+func linuxStartTimeFromStat(data []byte) (time.Time, bool) {
+	const userHz = 100
 	open := bytes.IndexByte(data, '(')
 	close := bytes.LastIndexByte(data, ')')
 	if open < 0 || close <= open {

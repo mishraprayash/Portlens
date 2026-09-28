@@ -89,8 +89,10 @@ func (m *Manager) Restart(ctx context.Context, report *model.Report) error {
 
 // defaultProcessStarter spawns a process detached from the current terminal
 // session with stdio connected to os.DevNull so background logs do not bleed into the shell.
-func defaultProcessStarter(ctx context.Context, argv []string, cwd string) (int, error) {
-	run := exec.CommandContext(ctx, argv[0], argv[1:]...)
+func defaultProcessStarter(_ context.Context, argv []string, cwd string) (int, error) {
+	// exec.Command without context is required so that Go's runtime does not kill
+	// the detached process when PortLens exits and ctx is cancelled.
+	run := exec.Command(argv[0], argv[1:]...)
 	if cwd != "" {
 		run.Dir = cwd
 	}

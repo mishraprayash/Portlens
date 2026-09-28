@@ -162,6 +162,7 @@ portlens open <port>               Open service in your default browser
 portlens tree <port>               Show complete process hierarchy
 portlens conn <port>               Show network connections, grouped & summarized
 portlens watch [port...]           Live-monitor ports; optional --notify
+portlens top, tui                  Full-screen live interactive TUI dashboard
 portlens find <query|pid>          Find ports by process name or PID (--pid)
 portlens next [start]              Find lowest available/free port (default 3000)
 portlens config                    Manage named port groups (@name)

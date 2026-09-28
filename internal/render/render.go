@@ -6,6 +6,7 @@ package render
 import (
 	"io"
 	"os"
+	"strings"
 
 	"golang.org/x/term"
 )
@@ -42,9 +43,7 @@ func WithWidth(width int) Option {
 // NewRenderer builds a Renderer using functional options.
 func NewRenderer(w io.Writer, opts ...Option) *Renderer {
 	r := &Renderer{W: w, Width: DefaultWidth}
-	isTerm := false
 	if f, ok := w.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
-		isTerm = true
 		r.Color = true
 		if width, _, err := term.GetSize(int(f.Fd())); err == nil && width > 0 {
 			r.Width = width
@@ -52,10 +51,6 @@ func NewRenderer(w io.Writer, opts ...Option) *Renderer {
 	}
 	for _, opt := range opts {
 		opt(r)
-	}
-	// Piped or non-terminal output never carries color escapes unless w is a terminal.
-	if !isTerm {
-		r.Color = false
 	}
 	return r
 }
@@ -126,11 +121,14 @@ func (r *Renderer) kv(rows [][2]string) string {
 		}
 	}
 	pad += 3
-	out := ""
+	var sb strings.Builder
 	for _, row := range rows {
-		out += r.dim(row[0]) + spaces(pad-len(row[0])) + row[1] + "\n"
+		sb.WriteString(r.dim(row[0]))
+		sb.WriteString(spaces(pad - len(row[0])))
+		sb.WriteString(row[1])
+		sb.WriteByte('\n')
 	}
-	return out
+	return sb.String()
 }
 
 func spaces(n int) string {

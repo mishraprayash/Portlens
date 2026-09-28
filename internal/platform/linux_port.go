@@ -17,18 +17,30 @@ import (
 // directly, then maps socket inodes back to owning processes by inspecting
 // /proc/<pid>/fd symlinks. No external commands are used.
 
+type sharedInodeMap struct {
+	once   sync.Once
+	inodes map[uint64]int32
+}
+
+func (s *sharedInodeMap) get() map[uint64]int32 {
+	s.once.Do(func() { s.inodes = socketInodeMap() })
+	return s.inodes
+}
+
+var defaultLinuxInodeMap = &sharedInodeMap{}
+
 type linuxPortResolver struct {
-	inodeOnce sync.Once
-	inodes    map[uint64]int32
+	inodes *sharedInodeMap
 }
 
 type linuxNetworkInspector struct {
-	inodeOnce sync.Once
-	inodes    map[uint64]int32
+	inodes *sharedInodeMap
 }
 
-func newPortResolver() PortResolver         { return &linuxPortResolver{} }
-func newNetworkInspector() NetworkInspector { return &linuxNetworkInspector{} }
+func newPortResolver() PortResolver { return &linuxPortResolver{inodes: defaultLinuxInodeMap} }
+func newNetworkInspector() NetworkInspector {
+	return &linuxNetworkInspector{inodes: defaultLinuxInodeMap}
+}
 
 // socketInodeMap scans /proc/<pid>/fd to build an inode→pid mapping for all
 // socket file descriptors on the system. It is built once per invocation.
@@ -66,8 +78,7 @@ func socketInodeMap() map[uint64]int32 {
 }
 
 func (r *linuxPortResolver) inodeMap() map[uint64]int32 {
-	r.inodeOnce.Do(func() { r.inodes = socketInodeMap() })
-	return r.inodes
+	return r.inodes.get()
 }
 
 func (r *linuxPortResolver) ResolvePort(_ context.Context, port uint16, protocol model.Protocol) ([]model.Listener, error) {
@@ -150,8 +161,7 @@ func (r *linuxPortResolver) Listeners(_ context.Context) ([]model.Listener, erro
 }
 
 func (n *linuxNetworkInspector) inodeMap() map[uint64]int32 {
-	n.inodeOnce.Do(func() { n.inodes = socketInodeMap() })
-	return n.inodes
+	return n.inodes.get()
 }
 
 func (n *linuxNetworkInspector) Connections(_ context.Context, pid int32) ([]model.Connection, error) {
