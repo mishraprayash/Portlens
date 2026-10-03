@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/mishraprayash/Portlens/internal/detect"
 	"github.com/mishraprayash/Portlens/internal/exitcode"
@@ -46,12 +47,17 @@ func runCompletion(args []string, stdout, stderr io.Writer) int {
 
 // runCompletePorts outputs "port:description" for all current listening sockets,
 // powering dynamic shell autocompletion.
-func runCompletePorts(stdout io.Writer) int {
+func runCompletePorts(ctx context.Context, stdout io.Writer) int {
 	plat := platform.New()
 	if plat.Ports == nil {
 		return exitcode.Success
 	}
-	listeners, err := plat.Ports.Listeners(context.Background())
+	// A completion request must never hang the shell: bound the listener scan
+	// even when the caller's context carries no deadline. On timeout the
+	// error path below silently yields no completions.
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	listeners, err := plat.Ports.Listeners(ctx)
 	if err != nil {
 		return exitcode.Success
 	}

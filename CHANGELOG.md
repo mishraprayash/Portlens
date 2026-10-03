@@ -33,6 +33,25 @@ All notable changes to PortLens are documented here. The format is based on
   another user (EPERM) now exits 4 as `docs/exit-codes.md` promises — the
   platform and model `ErrPermissionDenied` are a single sentinel, so
   `model.MapExitCode` recognizes it. Previously it fell through to exit 1.
+- **IPv6 addresses are bracketed in every human-facing view**: the TUI
+  overview, TUI connections table, and inspector facts now render
+  `[::1]:5432` via the shared `model.FormatAddr` instead of `::1:5432`.
+  JSON output still carries the raw address.
+- **One filter predicate for the table and the TUI**: `--filter` and the TUI's
+  `/` filter now both use `model.PortEntry.Matches`, a case-insensitive
+  substring match over port, process, service, project, runtime, address,
+  status, origin, protocol, and container fields (queries are trimmed of
+  surrounding whitespace). Previously the two implementations matched
+  different field sets — e.g. `--filter listening` did not work in the TUI
+  and `--filter tcp` did not work in the table.
+- **Watch mode on Linux sees processes started after launch**: the shared
+  socket-inode→PID cache expires after one second instead of being built
+  once per invocation, so long-running `--watch` sessions attribute new
+  processes correctly (single-shot commands still scan at most once).
+- **Shell completion cannot hang**: the dynamic `--_complete_ports` listener
+  scan is bounded by a 10-second deadline derived from the caller's
+  context; a canceled or expired context yields no completions and still
+  exits 0.
 - **`parseLsofFields` multi-process socket attribution**: Fixed a critical bug in `lsof` field parsing where `flush()` was not called upon encountering a new PID line, causing the trailing socket of any process to be misattributed to the subsequent process.
 - **Detached process termination on exit in `--restart`**: Replaced `exec.CommandContext` with `exec.Command` in `defaultProcessStarter` so that Go's runtime context monitor does not terminate the restarted detached process when PortLens completes execution.
 - **Interactive mode nil pointer dereference panic**: Guarded against nil `report.Process` when pressing `'c'` to copy PID, preventing panics on unprivileged or system listeners.

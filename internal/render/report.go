@@ -24,7 +24,7 @@ func (r *Renderer) Report(report *model.Report) {
 	rows := [][2]string{
 		{"Status", strings.ToUpper(report.Status)},
 		{"Protocol", strings.ToUpper(string(report.Protocol.Normalize()))},
-		{"Address", formatAddr(report.Address, uint16(report.Port))},
+		{"Address", model.FormatAddr(report.Address, uint16(report.Port))},
 	}
 	if report.Service != "" {
 		rows = append(rows, [2]string{"Service", report.Service})
@@ -232,13 +232,6 @@ func (r *Renderer) renderActions() {
 		r.writeln(r.dim("[n]") + " Connections")
 		r.writeln(r.dim("[q]") + " Quit")
 	})
-}
-
-func formatAddr(addr string, port uint16) string {
-	if strings.Contains(addr, ":") {
-		return fmt.Sprintf("[%s]:%d", addr, port)
-	}
-	return fmt.Sprintf("%s:%d", addr, port)
 }
 
 func shortenHome(path string) string {

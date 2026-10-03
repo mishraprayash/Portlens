@@ -126,7 +126,7 @@ func (i *Inspector) InspectDepth(ctx context.Context, port int32, protocol model
 		// process, or permission limits). Report what we know.
 		report.Exposure = assessExposure(listeners)
 		report.Facts = append(report.Facts,
-			fmt.Sprintf("Port %d is bound to %s:%d", port, displayAddr(primary.Address), port))
+			fmt.Sprintf("Port %d is bound to %s", port, model.FormatAddr(displayAddr(primary.Address), uint16(port))))
 		report.Inferences = append(report.Inferences,
 			"Owner could not be determined (may require elevated privileges)")
 		i.attachContainer(ctx, report)

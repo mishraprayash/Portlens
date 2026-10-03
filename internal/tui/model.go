@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/mishraprayash/Portlens/internal/model"
@@ -117,26 +115,11 @@ func (m *Model) SetEntries(entries []model.PortEntry) {
 // RecomputeFilter rebuilds FilteredIndices matching the current Filter text.
 func (m *Model) RecomputeFilter() {
 	m.FilteredIndices = m.FilteredIndices[:0]
-	q := strings.TrimSpace(strings.ToLower(m.Filter))
-
 	for i, e := range m.Entries {
 		if m.TCPOnly && e.Protocol.Normalize() != model.ProtocolTCP {
 			continue
 		}
-		if q == "" {
-			m.FilteredIndices = append(m.FilteredIndices, i)
-			continue
-		}
-		// Match against port, process, service, project, runtime, container, address
-		if strings.Contains(strconv.Itoa(int(e.Port)), q) ||
-			strings.Contains(strings.ToLower(e.Process), q) ||
-			strings.Contains(strings.ToLower(e.Service), q) ||
-			strings.Contains(strings.ToLower(e.Project), q) ||
-			strings.Contains(strings.ToLower(e.Runtime), q) ||
-			strings.Contains(strings.ToLower(e.Address), q) ||
-			strings.Contains(strings.ToLower(string(e.Protocol)), q) ||
-			(e.Container != nil && (strings.Contains(strings.ToLower(e.Container.Name), q) ||
-				strings.Contains(strings.ToLower(e.Container.Image), q))) {
+		if e.Matches(m.Filter) {
 			m.FilteredIndices = append(m.FilteredIndices, i)
 		}
 	}

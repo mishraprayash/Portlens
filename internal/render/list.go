@@ -3,7 +3,6 @@ package render
 import (
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/mishraprayash/Portlens/internal/detect"
@@ -25,17 +24,8 @@ func (r *Renderer) List(entries []model.PortEntry, opts ListOptions) {
 		})
 	}
 	if opts.Filter != "" {
-		f := strings.ToLower(opts.Filter)
 		entries = filterEntries(entries, func(e model.PortEntry) bool {
-			return strings.Contains(strconv.Itoa(int(e.Port)), f) ||
-				strings.Contains(strings.ToLower(e.Process), f) ||
-				strings.Contains(strings.ToLower(e.Project), f) ||
-				strings.Contains(strings.ToLower(e.Runtime), f) ||
-				strings.Contains(strings.ToLower(e.Address), f) ||
-				strings.Contains(strings.ToLower(e.Status), f) ||
-				strings.Contains(strings.ToLower(e.Service), f) ||
-				strings.Contains(strings.ToLower(string(e.Origin)), f) ||
-				(e.Container != nil && strings.Contains(strings.ToLower(containerFilterText(e.Container)), f))
+			return e.Matches(opts.Filter)
 		})
 	}
 
@@ -90,7 +80,7 @@ func (r *Renderer) List(entries []model.PortEntry, opts ListOptions) {
 		if hasContainer {
 			row = append(row, listContainerCell(e.Container))
 		}
-		row = append(row, svc, proj, rt, string(e.Protocol.Normalize()), formatAddr(e.Address, uint16(e.Port)), e.Status, origin)
+		row = append(row, svc, proj, rt, string(e.Protocol.Normalize()), model.FormatAddr(e.Address, uint16(e.Port)), e.Status, origin)
 		cols = append(cols, row)
 	}
 	r.writeln(r.table(headers, cols))

@@ -18,8 +18,9 @@ func (i *Inspector) interpret(report *model.Report) {
 	}
 
 	report.Facts = append(report.Facts,
-		fmt.Sprintf("Process %d (%s) is listening on %s:%d over %s",
-			p.PID, p.Name, displayAddr(report.Address), report.Port, report.Protocol.Normalize()),
+		fmt.Sprintf("Process %d (%s) is listening on %s over %s",
+			p.PID, p.Name, model.FormatAddr(displayAddr(report.Address), uint16(report.Port)),
+			report.Protocol.Normalize()),
 	)
 	if p.Command != "" {
 		report.Facts = append(report.Facts, fmt.Sprintf("Full command: %s", p.Command))

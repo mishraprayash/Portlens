@@ -84,7 +84,7 @@ func ExecuteContext(ctx context.Context, args []string, stdout, stderr io.Writer
 
 	for _, a := range args {
 		if a == "--_complete_ports" {
-			return runCompletePorts(stdout)
+			return runCompletePorts(ctx, stdout)
 		}
 	}
 

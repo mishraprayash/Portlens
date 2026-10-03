@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 
@@ -51,9 +52,20 @@ func TestRunCompletionInvalidShell(t *testing.T) {
 
 func TestRunCompletePorts(t *testing.T) {
 	var stdout bytes.Buffer
-	code := runCompletePorts(&stdout)
+	code := runCompletePorts(context.Background(), &stdout)
 	if code != exitcode.Success {
 		t.Fatalf("runCompletePorts returned %d, want 0", code)
+	}
+}
+
+// Completion must never fail the shell: a canceled or expired context
+// yields no completions but still exits 0.
+func TestRunCompletePortsCanceledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var stdout bytes.Buffer
+	if code := runCompletePorts(ctx, &stdout); code != exitcode.Success {
+		t.Fatalf("runCompletePorts with canceled context returned %d, want 0", code)
 	}
 }
 

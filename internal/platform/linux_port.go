@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/mishraprayash/Portlens/internal/model"
 )
@@ -17,17 +18,35 @@ import (
 // directly, then maps socket inodes back to owning processes by inspecting
 // /proc/<pid>/fd symlinks. No external commands are used.
 
+// inodeMapTTL bounds how long the cached inode→pid map is reused. Watch mode
+// re-runs resolution on every tick, so a process that starts after the first
+// scan is picked up by a later refresh instead of being attributed from a
+// map frozen at process start.
+const inodeMapTTL = time.Second
+
 type sharedInodeMap struct {
-	once   sync.Once
-	inodes map[uint64]int32
+	mu        sync.Mutex
+	ttl       time.Duration
+	build     func() map[uint64]int32
+	inodes    map[uint64]int32
+	fetchedAt time.Time
+}
+
+func newSharedInodeMap(ttl time.Duration, build func() map[uint64]int32) *sharedInodeMap {
+	return &sharedInodeMap{ttl: ttl, build: build}
 }
 
 func (s *sharedInodeMap) get() map[uint64]int32 {
-	s.once.Do(func() { s.inodes = socketInodeMap() })
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.inodes == nil || time.Since(s.fetchedAt) >= s.ttl {
+		s.inodes = s.build()
+		s.fetchedAt = time.Now()
+	}
 	return s.inodes
 }
 
-var defaultLinuxInodeMap = &sharedInodeMap{}
+var defaultLinuxInodeMap = newSharedInodeMap(inodeMapTTL, socketInodeMap)
 
 type linuxPortResolver struct {
 	inodes *sharedInodeMap
@@ -43,7 +62,7 @@ func newNetworkInspector() NetworkInspector {
 }
 
 // socketInodeMap scans /proc/<pid>/fd to build an inode→pid mapping for all
-// socket file descriptors on the system. It is built once per invocation.
+// socket file descriptors on the system. Results are cached for inodeMapTTL.
 func socketInodeMap() map[uint64]int32 {
 	m := map[uint64]int32{}
 	entries, err := os.ReadDir("/proc")

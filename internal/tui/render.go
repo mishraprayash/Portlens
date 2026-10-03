@@ -391,9 +391,9 @@ func renderOverviewTab(rep *model.Report, width int) []string {
 	if rep.Status != "listening" {
 		statusText = yellow(rep.Status)
 	}
-	lines = append(lines, fmt.Sprintf(" %s %-12s %s %s:%d (%s)",
+	lines = append(lines, fmt.Sprintf(" %s %-12s %s %s (%s)",
 		dim("Status:"), statusText,
-		dim("Address:"), rep.Address, rep.Port, rep.Protocol))
+		dim("Address:"), model.FormatAddr(rep.Address, uint16(rep.Port)), rep.Protocol))
 
 	// Exposure Assessment
 	if rep.Exposure != nil {
@@ -517,10 +517,10 @@ func renderConnectionsTab(rep *model.Report, width int) []string {
 	))
 
 	for _, c := range rep.Network.Connections {
-		local := fmt.Sprintf("%s:%d", c.LocalAddr, c.LocalPort)
+		local := model.FormatAddr(c.LocalAddr, c.LocalPort)
 		remote := "-"
 		if c.RemotePort > 0 {
-			remote = fmt.Sprintf("%s:%d", c.RemoteAddr, c.RemotePort)
+			remote = model.FormatAddr(c.RemoteAddr, c.RemotePort)
 		}
 		lines = append(lines, fmt.Sprintf(" %s %s %s %s",
 			padRight(string(c.Protocol), 6),

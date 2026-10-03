@@ -46,7 +46,7 @@ GENERAL FLAGS
 
 LISTING & FILTER FLAGS
       --sort <key>  Sort listing by: port, process, project, runtime
-      --filter <s>  Filter listing by substring (matches process, service, project)
+      --filter <s>  Filter listing by substring across all fields
       --tcp         Only show TCP listeners
 
 WATCH FLAGS

@@ -129,6 +129,11 @@ $ portlens --filter kerberos     # find the service by its well-known name
 $ portlens --tcp                 # TCP listeners only (hide UDP)
 ```
 
+The filter is a case-insensitive substring match against every field —
+port, process, service, project, runtime, address, status, origin,
+protocol, and container — and the same predicate powers the TUI's `/`
+filter.
+
 **Use case — "which ports does my `orbit` project occupy?"**
 `portlens --filter orbit` answers it instantly.
 
@@ -496,7 +501,7 @@ $ portlens tui                    # alias
   - `[1:Overview]`: Process PID, memory usage, runtime duration, full command, working directory, git repo/branch, framework, and exposure assessment.
   - `[2:Tree]` (`t`): Full ancestor and descendant process hierarchy.
   - `[3:Connections]` (`n`): Active TCP connections with remote addresses and socket states.
-- **Live Search & Filter (`/`)**: Type any string to instantly filter listeners by port, process name, service, container, or project.
+- **Live Search & Filter (`/`)**: Type any string to instantly filter listeners by any field (port, process, service, container, project, status, ...).
 - **In-Place Actions**:
   - `k`: Send graceful `SIGTERM` with confirmation modal.
   - `f`: Send forced `SIGKILL` with confirmation modal.
