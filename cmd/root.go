@@ -99,9 +99,7 @@ func ExecuteContext(ctx context.Context, args []string, stdout, stderr io.Writer
 func executeCore(ctx context.Context, args []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	expanded, err := expandGroups(args, configGroupLookup)
 	if err != nil {
-		fmt.Fprintf(stderr, "portlens: %v\n", err)
-		fmt.Fprintf(stderr, "Manage groups with: portlens config add <name> <port> [port ...]\n")
-		return exitcode.InvalidArguments
+		return fail(stderr, exitcode.InvalidArguments, "portlens: %v\nManage groups with: portlens config add <name> <port> [port ...]\n", err)
 	}
 
 	opts, err := parseArgs(expanded)
@@ -110,9 +108,7 @@ func executeCore(ctx context.Context, args []string, stdout, stderr io.Writer, s
 		return exitcode.Success
 	}
 	if err != nil {
-		fmt.Fprintf(stderr, "portlens: %v\n", err)
-		fmt.Fprintf(stderr, "Run 'portlens --help' for usage.\n")
-		return exitcode.InvalidArguments
+		return fail(stderr, exitcode.InvalidArguments, "portlens: %v\nRun 'portlens --help' for usage.\n", err)
 	}
 	if opts.help {
 		printUsage(stdout)
@@ -133,9 +129,7 @@ func executeCore(ctx context.Context, args []string, stdout, stderr io.Writer, s
 	// Actions and per-port views need a concrete target. Without one they
 	// would silently degrade to the default listing (e.g. `portlens --kill`).
 	if len(opts.ports) == 0 && requiresPortTarget(opts) {
-		fmt.Fprintln(stderr, "portlens: no ports to act on; pass port(s), --all, --pid, or --name")
-		fmt.Fprintln(stderr, "Run 'portlens --help' for usage.")
-		return exitcode.InvalidArguments
+		return fail(stderr, exitcode.InvalidArguments, "portlens: no ports to act on; pass port(s), --all, --pid, or --name\nRun 'portlens --help' for usage.\n")
 	}
 
 	if opts.watch {
@@ -425,8 +419,7 @@ func osSignalContext() (context.Context, context.CancelFunc) {
 // exitcode.Success on success or a nonzero exit code on failure.
 func resolveDynamicPorts(ctx context.Context, stdout, stderr io.Writer, opts *options) int {
 	if len(opts.ports) > 0 {
-		fmt.Fprintf(stderr, "portlens: cannot combine explicit ports with --all/--pid/--name\n")
-		return exitcode.InvalidArguments
+		return fail(stderr, exitcode.InvalidArguments, "portlens: cannot combine explicit ports with --all/--pid/--name\n")
 	}
 	insp := newInspector(opts)
 	var entries []model.PortEntry
@@ -440,12 +433,10 @@ func resolveDynamicPorts(ctx context.Context, stdout, stderr io.Writer, opts *op
 		entries, err = insp.List(ctx)
 	}
 	if err != nil {
-		fmt.Fprintf(stderr, "portlens: %v\n", err)
-		return mapError(err)
+		return fail(stderr, mapError(err), "portlens: %v\n", err)
 	}
 	if len(entries) == 0 {
-		fmt.Fprintf(stderr, "portlens: no %s\n", describeTarget(opts))
-		return exitcode.PortNotFound
+		return fail(stderr, exitcode.PortNotFound, "portlens: no %s\n", describeTarget(opts))
 	}
 	for _, e := range entries {
 		opts.ports = append(opts.ports, e.Port)

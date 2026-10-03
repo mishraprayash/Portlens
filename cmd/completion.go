@@ -40,8 +40,7 @@ func runCompletion(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stdout, fishCompletionScript)
 		return exitcode.Success
 	default:
-		fmt.Fprintf(stderr, "portlens completion: unsupported shell %q (supported: bash, zsh, fish)\n", shell)
-		return exitcode.InvalidArguments
+		return fail(stderr, exitcode.InvalidArguments, "portlens completion: unsupported shell %q (supported: bash, zsh, fish)\n", shell)
 	}
 }
 

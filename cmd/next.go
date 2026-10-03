@@ -51,16 +51,14 @@ func runNext(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 	reordered := reorderArgs(args)
 	if err := fs.Parse(reordered.flags); err != nil {
-		fmt.Fprintf(stderr, "portlens next: %v\n", err)
-		return exitcode.InvalidArguments
+		return fail(stderr, exitcode.InvalidArguments, "portlens next: %v\n", err)
 	}
 
 	startPort := 3000
 	if len(reordered.positional) > 0 {
 		p, err := strconv.Atoi(reordered.positional[0])
 		if err != nil || p < 1 || p > 65535 {
-			fmt.Fprintf(stderr, "portlens next: invalid start port %q (must be 1-65535)\n", reordered.positional[0])
-			return exitcode.InvalidArguments
+			return fail(stderr, exitcode.InvalidArguments, "portlens next: invalid start port %q (must be 1-65535)\n", reordered.positional[0])
 		}
 		startPort = p
 	}
@@ -73,8 +71,7 @@ func runNext(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		proto = model.ProtocolUDP
 		network = "udp"
 	default:
-		fmt.Fprintf(stderr, "portlens next: invalid --protocol %q (must be tcp or udp)\n", protocol)
-		return exitcode.InvalidArguments
+		return fail(stderr, exitcode.InvalidArguments, "portlens next: invalid --protocol %q (must be tcp or udp)\n", protocol)
 	}
 
 	insp := newInspector(&options{})
@@ -113,6 +110,5 @@ func runNext(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		}
 	}
 
-	fmt.Fprintf(stderr, "portlens next: no available %s ports found starting from %d\n", network, startPort)
-	return exitcode.PortNotFound
+	return fail(stderr, exitcode.PortNotFound, "portlens next: no available %s ports found starting from %d\n", network, startPort)
 }

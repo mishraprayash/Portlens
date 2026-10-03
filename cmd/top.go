@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"flag"
-	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -48,9 +47,7 @@ func (c *topSubcommand) Run(ctx context.Context, args []string, preFlags []strin
 				interval = num
 				continue
 			}
-			fmt.Fprintf(stderr, "portlens top: unexpected argument %q\n", a)
-			fmt.Fprintln(stderr, "Run 'portlens top --help' for usage.")
-			return exitcode.InvalidArguments
+			return fail(stderr, exitcode.InvalidArguments, "portlens top: unexpected argument %q\nRun 'portlens top --help' for usage.\n", a)
 		}
 		name := strings.TrimLeft(a, "-")
 		if eq := strings.IndexByte(name, '='); eq >= 0 {
@@ -64,15 +61,12 @@ func (c *topSubcommand) Run(ctx context.Context, args []string, preFlags []strin
 				i++
 			}
 		default:
-			fmt.Fprintf(stderr, "portlens top: unknown flag %q\n", a)
-			fmt.Fprintln(stderr, "Run 'portlens top --help' for usage.")
-			return exitcode.InvalidArguments
+			return fail(stderr, exitcode.InvalidArguments, "portlens top: unknown flag %q\nRun 'portlens top --help' for usage.\n", a)
 		}
 	}
 
 	if err := fs.Parse(reordered); err != nil {
-		fmt.Fprintf(stderr, "portlens top: %v\n", err)
-		return exitcode.InvalidArguments
+		return fail(stderr, exitcode.InvalidArguments, "portlens top: %v\n", err)
 	}
 
 	return tui.RunTop(ctx, interval, onlyTCP, stdout, stdin)

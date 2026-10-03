@@ -54,8 +54,7 @@ func runListing(ctx context.Context, stdout, stderr io.Writer, opts *options) in
 	svc := newService(opts, stdout, nil)
 	entries, err := svc.List(ctx, opts.onlyTCP)
 	if err != nil {
-		fmt.Fprintf(stderr, "portlens: %v\n", err)
-		return mapError(err)
+		return fail(stderr, mapError(err), "portlens: %v\n", err)
 	}
 	if opts.jsonOut {
 		_ = render.JSONList(stdout, entries)
@@ -131,8 +130,7 @@ func scanPorts(ctx context.Context, stderr io.Writer, insp *inspector.Inspector,
 	svc := service.New(service.WithInspector(insp))
 	found, err := svc.Scan(ctx, ports, proto, progress)
 	if err != nil {
-		fmt.Fprintf(stderr, "portlens: %v\n", err)
-		return nil, mapError(err)
+		return nil, fail(stderr, mapError(err), "portlens: %v\n", err)
 	}
 	return found, exitcode.Success
 }
@@ -326,8 +324,7 @@ func runPort(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, opt
 			}
 			return exitcode.PortNotFound
 		}
-		fmt.Fprintf(stderr, "portlens: %v\n", err)
-		return mapError(err)
+		return fail(stderr, mapError(err), "portlens: %v\n", err)
 	}
 
 	r := render.New(stdout, !opts.noColor)
@@ -372,11 +369,9 @@ func runKill(ctx context.Context, mgr *actions.Manager, report *model.Report, op
 	if err != nil {
 		var still *actions.ErrStillRunning
 		if errors.As(err, &still) {
-			fmt.Fprintf(mgr.Out, "Process %d did not exit; use --kill --force to force termination.\n", still.PID)
-			return exitcode.ProcessActionFailed
+			return fail(mgr.Out, exitcode.ProcessActionFailed, "Process %d did not exit; use --kill --force to force termination.\n", still.PID)
 		}
-		fmt.Fprintf(mgr.Out, "kill failed: %v\n", err)
-		return mapError(err)
+		return fail(mgr.Out, mapError(err), "kill failed: %v\n", err)
 	}
 	return exitcode.Success
 }
@@ -384,20 +379,18 @@ func runKill(ctx context.Context, mgr *actions.Manager, report *model.Report, op
 func runRestart(ctx context.Context, mgr *actions.Manager, report *model.Report) int {
 	if err := mgr.Restart(ctx, report); err != nil {
 		if errors.Is(err, actions.ErrRestartUnavailable) {
-			fmt.Fprintf(mgr.Out, "Automatic restart is unavailable.\n")
-			fmt.Fprintf(mgr.Out, "The process was not launched from an interactive shell in a way PortLens can reproduce.\n")
-			return exitcode.ProcessActionFailed
+			return fail(mgr.Out, exitcode.ProcessActionFailed,
+				"Automatic restart is unavailable.\nThe process was not launched from an interactive shell in a way PortLens can reproduce.\n")
 		}
-		fmt.Fprintf(mgr.Out, "restart failed: %v\n", err)
-		return mapError(err)
+		return fail(mgr.Out, mapError(err), "restart failed: %v\n", err)
 	}
 	return exitcode.Success
 }
 
 func runOpen(ctx context.Context, mgr *actions.Manager, report *model.Report) int {
-	if err := mgr.Open(ctx, report); err != nil {
-		fmt.Fprintf(mgr.Out, "open failed: %v\n", err)
-		return mapError(err)
+	err := mgr.Open(ctx, report)
+	if err != nil {
+		return fail(mgr.Out, mapError(err), "open failed: %v\n", err)
 	}
 	return exitcode.Success
 }

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -96,9 +95,7 @@ func (c *inspectSubcommand) Run(ctx context.Context, args []string, preFlags []s
 		}
 	}
 	if !hasPortTarget(append(preFlags, args...)) {
-		fmt.Fprintln(stderr, "portlens inspect: specify one or more ports to inspect")
-		fmt.Fprintln(stderr, "Run 'portlens inspect --help' for usage.")
-		return exitcode.InvalidArguments
+		return fail(stderr, exitcode.InvalidArguments, "portlens inspect: specify one or more ports to inspect\nRun 'portlens inspect --help' for usage.\n")
 	}
 	return executeCore(ctx, append(preFlags, args...), stdout, stderr, stdin)
 }
@@ -119,9 +116,7 @@ func (c *killSubcommand) Run(ctx context.Context, args []string, preFlags []stri
 		}
 	}
 	if !hasPortTarget(append(preFlags, args...)) {
-		fmt.Fprintln(stderr, "portlens kill: specify port(s) to terminate or use --all")
-		fmt.Fprintln(stderr, "Run 'portlens kill --help' for usage.")
-		return exitcode.InvalidArguments
+		return fail(stderr, exitcode.InvalidArguments, "portlens kill: specify port(s) to terminate or use --all\nRun 'portlens kill --help' for usage.\n")
 	}
 	return executeCore(ctx, append(preFlags, append([]string{"--kill"}, args...)...), stdout, stderr, stdin)
 }
@@ -140,9 +135,7 @@ func (c *restartSubcommand) Run(ctx context.Context, args []string, preFlags []s
 		}
 	}
 	if !hasPortTarget(append(preFlags, args...)) {
-		fmt.Fprintln(stderr, "portlens restart: specify a port to restart")
-		fmt.Fprintln(stderr, "Run 'portlens restart --help' for usage.")
-		return exitcode.InvalidArguments
+		return fail(stderr, exitcode.InvalidArguments, "portlens restart: specify a port to restart\nRun 'portlens restart --help' for usage.\n")
 	}
 	return executeCore(ctx, append(preFlags, append([]string{"--restart"}, args...)...), stdout, stderr, stdin)
 }
@@ -161,9 +154,7 @@ func (c *openSubcommand) Run(ctx context.Context, args []string, preFlags []stri
 		}
 	}
 	if !hasPortTarget(append(preFlags, args...)) {
-		fmt.Fprintln(stderr, "portlens open: specify a port to open")
-		fmt.Fprintln(stderr, "Run 'portlens open --help' for usage.")
-		return exitcode.InvalidArguments
+		return fail(stderr, exitcode.InvalidArguments, "portlens open: specify a port to open\nRun 'portlens open --help' for usage.\n")
 	}
 	return executeCore(ctx, append(preFlags, append([]string{"--open"}, args...)...), stdout, stderr, stdin)
 }
@@ -184,9 +175,7 @@ func (c *treeSubcommand) Run(ctx context.Context, args []string, preFlags []stri
 		}
 	}
 	if !hasPortTarget(append(preFlags, args...)) {
-		fmt.Fprintln(stderr, "portlens tree: specify a port")
-		fmt.Fprintln(stderr, "Run 'portlens tree --help' for usage.")
-		return exitcode.InvalidArguments
+		return fail(stderr, exitcode.InvalidArguments, "portlens tree: specify a port\nRun 'portlens tree --help' for usage.\n")
 	}
 	return executeCore(ctx, append(preFlags, append([]string{"--tree"}, args...)...), stdout, stderr, stdin)
 }
@@ -207,9 +196,7 @@ func (c *connSubcommand) Run(ctx context.Context, args []string, preFlags []stri
 		}
 	}
 	if !hasPortTarget(append(preFlags, args...)) {
-		fmt.Fprintln(stderr, "portlens conn: specify a port")
-		fmt.Fprintln(stderr, "Run 'portlens conn --help' for usage.")
-		return exitcode.InvalidArguments
+		return fail(stderr, exitcode.InvalidArguments, "portlens conn: specify a port\nRun 'portlens conn --help' for usage.\n")
 	}
 	return executeCore(ctx, append(preFlags, append([]string{"--connections"}, args...)...), stdout, stderr, stdin)
 }
@@ -283,9 +270,7 @@ func (c *findSubcommand) Run(ctx context.Context, args []string, preFlags []stri
 		}
 	}
 	if !hasTarget && query == "" {
-		fmt.Fprintln(stderr, "portlens find: specify process name/query or --pid <pid>")
-		fmt.Fprintln(stderr, "Run 'portlens find --help' for usage.")
-		return exitcode.InvalidArguments
+		return fail(stderr, exitcode.InvalidArguments, "portlens find: specify process name/query or --pid <pid>\nRun 'portlens find --help' for usage.\n")
 	}
 	if query != "" && !hasTarget {
 		if p, err := strconv.Atoi(query); err == nil && p > 0 {
