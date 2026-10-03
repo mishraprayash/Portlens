@@ -130,6 +130,14 @@ func executeCore(ctx context.Context, args []string, stdout, stderr io.Writer, s
 		}
 	}
 
+	// Actions and per-port views need a concrete target. Without one they
+	// would silently degrade to the default listing (e.g. `portlens --kill`).
+	if len(opts.ports) == 0 && requiresPortTarget(opts) {
+		fmt.Fprintln(stderr, "portlens: no ports to act on; pass port(s), --all, --pid, or --name")
+		fmt.Fprintln(stderr, "Run 'portlens --help' for usage.")
+		return exitcode.InvalidArguments
+	}
+
 	if opts.watch {
 		return runWatch(ctx, stdout, stderr, opts)
 	}
@@ -243,6 +251,14 @@ func parseArgs(args []string) (*options, error) {
 		opts.protocol = "tcp"
 	}
 
+	switch opts.sortBy {
+	case "", "port":
+		opts.sortBy = "port"
+	case "process", "project", "runtime":
+	default:
+		return nil, fmt.Errorf("invalid --sort %q (must be port, process, project, or runtime)", opts.sortBy)
+	}
+
 	if opts.force && !opts.kill {
 		return nil, fmt.Errorf("--force requires --kill")
 	}
@@ -309,6 +325,35 @@ func reorderArgs(args []string) argSplit {
 		out.positional = append(out.positional, a)
 	}
 	return out
+}
+
+// hasPortTarget reports whether args carries a port target: a positional
+// port, range, or @group, or a dynamic source (--all, --pid, --name) that is
+// resolved at runtime by resolveDynamicPorts. Flag values such as
+// "--filter node" are not mistaken for ports.
+func hasPortTarget(args []string) bool {
+	split := reorderArgs(args)
+	if len(split.positional) > 0 {
+		return true
+	}
+	for _, f := range split.flags {
+		name := strings.TrimLeft(f, "-")
+		if eq := strings.IndexByte(name, '='); eq >= 0 {
+			name = name[:eq]
+		}
+		switch name {
+		case "all", "pid", "name":
+			return true
+		}
+	}
+	return false
+}
+
+// requiresPortTarget reports whether opts requests an action or per-port view
+// that cannot apply to the default listing. Such invocations need at least
+// one resolved port to do anything meaningful.
+func requiresPortTarget(opts *options) bool {
+	return opts.kill || opts.restart || opts.open || opts.tree || opts.connections
 }
 
 // dedupePorts removes duplicate ports while preserving first-seen order.

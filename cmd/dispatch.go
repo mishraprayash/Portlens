@@ -95,7 +95,7 @@ func (c *inspectSubcommand) Run(ctx context.Context, args []string, preFlags []s
 			return exitcode.Success
 		}
 	}
-	if len(args) == 0 {
+	if !hasPortTarget(append(preFlags, args...)) {
 		fmt.Fprintln(stderr, "portlens inspect: specify one or more ports to inspect")
 		fmt.Fprintln(stderr, "Run 'portlens inspect --help' for usage.")
 		return exitcode.InvalidArguments
@@ -118,14 +118,7 @@ func (c *killSubcommand) Run(ctx context.Context, args []string, preFlags []stri
 			return exitcode.Success
 		}
 	}
-	hasTarget := false
-	for _, a := range append(preFlags, args...) {
-		if a == "--all" || (!strings.HasPrefix(a, "-") && a != "") {
-			hasTarget = true
-			break
-		}
-	}
-	if !hasTarget {
+	if !hasPortTarget(append(preFlags, args...)) {
 		fmt.Fprintln(stderr, "portlens kill: specify port(s) to terminate or use --all")
 		fmt.Fprintln(stderr, "Run 'portlens kill --help' for usage.")
 		return exitcode.InvalidArguments
@@ -146,14 +139,7 @@ func (c *restartSubcommand) Run(ctx context.Context, args []string, preFlags []s
 			return exitcode.Success
 		}
 	}
-	hasPort := false
-	for _, a := range args {
-		if !strings.HasPrefix(a, "-") {
-			hasPort = true
-			break
-		}
-	}
-	if !hasPort {
+	if !hasPortTarget(append(preFlags, args...)) {
 		fmt.Fprintln(stderr, "portlens restart: specify a port to restart")
 		fmt.Fprintln(stderr, "Run 'portlens restart --help' for usage.")
 		return exitcode.InvalidArguments
@@ -174,14 +160,7 @@ func (c *openSubcommand) Run(ctx context.Context, args []string, preFlags []stri
 			return exitcode.Success
 		}
 	}
-	hasPort := false
-	for _, a := range args {
-		if !strings.HasPrefix(a, "-") {
-			hasPort = true
-			break
-		}
-	}
-	if !hasPort {
+	if !hasPortTarget(append(preFlags, args...)) {
 		fmt.Fprintln(stderr, "portlens open: specify a port to open")
 		fmt.Fprintln(stderr, "Run 'portlens open --help' for usage.")
 		return exitcode.InvalidArguments
@@ -204,14 +183,7 @@ func (c *treeSubcommand) Run(ctx context.Context, args []string, preFlags []stri
 			return exitcode.Success
 		}
 	}
-	hasPort := false
-	for _, a := range args {
-		if !strings.HasPrefix(a, "-") {
-			hasPort = true
-			break
-		}
-	}
-	if !hasPort {
+	if !hasPortTarget(append(preFlags, args...)) {
 		fmt.Fprintln(stderr, "portlens tree: specify a port")
 		fmt.Fprintln(stderr, "Run 'portlens tree --help' for usage.")
 		return exitcode.InvalidArguments
@@ -234,14 +206,7 @@ func (c *connSubcommand) Run(ctx context.Context, args []string, preFlags []stri
 			return exitcode.Success
 		}
 	}
-	hasPort := false
-	for _, a := range args {
-		if !strings.HasPrefix(a, "-") {
-			hasPort = true
-			break
-		}
-	}
-	if !hasPort {
+	if !hasPortTarget(append(preFlags, args...)) {
 		fmt.Fprintln(stderr, "portlens conn: specify a port")
 		fmt.Fprintln(stderr, "Run 'portlens conn --help' for usage.")
 		return exitcode.InvalidArguments

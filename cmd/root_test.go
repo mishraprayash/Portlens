@@ -31,6 +31,44 @@ func TestReorderArgs(t *testing.T) {
 	}
 }
 
+func TestHasPortTarget(t *testing.T) {
+	cases := []struct {
+		args []string
+		want bool
+	}{
+		{[]string{"3000"}, true},
+		{[]string{"3000-3010"}, true},
+		{[]string{"--all"}, true},
+		{[]string{"--pid", "123"}, true},
+		{[]string{"--pid=123"}, true},
+		{[]string{"--name", "node"}, true},
+		{[]string{"--name=node"}, true},
+		{[]string{"--no-color", "3000"}, true},
+		{[]string{"--filter", "node"}, false},
+		{[]string{"--sort=process"}, false},
+		{[]string{"--no-color"}, false},
+		{[]string{}, false},
+	}
+	for _, c := range cases {
+		if got := hasPortTarget(c.args); got != c.want {
+			t.Errorf("hasPortTarget(%v) = %v, want %v", c.args, got, c.want)
+		}
+	}
+}
+
+func TestParseArgsInvalidSort(t *testing.T) {
+	if _, err := parseArgs([]string{"--sort", "pid"}); err == nil {
+		t.Error("expected error for invalid --sort key")
+	}
+	opts, err := parseArgs([]string{"--sort", "process"})
+	if err != nil {
+		t.Fatalf("parseArgs(--sort process) = %v", err)
+	}
+	if opts.sortBy != "process" {
+		t.Errorf("sortBy = %q, want process", opts.sortBy)
+	}
+}
+
 func TestParseArgsFlagsAfterPort(t *testing.T) {
 	opts, err := parseArgs([]string{"3000", "--tree", "--no-color"})
 	if err != nil {

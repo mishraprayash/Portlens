@@ -67,9 +67,14 @@ func runNext(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 	proto := model.ProtocolTCP
 	network := "tcp"
-	if strings.ToLower(protocol) == "udp" {
+	switch strings.ToLower(protocol) {
+	case "", "tcp", "tcp4", "tcp6":
+	case "udp", "udp4", "udp6":
 		proto = model.ProtocolUDP
 		network = "udp"
+	default:
+		fmt.Fprintf(stderr, "portlens next: invalid --protocol %q (must be tcp or udp)\n", protocol)
+		return exitcode.InvalidArguments
 	}
 
 	insp := newInspector(&options{})

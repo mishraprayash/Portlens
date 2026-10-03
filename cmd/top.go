@@ -37,28 +37,36 @@ func (c *topSubcommand) Run(ctx context.Context, args []string, preFlags []strin
 	fs.IntVar(&interval, "i", 2, "")
 	fs.BoolVar(&onlyTCP, "tcp", false, "")
 
+	// Separate recognized flags from stray arguments so typos are reported
+	// instead of silently dropped. A bare positive number sets the refresh
+	// interval: `portlens top 5`.
 	var reordered []string
 	for i := 0; i < len(allArgs); i++ {
 		a := allArgs[i]
-		if a == "--interval" || a == "-i" {
-			if i+1 < len(allArgs) {
-				reordered = append(reordered, a, allArgs[i+1])
-				i++
+		if !strings.HasPrefix(a, "-") || a == "-" {
+			if num, err := strconv.Atoi(a); err == nil && num > 0 {
+				interval = num
 				continue
 			}
+			fmt.Fprintf(stderr, "portlens top: unexpected argument %q\n", a)
+			fmt.Fprintln(stderr, "Run 'portlens top --help' for usage.")
+			return exitcode.InvalidArguments
 		}
-		if strings.HasPrefix(a, "--interval=") || strings.HasPrefix(a, "-i=") {
+		name := strings.TrimLeft(a, "-")
+		if eq := strings.IndexByte(name, '='); eq >= 0 {
+			name = name[:eq]
+		}
+		switch name {
+		case "interval", "i", "tcp":
 			reordered = append(reordered, a)
-			continue
-		}
-		if a == "--tcp" {
-			reordered = append(reordered, a)
-			continue
-		}
-		// If user provides bare number like `portlens top 3`, treat as interval
-		if num, err := strconv.Atoi(a); err == nil && num > 0 {
-			interval = num
-			continue
+			if name != "tcp" && !strings.Contains(a, "=") && i+1 < len(allArgs) {
+				reordered = append(reordered, allArgs[i+1])
+				i++
+			}
+		default:
+			fmt.Fprintf(stderr, "portlens top: unknown flag %q\n", a)
+			fmt.Fprintln(stderr, "Run 'portlens top --help' for usage.")
+			return exitcode.InvalidArguments
 		}
 	}
 

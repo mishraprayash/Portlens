@@ -12,6 +12,23 @@ All notable changes to PortLens are documented here. The format is based on
   now declare `github.com/mishraprayash/Portlens` (previously
   `github.com/portlens/portlens`, which does not exist), so `go install
   github.com/mishraprayash/Portlens@latest` and the documented clone URL work.
+- **Subcommands no longer mistake flag values for port targets**: `portlens
+  kill --filter node`, `tree --sort process`, `inspect --protocol udp`, and
+  similar invocations now fail with exit code 2 and a usage message instead of
+  printing the default listing and exiting 0 without acting.
+- **Action flags without a port target fail fast**: `portlens --kill`,
+  `--tree`, `--restart`, `--open`, and `--connections` without a port,
+  `--all`, `--pid`, or `--name` now return exit code 2 instead of silently
+  degrading to the full listing.
+- **`--sort` key validation**: an unknown `--sort` value (e.g. `--sort pid`)
+  is rejected with exit code 2 instead of being silently ignored and falling
+  back to port order.
+- **`next --protocol` validation**: an unknown protocol now fails with exit
+  code 2 instead of silently falling back to TCP.
+- **`top` reports unknown flags and stray arguments**: typos such as
+  `portlens top --filter x` fail with exit code 2 instead of being dropped,
+  and a missing `--interval` value is an error rather than silently using the
+  default.
 - **`parseLsofFields` multi-process socket attribution**: Fixed a critical bug in `lsof` field parsing where `flush()` was not called upon encountering a new PID line, causing the trailing socket of any process to be misattributed to the subsequent process.
 - **Detached process termination on exit in `--restart`**: Replaced `exec.CommandContext` with `exec.Command` in `defaultProcessStarter` so that Go's runtime context monitor does not terminate the restarted detached process when PortLens completes execution.
 - **Interactive mode nil pointer dereference panic**: Guarded against nil `report.Process` when pressing `'c'` to copy PID, preventing panics on unprivileged or system listeners.

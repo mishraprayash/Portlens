@@ -159,6 +159,47 @@ func TestSubcommandValidation(t *testing.T) {
 	}
 }
 
+// Regression tests: flag values used to be mistaken for port targets, so
+// invocations like `kill --filter node` printed the default listing and
+// exited 0 without doing anything.
+func TestSubcommandRejectsFlagValuesAsTargets(t *testing.T) {
+	cases := [][]string{
+		{"kill", "--filter", "node"},
+		{"restart", "--filter", "node"},
+		{"open", "--filter", "node"},
+		{"tree", "--sort", "process"},
+		{"conn", "--sort", "port"},
+		{"inspect", "--protocol", "udp"},
+	}
+	for _, args := range cases {
+		var stdout, stderr bytes.Buffer
+		code := Execute(args, &stdout, &stderr, nil)
+		if code != exitcode.InvalidArguments {
+			t.Errorf("Execute(%v) = %d, want %d (stderr: %s)", args, code, exitcode.InvalidArguments, stderr.String())
+		}
+	}
+}
+
+// Action flags without a port target must fail instead of silently degrading
+// to the default listing.
+func TestActionFlagsRequirePorts(t *testing.T) {
+	cases := [][]string{
+		{"--kill"},
+		{"--restart"},
+		{"--open"},
+		{"--tree"},
+		{"--connections"},
+		{"--filter", "node", "--kill"},
+	}
+	for _, args := range cases {
+		var stdout, stderr bytes.Buffer
+		code := Execute(args, &stdout, &stderr, nil)
+		if code != exitcode.InvalidArguments {
+			t.Errorf("Execute(%v) = %d, want %d (stderr: %s)", args, code, exitcode.InvalidArguments, stderr.String())
+		}
+	}
+}
+
 func TestSubcommandListExecution(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := Execute([]string{"list", "--no-color", "--json"}, &stdout, &stderr, nil)

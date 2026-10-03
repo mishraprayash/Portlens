@@ -49,3 +49,14 @@ func TestRunNextInvalidPort(t *testing.T) {
 		t.Fatalf("runNext returned %d, want %d", code, exitcode.InvalidArguments)
 	}
 }
+
+func TestRunNextInvalidProtocol(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := runNext(context.Background(), []string{"--protocol", "icmp"}, &stdout, &stderr)
+	if code != exitcode.InvalidArguments {
+		t.Fatalf("runNext(--protocol icmp) = %d, want %d", code, exitcode.InvalidArguments)
+	}
+	if !strings.Contains(stderr.String(), "icmp") {
+		t.Errorf("expected error to name the invalid protocol, got: %s", stderr.String())
+	}
+}

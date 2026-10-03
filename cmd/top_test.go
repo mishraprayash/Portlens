@@ -39,6 +39,29 @@ func TestTopSubcommandNonTerminal(t *testing.T) {
 	}
 }
 
+// Unknown flags and stray arguments used to be silently dropped, so typos
+// like `portlens top --interval3` quietly ran with defaults.
+func TestTopRejectsUnknownFlags(t *testing.T) {
+	cmd := &topSubcommand{}
+	var stdout, stderr bytes.Buffer
+	code := cmd.Run(context.Background(), []string{"--filter", "node"}, nil, &stdout, &stderr, strings.NewReader(""))
+	if code != exitcode.InvalidArguments {
+		t.Errorf("expected %d for unknown flag, got %d", exitcode.InvalidArguments, code)
+	}
+	if !strings.Contains(stderr.String(), "--filter") {
+		t.Errorf("expected error to name the offending flag, got: %s", stderr.String())
+	}
+}
+
+func TestTopRejectsStrayArgument(t *testing.T) {
+	cmd := &topSubcommand{}
+	var stdout, stderr bytes.Buffer
+	code := cmd.Run(context.Background(), []string{"bogus"}, nil, &stdout, &stderr, strings.NewReader(""))
+	if code != exitcode.InvalidArguments {
+		t.Errorf("expected %d for stray argument, got %d", exitcode.InvalidArguments, code)
+	}
+}
+
 func TestDispatchTopRegistry(t *testing.T) {
 	reg := defaultSubcommandRegistry()
 	if cmd := reg.Lookup("top"); cmd == nil {
