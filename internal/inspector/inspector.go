@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portlens/portlens/internal/detect"
-	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/platform"
+	"github.com/mishraprayash/Portlens/internal/detect"
+	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/platform"
 )
 
 // ErrPortNotFound is returned when nothing is listening on the requested port.

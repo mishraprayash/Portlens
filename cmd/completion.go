@@ -6,9 +6,9 @@ import (
 	"io"
 	"strings"
 
-	"github.com/portlens/portlens/internal/detect"
-	"github.com/portlens/portlens/internal/exitcode"
-	"github.com/portlens/portlens/internal/platform"
+	"github.com/mishraprayash/Portlens/internal/detect"
+	"github.com/mishraprayash/Portlens/internal/exitcode"
+	"github.com/mishraprayash/Portlens/internal/platform"
 )
 
 // completionSubcommand handles `portlens completion <bash|zsh|fish>`.

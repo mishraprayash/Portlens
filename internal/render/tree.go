@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 // procLabel returns a short, readable label for a process in the tree view.

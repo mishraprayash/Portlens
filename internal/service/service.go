@@ -13,10 +13,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/portlens/portlens/internal/actions"
-	"github.com/portlens/portlens/internal/inspector"
-	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/platform"
+	"github.com/mishraprayash/Portlens/internal/actions"
+	"github.com/mishraprayash/Portlens/internal/inspector"
+	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/platform"
 )
 
 // ProgressFunc reports scan progress in a thread-safe manner.

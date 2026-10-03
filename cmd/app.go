@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portlens/portlens/internal/actions"
-	"github.com/portlens/portlens/internal/exitcode"
-	"github.com/portlens/portlens/internal/inspector"
-	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/platform"
-	"github.com/portlens/portlens/internal/render"
-	"github.com/portlens/portlens/internal/service"
+	"github.com/mishraprayash/Portlens/internal/actions"
+	"github.com/mishraprayash/Portlens/internal/exitcode"
+	"github.com/mishraprayash/Portlens/internal/inspector"
+	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/platform"
+	"github.com/mishraprayash/Portlens/internal/render"
+	"github.com/mishraprayash/Portlens/internal/service"
 )
 
 // newInspector builds an inspector honoring the --no-docker escape hatch: when

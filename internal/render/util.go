@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 func reportNow() time.Time { return time.Now() }

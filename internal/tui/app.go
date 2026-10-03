@@ -12,12 +12,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/portlens/portlens/internal/actions"
-	"github.com/portlens/portlens/internal/exitcode"
-	"github.com/portlens/portlens/internal/inspector"
-	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/platform"
-	"github.com/portlens/portlens/internal/service"
+	"github.com/mishraprayash/Portlens/internal/actions"
+	"github.com/mishraprayash/Portlens/internal/exitcode"
+	"github.com/mishraprayash/Portlens/internal/inspector"
+	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/platform"
+	"github.com/mishraprayash/Portlens/internal/service"
 	"golang.org/x/term"
 )
 

@@ -9,11 +9,11 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/portlens/portlens/internal/actions"
-	"github.com/portlens/portlens/internal/exitcode"
-	"github.com/portlens/portlens/internal/inspector"
-	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/render"
+	"github.com/mishraprayash/Portlens/internal/actions"
+	"github.com/mishraprayash/Portlens/internal/exitcode"
+	"github.com/mishraprayash/Portlens/internal/inspector"
+	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/render"
 )
 
 // runInteractive renders the report and enters a single-key action loop. It is

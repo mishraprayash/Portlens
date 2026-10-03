@@ -8,9 +8,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/portlens/portlens/internal/actions"
-	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/version"
+	"github.com/mishraprayash/Portlens/internal/actions"
+	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/version"
 )
 
 var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 func TestReorderArgs(t *testing.T) {

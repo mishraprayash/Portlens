@@ -14,10 +14,10 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/portlens/portlens/internal/config"
-	"github.com/portlens/portlens/internal/exitcode"
-	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/version"
+	"github.com/mishraprayash/Portlens/internal/config"
+	"github.com/mishraprayash/Portlens/internal/exitcode"
+	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/version"
 )
 
 var errHelp = errors.New("help requested")

@@ -5,8 +5,8 @@ import (
 	"net"
 	"testing"
 
-	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/platform"
+	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/platform"
 )
 
 // benchPort returns a port that is very likely listening during the benchmark

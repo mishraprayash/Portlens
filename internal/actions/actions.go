@@ -10,8 +10,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/platform"
+	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/platform"
 )
 
 // ConfirmFunc prompts the user and reports whether to proceed.

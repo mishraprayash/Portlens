@@ -16,10 +16,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portlens/portlens/internal/actions"
-	"github.com/portlens/portlens/internal/inspector"
-	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/platform"
+	"github.com/mishraprayash/Portlens/internal/actions"
+	"github.com/mishraprayash/Portlens/internal/inspector"
+	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/platform"
 )
 
 // TestMain re-invokes the test binary as a controllable HTTP server helper when

@@ -3,7 +3,7 @@ package detect
 import (
 	"strings"
 
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 // userPathPrefixes are locations where user-installed software lives (Homebrew,

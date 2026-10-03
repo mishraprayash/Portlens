@@ -5,7 +5,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 // processRow is the minimal identity needed for hierarchy operations. Building

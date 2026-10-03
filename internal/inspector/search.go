@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/portlens/portlens/internal/detect"
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/detect"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 // SearchByName returns the listening ports owned by processes whose name,

@@ -18,7 +18,7 @@ import (
 	"github.com/ebitengine/purego"
 	"golang.org/x/sys/unix"
 
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 // Native macOS process metadata. Everything is read through kernel interfaces:

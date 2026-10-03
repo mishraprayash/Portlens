@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 // Connections renders a summary of a process's active connections, grouped by

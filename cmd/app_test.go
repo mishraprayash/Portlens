@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portlens/portlens/internal/exitcode"
+	"github.com/mishraprayash/Portlens/internal/exitcode"
 )
 
 // runScanTest builds a scanner over a real bound port plus a second port that

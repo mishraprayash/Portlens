@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/portlens/portlens/internal/exitcode"
+	"github.com/mishraprayash/Portlens/internal/exitcode"
 )
 
 // Subcommand defines the interface for modular top-level CLI subcommands.

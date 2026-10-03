@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 // Linux port and connection resolution reads the kernel's /proc/net/* tables

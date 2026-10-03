@@ -41,7 +41,7 @@ never collects or transmits any data.
 ### Quick install (from source)
 
 ```bash
-git clone https://github.com/portlens/portlens.git
+git clone https://github.com/mishraprayash/Portlens.git
 cd portlens
 make install            # builds with CGO_ENABLED=0, installs to $GOBIN
 ```

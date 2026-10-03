@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 var titleTagRegex = regexp.MustCompile(`(?i)<title[^>]*>([^<]+)</title>`)

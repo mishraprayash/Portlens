@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/portlens/portlens/internal/detect"
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/detect"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 func TestCompileProcessMatcher(t *testing.T) {

@@ -12,11 +12,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/portlens/portlens/internal/exitcode"
-	"github.com/portlens/portlens/internal/inspector"
-	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/platform"
-	"github.com/portlens/portlens/internal/render"
+	"github.com/mishraprayash/Portlens/internal/exitcode"
+	"github.com/mishraprayash/Portlens/internal/inspector"
+	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/platform"
+	"github.com/mishraprayash/Portlens/internal/render"
 )
 
 // watchSnap captures the observed state of the watched targets at one point in

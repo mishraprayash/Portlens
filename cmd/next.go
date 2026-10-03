@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/portlens/portlens/internal/exitcode"
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/exitcode"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 // nextSubcommand handles `portlens next [start-port]`.

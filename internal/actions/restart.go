@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/portlens/portlens/internal/inspector"
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/inspector"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 // Restart relaunches the owning process (or restarts the owning container). For

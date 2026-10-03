@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/portlens/portlens/internal/detect"
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/detect"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 // interpret fills the Facts, Inferences, and Interpretation fields of a report.

@@ -13,7 +13,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 // Signal is a portable process signal selector.

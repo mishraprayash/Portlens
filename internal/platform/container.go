@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 // dockerSocketTimeout bounds a single daemon round-trip. Detection must never

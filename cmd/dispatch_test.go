@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portlens/portlens/internal/exitcode"
+	"github.com/mishraprayash/Portlens/internal/exitcode"
 )
 
 type mockSubcommand struct {

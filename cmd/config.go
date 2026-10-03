@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/portlens/portlens/internal/config"
-	"github.com/portlens/portlens/internal/exitcode"
+	"github.com/mishraprayash/Portlens/internal/config"
+	"github.com/mishraprayash/Portlens/internal/exitcode"
 )
 
 // runConfig dispatches the `portlens config` subcommand, which manages named

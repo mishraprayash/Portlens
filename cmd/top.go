@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/portlens/portlens/internal/exitcode"
-	"github.com/portlens/portlens/internal/tui"
+	"github.com/mishraprayash/Portlens/internal/exitcode"
+	"github.com/mishraprayash/Portlens/internal/tui"
 )
 
 // topSubcommand handles `portlens top` and `portlens tui`.

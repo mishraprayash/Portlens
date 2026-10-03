@@ -7,7 +7,7 @@ GO ?= go
 export CGO_ENABLED := 0
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-LDFLAGS := -s -w -X github.com/portlens/portlens/internal/version.Version=$(VERSION)
+LDFLAGS := -s -w -X github.com/mishraprayash/Portlens/internal/version.Version=$(VERSION)
 
 .PHONY: build build-release install test vet fmt lint check clean cross bench profile race
 
