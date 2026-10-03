@@ -64,16 +64,19 @@ files so they can be unit-tested on any platform.
 
 ## Data flow
 
-1. `cmd` parses arguments and builds a `platform.Platform` and an
-   `inspector.Inspector`.
-2. `Inspector.Inspect(port)` calls `PortResolver.ResolvePort` to find listeners.
-3. For the owning PID, it gathers `ProcessInfo`, ancestors, descendants, and
-   connections via the providers.
-4. `detect` infers project/runtime/framework from the working directory and
+1. `cmd` parses arguments, resolves the target ports, and hands the request to
+   a `service.PortService` (built with functional options; `cmd` and `internal/tui`
+   are the only constructors in production).
+2. `PortService.List` / `Scan` / `Inspect` call the `inspector.Inspector`
+   behind the facade: `PortResolver.ResolvePort` finds the listeners, then for
+   the owning PID the inspector gathers `ProcessInfo`, ancestors, descendants,
+   and connections via the platform providers.
+3. `detect` infers project/runtime/framework from the working directory and
    command line.
-5. The `model.Report` is produced, including `Facts` (observations) and
+4. The `model.Report` is produced, including `Facts` (observations) and
    `Inferences` (guesses), plus an exposure assessment.
-6. `render` displays the report; `actions` performs any requested mutations.
+5. `render` displays the report; `actions` (invoked through the service facade
+   or directly by the interactive paths) performs any requested mutations.
 
 ## Design decisions
 

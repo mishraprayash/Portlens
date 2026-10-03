@@ -8,6 +8,10 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Fixed
 
+- **Module path matches the canonical repository**: `go.mod` and every import
+  now declare `github.com/mishraprayash/Portlens` (previously
+  `github.com/portlens/portlens`, which does not exist), so `go install
+  github.com/mishraprayash/Portlens@latest` and the documented clone URL work.
 - **`parseLsofFields` multi-process socket attribution**: Fixed a critical bug in `lsof` field parsing where `flush()` was not called upon encountering a new PID line, causing the trailing socket of any process to be misattributed to the subsequent process.
 - **Detached process termination on exit in `--restart`**: Replaced `exec.CommandContext` with `exec.Command` in `defaultProcessStarter` so that Go's runtime context monitor does not terminate the restarted detached process when PortLens completes execution.
 - **Interactive mode nil pointer dereference panic**: Guarded against nil `report.Process` when pressing `'c'` to copy PID, preventing panics on unprivileged or system listeners.
@@ -30,12 +34,84 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Changed
 
+- **`make check` now matches the CI gate**: it runs gofmt, vet, build, the full
+  test suite, and the four-target cross-compile matrix — the same checks CI
+  runs. `make cover` (new) prints an aggregate coverage percentage, and CI
+  reports coverage on the Linux job.
+- **Docs refreshed for the post-refactor architecture**: the data flow in
+  `docs/architecture.md` now routes through `service.PortService`; the project
+  layout blocks list `internal/tui`; the removed `HistoryStore` interface and
+  the shipped shell-completion roadmap item were dropped; and `CHANGELOG.md`'s
+  duplicate `[Unreleased]` sections were merged (contradictory history/`--log`
+  entries pruned).
 - **Enterprise-grade Clean Architecture and Functional Options**: Decoupled core business domain from CLI delivery through a new `internal/service.PortService` facade. Refactored `inspector.New` and `render.NewRenderer` to use Functional Options and consumer-defined interfaces (`PortInspector`). Centralized domain sentinel errors in `internal/model/errors.go` and threaded signal context cancellation (`osSignalContext` / `ExecuteContext`) through all I/O and worker pool boundaries.
 - **Standard open-source subcommand CLI architecture**: Elevated primary actions to intuitive, first-class subcommands (`portlens kill`, `portlens list`/`ls`, `portlens inspect`, `portlens watch`, `portlens find`, `portlens tree`, `portlens conn`, `portlens open`, `portlens restart`) while preserving 100% backward compatibility with flag-based invocations (`portlens 3000 --kill`, `portlens 3000 -t`).
 - **Structured and modernized help output**: Redesigned `portlens --help` and added subcommand-specific `--help` usage screens following open-source CLI standards.
 - **Parallel multi-port and range scan inspection**: Replaced sequential port inspection in `scanPorts` with a concurrent worker pool (`min(2*NumCPU, 16)` workers), parallelizing inspection across active ports while maintaining exact input order and thread-safe progress reporting.
 - **Multi-port and range scan bulk pre-filtering**: Scans (`portlens 3000-8000`) now query the host's active listener table once in bulk and filter in memory, reducing 5,000-port scan times from ~42s down to ~20ms by avoiding thousands of redundant `lsof` process spawns on macOS and `/proc` parsing passes on Linux.
 - **Refined exposure risk classification**: Accurately distinguishes private LAN/VPN addresses (RFC 1918 / RFC 4193 / link-local) from public internet-routable WAN interfaces.
+
+- **Enterprise-grade Clean Architecture and Functional Options**: Decoupled core business domain from CLI delivery through a new `internal/service.PortService` facade. Refactored `inspector.New` and `render.NewRenderer` to use Functional Options and consumer-defined interfaces (`PortInspector`). Centralized domain sentinel errors in `internal/model/errors.go` and threaded signal context cancellation (`osSignalContext` / `ExecuteContext`) through all I/O and worker pool boundaries.
+- **Standard open-source subcommand CLI architecture**: Elevated primary actions to intuitive, first-class subcommands (`portlens kill`, `portlens list`/`ls`, `portlens inspect`, `portlens watch`, `portlens find`, `portlens tree`, `portlens conn`, `portlens open`, `portlens restart`) while preserving 100% backward compatibility with flag-based invocations (`portlens 3000 --kill`, `portlens 3000 -t`).
+- **Structured and modernized help output**: Redesigned `portlens --help` and added subcommand-specific `--help` usage screens following open-source CLI standards.
+- **Parallel multi-port and range scan inspection**: Replaced sequential port inspection in `scanPorts` with a concurrent worker pool (`min(2*NumCPU, 16)` workers), parallelizing inspection across active ports while maintaining exact input order and thread-safe progress reporting.
+- **Multi-port and range scan bulk pre-filtering**: Scans (`portlens 3000-8000`) now query the host's active listener table once in bulk and filter in memory, reducing 5,000-port scan times from ~42s down to ~20ms by avoiding thousands of redundant `lsof` process spawns on macOS and `/proc` parsing passes on Linux.
+- **Refined exposure risk classification**: Accurately distinguishes private LAN/VPN addresses (RFC 1918 / RFC 4193 / link-local) from public internet-routable WAN interfaces.
+
+- **Removed gopsutil and embedded SQLite.** Process metadata is now read
+  natively on both platforms — `sysctl` + the raw `__sysctl` syscall + libproc
+  (`proc_pidpath`/`proc_pidinfo`) on macOS, byte-oriented `/proc` on Linux —
+  with no external commands and no hidden `ps` spawns (previously gopsutil ran
+  `ps` twice per lookup on macOS). The binary shrank **9.3 MB → 5.9 MB** and
+  `go.mod` went from ~19 modules to 3 (`purego`, `x/sys`, `x/term`).
+- **The macOS listing uses one lsof call** (`-FpctnT`, TCP LISTEN + UDP in a
+  single spawn, protocol recovered from the `TST=` field) instead of two,
+  halving the listing's external-process cost.
+- **`--restart` re-runs the raw argv directly** (`exec.Command(argv[0],
+  argv[1:]...)`) instead of `sh -c`, so a crafted argv cannot inject shell
+  syntax. It also picks the *nearest* shell ancestor (nested shells such as
+  Terminal → zsh → tool → zsh → target previously chose the wrong command) and
+  re-resolves the launch argv when the ancestor chain only carries identity.
+- `go test -race` is now run in CI on **Linux**; on macOS it remains blocked by
+  the documented Go-1.23/macOS `dyld: missing LC_UUID` toolchain issue (which
+  is why `CGO_ENABLED=0` is required), not by project code.
+- **Performance: lazy inspection depth.** `portlens <port>` now runs a fast
+  path that resolves ownership, minimal process metadata, project, exposure,
+  and container — but skips the process tree, network connections, and verbose
+  facts unless the requested output needs them (`--verbose`, `--tree`,
+  `--connections`, single-port `--json`). This removed the expensive
+  full-process scans and hidden `ps` spawns from the default lookup, cutting
+  end-to-end latency roughly **10x** (≈250ms → ≈20ms on macOS) and
+  allocations per inspection from ≈16,700 to ≈450.
+- **Performance: native process tables.** Process hierarchy operations
+  (Ancestors/Children/Descendants, used by `--verbose`, `--tree`, `--kill`,
+  and `--pid`/`--name`) now read the process table once per invocation — a
+  single `sysctl` on macOS, one `/proc` scan on Linux — instead of enumerating
+  the process table repeatedly via gopsutil. Deep inspection dropped from
+  ≈70ms to ≈32ms with ≈15x fewer allocations. The fast path (`InfoBasic`)
+  no longer spawns `ps`.
+- **Multi-port `--json`** now uses the fast depth, so each array entry carries
+  the essentials (port, protocol, status, address, service, process, origin,
+  project, exposure, container) and omits the process tree and network
+  sections.
+- `--json` on a range or multiple ports now emits **only the in-use ports** as
+  an array (idle ports are omitted, matching scan mode) and shows the same
+  scan progress/ETA/summary on stderr, so stdout stays a pure JSON payload
+  ready for `jq` or a file.
+- Multi-port inspection (scan mode, JSON) shares one inspection loop, progress
+  reporter, and exit-code policy via `scanPorts`, so the commands stay
+  consistent and free of duplicated logic.
+- Multi-port invocations (ranges, several ports, groups) now use **scan mode**:
+  only the ports actually in use are printed, live progress shows a count,
+  percent, and ETA (to stderr), and a summary reports how many of the scanned
+  ports were found and how long the scan took. Idle ports are no longer an
+  error. `--log <file>` writes the full report of every in-use port after the
+  scan finishes.
+- Port ranges may now span the full port space (1-65535); previously a single
+  range was capped at 1024 ports.
+- `portlens <port>` now shows a compact summary by default; use `--verbose`
+  (or `-v`) for the full detailed report. `-v` is no longer a `--version`
+  alias (`--version` remains).
 
 ### Removed
 
@@ -44,6 +120,10 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Added
 
+- **Testing guide (`docs/testing.md`)**: documents the `CGO_ENABLED=0`
+  requirement (a bare `go test ./...` fails on macOS), the coverage and race
+  targets, test layout rules, and the cross-compile matrix. CONTRIBUTING's
+  testing section now links to it and warns about the same trap.
 - **Full-Screen Interactive TUI Dashboard (`portlens top` / `portlens tui`)**: Added a zero-dependency, double-buffered full-screen terminal dashboard built directly on `golang.org/x/term` and standard ANSI escape sequences (`\x1b[?1049h`). Features split-pane navigation with real-time port selection, live search/filtering (`/`), instant tab switching (`1` Overview, `2`/`t` Process Tree, `3`/`n` Connections), safe in-place action triggers with confirmation modals (`k` graceful kill, `f` force kill, `r` restart, `o` browser open, `c`/`u` clipboard copy), background polling, responsive layout resizing on `SIGWINCH`, and guaranteed fail-safe terminal cleanup on any exit path.
 - **Shell autocompletion generator (`portlens completion <bash|zsh|fish>`)**: Generates dynamic shell autocompletion for bash, zsh, and fish that completes subcommands, flags, and currently active listening ports with their process names.
 - **HTTP health & HTML title probing (`--probe` / `-p`)**: Lightweight HTTP probing with a 300ms timeout extracts HTTP status, response latency, Server header, and HTML `<title>` to immediately identify the web application running behind generic process names.
@@ -79,72 +159,6 @@ All notable changes to PortLens are documented here. The format is based on
   `notify-send`) when a watched port goes up, goes down, or changes owner.
 - Named port groups via `portlens config add|list|show|remove|path`, usable as
   `portlens @<group>`, stored in a local JSON config file.
-
-### Changed
-
-- **Removed gopsutil and embedded SQLite.** Process metadata is now read
-  natively on both platforms — `sysctl` + the raw `__sysctl` syscall + libproc
-  (`proc_pidpath`/`proc_pidinfo`) on macOS, byte-oriented `/proc` on Linux —
-  with no external commands and no hidden `ps` spawns (previously gopsutil ran
-  `ps` twice per lookup on macOS). The binary shrank **9.3 MB → 5.9 MB** and
-  `go.mod` went from ~19 modules to 3 (`purego`, `x/sys`, `x/term`).
-- **History is now an owner-only (0600) JSONL log** with atomic `O_APPEND`
-  appends instead of an embedded SQLite database, cutting a large dependency
-  and its per-invocation open cost. The old `history.db` is left untouched;
-  delete it once you no longer need it.
-- **The macOS listing uses one lsof call** (`-FpctnT`, TCP LISTEN + UDP in a
-  single spawn, protocol recovered from the `TST=` field) instead of two,
-  halving the listing's external-process cost.
-- **`--restart` re-runs the raw argv directly** (`exec.Command(argv[0],
-  argv[1:]...)`) instead of `sh -c`, so a crafted argv cannot inject shell
-  syntax. It also picks the *nearest* shell ancestor (nested shells such as
-  Terminal → zsh → tool → zsh → target previously chose the wrong command) and
-  re-resolves the launch argv when the ancestor chain only carries identity.
-- `go test -race` is now run in CI on **Linux**; on macOS it remains blocked by
-  the documented Go-1.23/macOS `dyld: missing LC_UUID` toolchain issue (which
-  is why `CGO_ENABLED=0` is required), not by project code.
-- **Performance: lazy inspection depth.** `portlens <port>` now runs a fast
-  path that resolves ownership, minimal process metadata, project, exposure,
-  and container — but skips the process tree, network connections, and verbose
-  facts unless the requested output needs them (`--verbose`, `--tree`,
-  `--connections`, single-port `--json`). This removed the expensive
-  full-process scans and hidden `ps` spawns from the default lookup, cutting
-  end-to-end latency roughly **10x** (≈250ms → ≈20ms on macOS) and
-  allocations per inspection from ≈16,700 to ≈450.
-- **Performance: native process tables.** Process hierarchy operations
-  (Ancestors/Children/Descendants, used by `--verbose`, `--tree`, `--kill`,
-  and `--pid`/`--name`) now read the process table once per invocation — a
-  single `sysctl` on macOS, one `/proc` scan on Linux — instead of enumerating
-  the process table repeatedly via gopsutil. Deep inspection dropped from
-  ≈70ms to ≈32ms with ≈15x fewer allocations. gopsutil remains only for
-  per-process metadata, and the fast path (`InfoBasic`) no longer spawns `ps`.
-- **Multi-port `--json`** now uses the fast depth, so each array entry carries
-  the essentials (port, protocol, status, address, service, process, origin,
-  project, exposure, container) and omits the process tree and network
-  sections.
-- `--json` on a range or multiple ports now emits **only the in-use ports** as
-  an array (idle ports are omitted, matching scan mode) and shows the same
-  scan progress/ETA/summary on stderr, so stdout stays a pure JSON payload
-  ready for `jq` or a file.
-- `--log <file>` now works with **every** command (single port, listing, scan,
-  JSON, actions) instead of only scan mode: it captures the command's stdout
-  to the file. Progress/diagnostics (stderr) are never written, output is
-  plain (no color), and interactive mode is disabled. It cannot be combined
-  with `--watch`.
-- Multi-port inspection (scan mode, JSON) shares one inspection loop, progress
-  reporter, and exit-code policy via `scanPorts`, so the commands stay
-  consistent and free of duplicated logic.
-- Multi-port invocations (ranges, several ports, groups) now use **scan mode**:
-  only the ports actually in use are printed, live progress shows a count,
-  percent, and ETA (to stderr), and a summary reports how many of the scanned
-  ports were found and how long the scan took. Idle ports are no longer an
-  error. `--log <file>` writes the full report of every in-use port after the
-  scan finishes.
-- Port ranges may now span the full port space (1-65535); previously a single
-  range was capped at 1024 ports.
-- `portlens <port>` now shows a compact summary by default; use `--verbose`
-  (or `-v`) for the full detailed report. `-v` is no longer a `--version`
-  alias (`--version` remains).
 
 ## [0.1.0] - 2026-08-27
 

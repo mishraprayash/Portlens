@@ -28,7 +28,8 @@ or reworked:
 
 1. **Local-first, always.** Never add telemetry, cloud calls, or anything that
    transmits process/environment data. PortLens reads the machine it runs on
-   and keeps everything (history, config) on that machine.
+   and keeps everything (config) on that machine; it writes no history or
+   telemetry files.
 2. **Never silently kill.** Destructive actions must confirm first. Graceful
    (SIGTERM) before force (SIGKILL), and never escalate privileges.
 3. **Separate facts from inferences.** Anything guessed must be labeled as
@@ -76,6 +77,7 @@ internal/            Non-exported implementation packages
   detect/            Project/runtime/framework detection heuristics
   service/           Application service facade coordinating domain use cases
   render/            Human output (summary, report, tree, connections, JSON)
+  tui/               Full-screen interactive dashboard (portlens top / tui)
   actions/           State-changing operations (kill, restart, open, copy)
   config/            User config: named port groups (@name)
   exitcode/          Process exit codes
@@ -95,7 +97,8 @@ past `internal/platform`.
 make fmt             # gofmt all files
 make lint            # gofmt check (fails) + go vet
 make test            # full unit + integration suite (no cache)
-make check           # lint + test: the same gate CI runs
+make cover           # same suite with an aggregate coverage percentage
+make check           # lint + build + test + cross: the gate CI runs
 make build           # build to ./bin/portlens
 make install         # install to $GOBIN
 make cross           # verify macOS/Linux cross-compilation
@@ -113,13 +116,19 @@ make build
 
 ## Running and testing
 
+> **Always go through `make`.** A bare `go test ./...` uses the toolchain's
+> default `CGO_ENABLED=1`, which on macOS + Go 1.23 produces test binaries that
+> dyld refuses to load (`missing LC_UUID load command`, `signal: abort trap`).
+> The `Makefile` exports `CGO_ENABLED=0`, so `make test` / `make check` always
+> work. See [docs/testing.md](docs/testing.md) for the full testing guide.
+
 - **Unit tests** live next to the code they test (`package_test.go`), in the
   same package. Test pure logic with no OS involvement whenever possible
   (parsers, matchers, config round-trips, render output).
 - **Integration tests** live in `tests/integration` and spawn **controlled**
   test processes (an HTTP server helper). Never assume a particular process is
   running on the developer's machine.
-- Run everything with `make test` before opening a PR. CI runs the same
+- Run everything with `make check` before opening a PR. CI runs the same
   commands with `-count=1` on both Linux and macOS.
 
 When writing tests:
