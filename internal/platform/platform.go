@@ -123,4 +123,30 @@ type Platform struct {
 	Clipboard  ClipboardProvider
 	Controller ProcessController
 	Containers ContainerProvider
+
+	// OpenURL and Notify default to the OS browser opener and desktop
+	// notifier; they are function fields so tests (and embedders) can
+	// intercept launches and notifications without performing them.
+	OpenURL func(ctx context.Context, url string) error
+	Notify  func(ctx context.Context, title, message string) error
+}
+
+// OpenInBrowser opens url in the default browser, preferring the injected
+// OpenURL and falling back to the platform implementation. A nil Platform is
+// allowed and uses the default.
+func (p *Platform) OpenInBrowser(ctx context.Context, url string) error {
+	if p != nil && p.OpenURL != nil {
+		return p.OpenURL(ctx, url)
+	}
+	return OpenURL(ctx, url)
+}
+
+// PostNotification posts a desktop notification, preferring the injected
+// Notify and falling back to the platform implementation. A nil Platform is
+// allowed and uses the default.
+func (p *Platform) PostNotification(ctx context.Context, title, message string) error {
+	if p != nil && p.Notify != nil {
+		return p.Notify(ctx, title, message)
+	}
+	return Notify(ctx, title, message)
 }

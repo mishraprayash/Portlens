@@ -42,6 +42,8 @@ func runWatch(ctx context.Context, stdout, stderr io.Writer, opts *options) int 
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	plat := platform.New()
+
 	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	defer ticker.Stop()
 
@@ -84,7 +86,7 @@ func runWatch(ctx context.Context, stdout, stderr io.Writer, opts *options) int 
 		// The first tick only establishes a baseline; notifications are posted
 		// when a later tick detects an actual change.
 		if opts.notify && !first {
-			notifyChanges(ctx, diffWatch(prev, cur))
+			notifyChanges(plat, ctx, diffWatch(prev, cur))
 		}
 		prev = cur
 		first = false
@@ -190,7 +192,7 @@ func isDown(v string) bool {
 	return strings.HasPrefix(v, "down")
 }
 
-func notifyChanges(ctx context.Context, changes []watchChange) {
+func notifyChanges(plat *platform.Platform, ctx context.Context, changes []watchChange) {
 	for _, c := range changes {
 		title := "PortLens"
 		switch c.kind {
@@ -199,7 +201,7 @@ func notifyChanges(ctx context.Context, changes []watchChange) {
 		case "down":
 			title = "PortLens: down"
 		}
-		_ = platform.Notify(ctx, title, changeText(c))
+		_ = plat.PostNotification(ctx, title, changeText(c))
 	}
 }
 

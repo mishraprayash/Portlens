@@ -91,6 +91,11 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Changed
 
+- **Browser and notification side effects are injectable**: `platform.Platform`
+  now carries `OpenURL`/`Notify` function fields (defaulted by `New()`, with
+  nil-safe `OpenInBrowser`/`PostNotification` methods), and the `open` action,
+  TUI open key, and `watch --notify` all route through them — so tests and
+  embedders can capture or stub side effects instead of shelling out to the OS.
 - **Hot-path caching and single-flight background work**: the Docker
   container list is shared across every lookup within a one-second window
   (one daemon round trip per scan instead of one per port/PID/report);

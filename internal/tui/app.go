@@ -503,7 +503,7 @@ func (a *App) openBrowser(ctx context.Context) {
 	}
 	// Report not loaded yet: fall back to the entry's port.
 	url := fmt.Sprintf("http://localhost:%d", sel.Port)
-	if err := platform.OpenURL(ctx, url); err != nil {
+	if err := a.cfg.Platform.OpenInBrowser(ctx, url); err != nil {
 		a.model.SetStatus(fmt.Sprintf("Failed to open browser: %v", err), true, 4*time.Second)
 	} else {
 		a.model.SetStatus(fmt.Sprintf("Opened %s in browser", url), false, 3*time.Second)

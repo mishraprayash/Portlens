@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/mishraprayash/Portlens/internal/model"
-	"github.com/mishraprayash/Portlens/internal/platform"
 )
 
 // LocalURL builds the most appropriate HTTP URL for a listener. Wildcard and
@@ -39,7 +38,7 @@ func (m *Manager) Open(ctx context.Context, report *model.Report) error {
 		msg = fmt.Sprintf("Note: this service may not be HTTP; opening %s may fail.\n", url) + msg
 	}
 	fmt.Fprint(m.Out, msg)
-	return platform.OpenURL(ctx, url)
+	return m.Platform.OpenInBrowser(ctx, url)
 }
 
 // looksLikeHTTP makes a conservative guess about whether a process serves HTTP,
