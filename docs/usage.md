@@ -476,6 +476,12 @@ Found 2 of 5001 ports in use in 42.1s.
   output is piped it is printed to stderr so stdout stays clean for results.
 - **Only in-use ports are printed** — idle ports are not listed and are not an
   error. Exit codes now reflect only real failures (permission denied, etc.).
+- **Inspection failures are reported, not swallowed** — if some ports cannot
+  be inspected (for example permission denied on a privileged port), the scan
+  still prints everything it found, adds a line to stderr
+  (`portlens: warning: N of M ports could not be inspected: ...`), and exits
+  0. Fatal problems (invalid arguments, Ctrl-C) still use the exit codes from
+  [exit-codes.md](exit-codes.md).
 - **Ports can span the whole range** `1-65535`; ports outside `1-65535` (e.g.
   `1-99999`) still fail fast before any work starts.
 - Abort anytime with Ctrl-C.

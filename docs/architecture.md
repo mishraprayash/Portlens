@@ -8,32 +8,36 @@ build-tagged files; the rest of the codebase is OS-independent.
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ cmd/                                                    │
-│   subcommand dispatch, CLI parsing, exit codes, TUI loop │
+│   subcommand dispatch, CLI parsing, exit codes          │
 ├─────────────────────────────────────────────────────────┤
 │ internal/service/                                       │
 │   PortService application domain facade                 │
 ├─────────────────────────────────────────────────────────┤
-│ internal/render/        internal/actions/                │
-│   terminal UI, tables,   kill / restart / open / copy     │
+│ internal/render/        internal/actions/               │
+│   terminal UI, tables,   kill / restart / open / copy   │
 │   tree, JSON                                            │
 ├─────────────────────────────────────────────────────────┤
-│ internal/inspector/                                      │
-│   orchestrates providers → model.Report (+ risk)          │
+│ internal/tui/                                           │
+│   full-screen dashboard (portlens top), single-flight   │
+│   background refreshes                                  │
+├─────────────────────────────────────────────────────────┤
+│ internal/inspector/                                     │
+│   orchestrates providers → model.Report (+ risk)        │
 ├─────────────────────────────────────────────────────────┤
 │ internal/detect/                                        │
 │   project / runtime / framework detection               │
 ├─────────────────────────────────────────────────────────┤
-│ internal/model/                                          │
+│ internal/model/                                         │
 │   shared OS-independent data types & sentinel errors    │
 ├─────────────────────────────────────────────────────────┤
-│ internal/platform/  (the OS abstraction)                 │
-│   PortResolver          ProcessInspector                 │
-│   NetworkInspector      ProcessTreeProvider              │
-│   ClipboardProvider     ProcessController                │
+│ internal/platform/  (the OS abstraction)                │
+│   PortResolver          ProcessInspector                │
+│   NetworkInspector      ProcessTreeProvider             │
+│   ClipboardProvider     ProcessController               │
 │   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
 │   │ darwin_*.go  │  │ linux_*.go   │  │ windows_*.go │  │
 │   │ sysctl+proc, │  │ /proc, xclip │  │ (planned)    │  │
-│   │ lsof fallback│  │              │  │               │  │
+│   │ lsof fallback│  │              │  │               │ │
 │   └──────────────┘  └──────────────┘  └──────────────┘  │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -51,6 +55,12 @@ implementations live in files with build constraints:
 | `ProcessTreeProvider` | sysctl `kern.proc.all` (one snapshot)  | one `/proc` scan                |
 | `ClipboardProvider`   | `pbcopy`                               | `wl-copy`/`xclip`/`xsel`       |
 | `ProcessController`   | `syscall.Kill`                         | `syscall.Kill`                 |
+
+Two OS side effects — opening a URL and posting a desktop notification — are
+not interfaces but function fields on the `platform.Platform` struct
+(`OpenURL`, `Notify`), defaulted by `platform.New()` and reachable through the
+nil-safe `OpenInBrowser`/`PostNotification` methods. Callers and tests swap
+them directly (see [testing.md](testing.md#testing-side-effects)).
 
 Process metadata is read natively on both platforms — `sysctl` and libproc
 (`proc_pidpath`/`proc_pidinfo`) on macOS, `/proc` on Linux — with no external

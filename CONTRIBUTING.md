@@ -158,6 +158,36 @@ When writing tests:
 - **No secrets, ever.** The user configuration is user-local; keep it that way
   and never log its contents.
 
+### House patterns
+
+These conventions came out of the architecture cleanup; follow them when
+adding code so the codebase stays consistent:
+
+- **Inject side effects, don't call them.** Anything that leaves the process —
+  opening a browser, posting a desktop notification — goes through a function
+  field on `platform.Platform` (`OpenURL`, `Notify`; nil-safe wrappers
+  `OpenInBrowser`/`PostNotification`). Tests pass fakes instead of stubbing a
+  global. See `internal/actions/open_test.go`.
+- **CLI errors go through one helper.** Return the exit code from
+  `fail(stderr, code, format, args...)` (see `cmd/errors.go`) and map errors
+  with `mapError`/`model.MapExitCode`, so message and code cannot drift apart.
+- **Caches: TTL, never cache failures.** Shared caches (Docker list, inode
+  map, project-detection memo) expire after a fixed window and skip storing
+  errors, so a transient failure is retried. Correctness beats cache hits on
+  the single-port resolve path — see the rebuild-on-miss rule in
+  `internal/platform/linux_port.go`.
+- **Publish immutable snapshots.** Shared tables (the darwin process table,
+  cache contents) are built aside and swapped in under a mutex; readers use
+  the returned snapshot, never fields being mutated in place. This is what
+  keeps the suite race-clean.
+- **Coalesce background work.** TUI refreshes/refetches go through the
+  `singleFlight` helper (`internal/tui/flight.go`) so slow scans cannot stack
+  one goroutine per tick or keystroke.
+- **Inject the clock in tests.** Anything time-based takes an
+  `now func() time.Time` (or a controllable cache clock) so tests advance time
+  explicitly instead of sleeping — see `internal/platform/container_test.go`
+  and `internal/detect/memo_test.go`.
+
 ## How to add a feature
 
 A typical end-to-end feature touches:
@@ -171,6 +201,10 @@ A typical end-to-end feature touches:
 6. **`cmd/usage.go`** and `README.md` / `docs/usage.md` — help text and docs.
 7. **`CHANGELOG.md`** — a bullet under `[Unreleased]`.
 
+If the feature performs an action or surfaces one interactively, wire it
+through `internal/actions` (and `internal/tui` if the TUI should expose it)
+rather than calling platform functions directly.
+
 Write tests as you go; don't defer them to the end.
 
 ## How to add a platform (e.g. Windows)
@@ -178,9 +212,10 @@ Write tests as you go; don't defer them to the end.
 To support a new OS, create `internal/platform/windows_*.go` files that
 implement the existing interfaces — `PortResolver`, `NetworkInspector`,
 `ProcessInspector`, `ProcessTreeProvider`, `ClipboardProvider`,
-`ProcessController` — plus the small standalone functions (`Notify`, `OpenURL`).
-Wire the constructors into `internal/platform/new.go`. No other code needs to
-change. Keep every platform command inside these files.
+`ProcessController` — plus the small standalone functions (`Notify`,
+`OpenURL`), which `New()` wires into the `Platform`'s `Notify`/`OpenURL`
+fields. Wire the constructors into `internal/platform/new.go`. No other code
+needs to change. Keep every platform command inside these files.
 
 ## Commits and pull requests
 
@@ -196,7 +231,9 @@ change. Keep every platform command inside these files.
    make check
    ```
    This runs `gofmt` check, `go vet`, and the full test suite. CI runs the same
-   thing on Linux and macOS and must pass.
+   thing on Linux and macOS, plus a `-race` job and a coverage job on Linux —
+   all must pass. (`-race` needs cgo, which is blocked on macOS by the
+   toolchain issue described above; rely on the Linux race job.)
 5. **Update `CHANGELOG.md`** under `[Unreleased]`, and `README.md`/docs if the
    user-facing behavior changed.
 6. **Review:** keep PRs reviewable — add a short description, reference the

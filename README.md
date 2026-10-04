@@ -305,6 +305,7 @@ make build          # build to ./bin/portlens
 make lint           # gofmt check + go vet
 make test           # run all tests (unit + integration, no cache)
 make check          # lint + test — the same gate CI runs
+make cover          # test suite with an aggregate coverage percentage
 make fmt            # gofmt
 make cross          # verify macOS/Linux cross-compilation
 ```

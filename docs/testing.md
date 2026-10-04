@@ -54,14 +54,33 @@ make cover     # writes coverage.out, prints the aggregate percentage
 
 `coverage.out` is gitignored (`*.out`). CI runs `make cover` on Linux and
 posts the total to the job summary. When adding behavior, add tests that move
-the package's number — the weakest packages today are `internal/inspector`,
-`internal/actions`, and the exit-code mapping in `internal/model`.
+the package's number — the weakest packages today are `internal/inspector`
+(search/exposure paths), `internal/actions`, and `internal/tui`.
 
 Known gaps worth attacking first:
 
-- `model.MapExitCode` — the documented exit-code contract (docs/exit-codes.md)
-- The interactive and watch loops in `cmd/` (`runInteractive`, `runWatch`)
-- Config disk I/O (`internal/config.Load` / `Save`)
+- `internal/inspector` — search by name/PID, exposure assessment branches
+- The interactive and watch loops in `cmd/` (`runInteractive` raw-key loop,
+  `runWatch`)
+- Verbose/deep render paths in `internal/render`
+
+## Testing side effects
+
+Browser opens and desktop notifications go through function fields on
+`platform.Platform` (`OpenURL`, `Notify`), which `platform.New()` fills with
+the real implementations. Tests inject fakes instead of touching the OS:
+
+```go
+plat := &platform.Platform{OpenURL: func(_ context.Context, u string) error {
+    got = u
+    return nil
+}}
+```
+
+See `internal/actions/open_test.go` and `cmd/watch_test.go` for examples.
+Prefer this pattern (a function field or interface on `Platform`) over
+calling OS facilities directly — it keeps platform code isolated and tests
+hermetic.
 
 ## Race detector
 
