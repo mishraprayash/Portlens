@@ -71,7 +71,7 @@ func New(p *platform.Platform, opts ...Option) *Inspector {
 	}
 	insp := &Inspector{
 		Platform: p,
-		Projects: detect.NewProjectDetector(),
+		Projects: detect.Memoize(detect.NewProjectDetector()),
 		Now:      time.Now,
 	}
 	for _, opt := range opts {

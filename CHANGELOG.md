@@ -91,6 +91,19 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Changed
 
+- **Hot-path caching and single-flight background work**: the Docker
+  container list is shared across every lookup within a one-second window
+  (one daemon round trip per scan instead of one per port/PID/report);
+  project detection is memoized per working directory for five seconds,
+  including negative results; HTTP probes share one transport instead of
+  allocating one per port; the Linux inode map is built outside its lock so
+  concurrent resolvers do not queue behind a `/proc` walk; and the TUI's
+  list/report refreshes are single-flight, coalescing ticks and keystrokes
+  into one queued follow-up instead of stacking concurrent port scans. ANSI
+  stripping skips the regexp for strings without an escape byte.
+- **TUI filter keypresses use the run context**: report refetches triggered
+  while typing in the filter bar are canceled with the session instead of
+  running under `context.Background()`.
 - **`service.Scan` returns a `ScanResult`**: found reports now travel with a
   failure count and first error (`Failed`, `FirstErr`), so callers can warn
   about ports they could not inspect instead of dropping them silently.

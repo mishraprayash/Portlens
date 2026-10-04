@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mishraprayash/Portlens/internal/model"
@@ -35,7 +36,21 @@ type dockerProvider struct {
 	// field so tests can inject a deterministic value instead of reading the
 	// host's /proc.
 	cgroupForPID func(pid int32) string
+
+	// The container list is shared across every lookup in a scan (port, PID,
+	// and per-report enrichment would otherwise each pay a daemon round trip),
+	// so it is cached for containerListTTL. Failures are never cached.
+	listMu    sync.Mutex
+	listCache []containerSummary
+	listAt    time.Time
+	listBuilt bool
+	now       func() time.Time
 }
+
+// containerListTTL bounds how stale a cached container list may be: fresh
+// enough that a watch tick sees new containers, cheap enough that one scan
+// with many lookups pays a single daemon round trip.
+const containerListTTL = time.Second
 
 // newDockerProvider builds a provider dialing the daemon over a unix socket.
 func newDockerProvider(socket string) *dockerProvider {
@@ -43,6 +58,7 @@ func newDockerProvider(socket string) *dockerProvider {
 		base:         "http://docker",
 		socket:       socket,
 		cgroupForPID: containerIDForPID,
+		now:          time.Now,
 		client: &http.Client{Transport: &http.Transport{
 			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 				return (&net.Dialer{Timeout: dockerSocketTimeout}).DialContext(ctx, "unix", socket)
@@ -235,13 +251,30 @@ func pathForContainer(containerID string) string {
 	return "/containers/" + containerID
 }
 
+// list returns the running containers, serving from the short-lived cache
+// when possible. The cache is only populated on success, so a transient
+// daemon error is retried on the next call.
 func (d *dockerProvider) list(ctx context.Context) ([]containerSummary, error) {
-	ctx, cancel := context.WithTimeout(ctx, dockerSocketTimeout)
+	d.listMu.Lock()
+	if d.listBuilt && d.now().Sub(d.listAt) < containerListTTL {
+		cached := d.listCache
+		d.listMu.Unlock()
+		return cached, nil
+	}
+	d.listMu.Unlock()
+
+	reqCtx, cancel := context.WithTimeout(ctx, dockerSocketTimeout)
 	defer cancel()
 	var out []containerSummary
-	if err := d.get(ctx, "/containers/json", &out); err != nil {
+	if err := d.get(reqCtx, "/containers/json", &out); err != nil {
 		return nil, err
 	}
+
+	d.listMu.Lock()
+	d.listCache = out
+	d.listAt = d.now()
+	d.listBuilt = true
+	d.listMu.Unlock()
 	return out, nil
 }
 

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -39,6 +40,21 @@ type App struct {
 	actions *actions.Manager
 
 	mu sync.Mutex
+
+	// Background list/report work is single-flight: a slow run coalesces any
+	// requests that arrive while it is busy into exactly one follow-up,
+	// instead of stacking concurrent port scans on every tick or keystroke.
+	refresh    singleFlight
+	report     singleFlight
+	reportWant atomic.Pointer[reportTarget]
+}
+
+// reportTarget is the port/protocol the in-flight report fetch should inspect;
+// it is re-read on every follow-up run so a selection change made while a
+// fetch is busy is served by the queued run.
+type reportTarget struct {
+	port  int32
+	proto model.Protocol
 }
 
 // NewApp creates a new TUI App instance.
@@ -210,7 +226,7 @@ func (a *App) draw() {
 }
 
 func (a *App) refreshList(ctx context.Context, out chan<- []model.PortEntry) {
-	go func() {
+	a.refresh.run(func() {
 		entries, err := a.cfg.Service.List(ctx, a.cfg.OnlyTCP)
 		if err == nil && entries != nil {
 			select {
@@ -218,7 +234,7 @@ func (a *App) refreshList(ctx context.Context, out chan<- []model.PortEntry) {
 			default:
 			}
 		}
-	}()
+	})
 }
 
 func (a *App) ensureSelectedReportLocked(ctx context.Context, out chan<- *model.Report) {
@@ -231,18 +247,17 @@ func (a *App) ensureSelectedReportLocked(ctx context.Context, out chan<- *model.
 	if cached != nil {
 		a.model.SelectedReport = cached
 	}
-	port := sel.Port
-	proto := sel.Protocol
-
-	go func() {
-		rep, err := a.cfg.Service.Inspect(ctx, port, proto, inspector.DepthFull)
+	a.reportWant.Store(&reportTarget{port: sel.Port, proto: sel.Protocol})
+	a.report.run(func() {
+		t := a.reportWant.Load()
+		rep, err := a.cfg.Service.Inspect(ctx, t.port, t.proto, inspector.DepthFull)
 		if err == nil && rep != nil {
 			select {
 			case out <- rep:
 			default:
 			}
 		}
-	}()
+	})
 }
 
 func (a *App) handleKey(ctx context.Context, k Key, reportChan chan<- *model.Report, listChan chan<- []model.PortEntry) bool {
@@ -266,7 +281,7 @@ func (a *App) handleKey(ctx context.Context, k Key, reportChan chan<- *model.Rep
 
 	// 3. Filter Input Mode
 	if a.model.ViewMode == ModeFilter {
-		return a.handleFilterKey(k, reportChan)
+		return a.handleFilterKey(ctx, k, reportChan)
 	}
 
 	// 4. Normal Navigation Mode
@@ -341,22 +356,22 @@ func (a *App) handleConfirmKey(ctx context.Context, k Key, listChan chan<- []mod
 	return false
 }
 
-func (a *App) handleFilterKey(k Key, reportChan chan<- *model.Report) bool {
+func (a *App) handleFilterKey(ctx context.Context, k Key, reportChan chan<- *model.Report) bool {
 	switch k.Type {
 	case KeyEnter:
 		a.model.ViewMode = ModeNormal
 	case KeyEsc:
 		a.model.ViewMode = ModeNormal
 		a.model.SetFilter("")
-		a.ensureSelectedReportLocked(context.Background(), reportChan)
+		a.ensureSelectedReportLocked(ctx, reportChan)
 	case KeyBackspace, KeyDelete:
 		if len(a.model.Filter) > 0 {
 			a.model.SetFilter(a.model.Filter[:len(a.model.Filter)-1])
-			a.ensureSelectedReportLocked(context.Background(), reportChan)
+			a.ensureSelectedReportLocked(ctx, reportChan)
 		}
 	case KeyRune:
 		a.model.SetFilter(a.model.Filter + string(k.Rune))
-		a.ensureSelectedReportLocked(context.Background(), reportChan)
+		a.ensureSelectedReportLocked(ctx, reportChan)
 	}
 	return false
 }

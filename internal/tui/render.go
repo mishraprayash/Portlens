@@ -16,7 +16,12 @@ import (
 var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 
 // stripANSI removes ANSI color and formatting escape sequences from s.
+// Strings with no escape byte — the common case for plain table cells — skip
+// the regexp entirely.
 func stripANSI(s string) string {
+	if strings.IndexByte(s, 0x1b) < 0 {
+		return s
+	}
 	return ansiRegex.ReplaceAllString(s, "")
 }
 

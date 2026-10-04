@@ -38,9 +38,23 @@ func newSharedInodeMap(ttl time.Duration, build func() map[uint64]int32) *shared
 
 func (s *sharedInodeMap) get() map[uint64]int32 {
 	s.mu.Lock()
+	if s.inodes != nil && time.Since(s.fetchedAt) < s.ttl {
+		m := s.inodes
+		s.mu.Unlock()
+		return m
+	}
+	s.mu.Unlock()
+
+	// Build without the lock held: a /proc walk can take hundreds of
+	// milliseconds, and serializing every resolver behind it would turn a
+	// fresh cache hit into a queue. Concurrent expired callers may both
+	// build; the first to publish wins and the loser discards its result.
+	m := s.build()
+
+	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.inodes == nil || time.Since(s.fetchedAt) >= s.ttl {
-		s.inodes = s.build()
+		s.inodes = m
 		s.fetchedAt = time.Now()
 	}
 	return s.inodes
