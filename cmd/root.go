@@ -214,6 +214,11 @@ func parseArgs(args []string) (*options, error) {
 	if opts.notify && !opts.watch {
 		return nil, fmt.Errorf("--notify requires --watch")
 	}
+	// Watch mode only monitors; running an action once per tick was
+	// previously accepted and silently ignored.
+	if opts.watch && (opts.kill || opts.restart || opts.open || opts.tree || opts.connections) {
+		return nil, fmt.Errorf("--watch cannot be combined with --kill, --restart, --open, --tree, or --connections")
+	}
 
 	rest := reordered.positional
 	if len(rest) > 0 && (opts.all || opts.pid > 0 || opts.name != "") {

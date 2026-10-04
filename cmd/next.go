@@ -20,11 +20,9 @@ func (n *nextSubcommand) Name() string        { return "next" }
 func (n *nextSubcommand) Aliases() []string   { return []string{"free"} }
 func (n *nextSubcommand) Description() string { return "Find the lowest available/free port" }
 func (n *nextSubcommand) Run(ctx context.Context, args []string, preFlags []string, stdout, stderr io.Writer, _ io.Reader) int {
-	for _, a := range args {
-		if a == "--help" || a == "-h" || a == "help" {
-			printNextUsage(stdout)
-			return exitcode.Success
-		}
+	if wantsHelp(args) {
+		printNextUsage(stdout)
+		return exitcode.Success
 	}
 	return runNext(ctx, append(preFlags, args...), stdout, stderr)
 }

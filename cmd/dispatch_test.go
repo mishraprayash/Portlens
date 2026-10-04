@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mishraprayash/Portlens/internal/exitcode"
 )
@@ -218,5 +219,30 @@ func TestFindSubcommandFlags(t *testing.T) {
 	// It should reach search execution and return PortNotFound (3) rather than InvalidArguments (2)
 	if code != exitcode.PortNotFound {
 		t.Errorf("Execute(find --name=...) = %d, want %d (stderr: %s)", code, exitcode.PortNotFound, stderr.String())
+	}
+}
+
+// Watch mode only monitors: combining it with an action flag must fail with
+// exit 2 instead of silently ignoring the action. The timeout guarantees the
+// test fails rather than hangs if validation ever regresses.
+func TestWatchRejectsActionFlags(t *testing.T) {
+	cases := [][]string{
+		{"--watch", "--kill", "3000"},
+		{"-w", "-k", "3000"},
+		{"watch", "--kill", "3000"},
+		{"watch", "--restart", "3000"},
+		{"--watch", "--tree", "3000"},
+	}
+	for _, args := range cases {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		var stdout, stderr bytes.Buffer
+		code := ExecuteContext(ctx, args, &stdout, &stderr, nil)
+		cancel()
+		if code != exitcode.InvalidArguments {
+			t.Errorf("Execute(%v) = %d, want %d (stderr: %s)", args, code, exitcode.InvalidArguments, stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "--watch cannot be combined") {
+			t.Errorf("Execute(%v) stderr = %q, want --watch cannot be combined message", args, stderr.String())
+		}
 	}
 }

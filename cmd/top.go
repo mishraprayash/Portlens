@@ -20,11 +20,9 @@ func (c *topSubcommand) Description() string { return "Full-screen live interact
 
 func (c *topSubcommand) Run(ctx context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	allArgs := append(preFlags, args...)
-	for _, a := range allArgs {
-		if a == "--help" || a == "-h" || a == "help" {
-			printTopUsage(stdout)
-			return exitcode.Success
-		}
+	if wantsHelp(allArgs) {
+		printTopUsage(stdout)
+		return exitcode.Success
 	}
 
 	interval := 2

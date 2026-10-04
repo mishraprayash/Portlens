@@ -39,10 +39,29 @@ func runConfig(args []string, stdout, stderr io.Writer) int {
 	}
 }
 
-func configList(stdout, stderr io.Writer) int {
+// loadConfig reads the group config, reporting the standard
+// "portlens config: %v" error (exit 1) when the file cannot be read.
+// On failure it returns a nil config and the exit code to return.
+func loadConfig(stderr io.Writer) (*config.Config, int) {
 	c, err := config.Load()
 	if err != nil {
+		return nil, fail(stderr, exitcode.GeneralError, "portlens config: %v\n", err)
+	}
+	return c, exitcode.Success
+}
+
+// saveConfig writes the group config back with the standard error handling.
+func saveConfig(c *config.Config, stderr io.Writer) int {
+	if err := c.Save(); err != nil {
 		return fail(stderr, exitcode.GeneralError, "portlens config: %v\n", err)
+	}
+	return exitcode.Success
+}
+
+func configList(stdout, stderr io.Writer) int {
+	c, code := loadConfig(stderr)
+	if c == nil {
+		return code
 	}
 	names := c.GroupNames()
 	if len(names) == 0 {
@@ -61,9 +80,9 @@ func configShow(args []string, stdout, stderr io.Writer) int {
 	if len(args) != 1 {
 		return fail(stderr, exitcode.InvalidArguments, "usage: portlens config show <name>\n")
 	}
-	c, err := config.Load()
-	if err != nil {
-		return fail(stderr, exitcode.GeneralError, "portlens config: %v\n", err)
+	c, code := loadConfig(stderr)
+	if c == nil {
+		return code
 	}
 	ports, ok := c.Ports(args[0])
 	if !ok {
@@ -88,15 +107,15 @@ func configAdd(args []string, stdout, stderr io.Writer) int {
 	}
 	ports = dedupePorts(ports)
 
-	c, err := config.Load()
-	if err != nil {
-		return fail(stderr, exitcode.GeneralError, "portlens config: %v\n", err)
+	c, code := loadConfig(stderr)
+	if c == nil {
+		return code
 	}
 	if err := c.SetGroup(name, ports); err != nil {
 		return fail(stderr, exitcode.InvalidArguments, "portlens config: %v\n", err)
 	}
-	if err := c.Save(); err != nil {
-		return fail(stderr, exitcode.GeneralError, "portlens config: %v\n", err)
+	if code := saveConfig(c, stderr); code != exitcode.Success {
+		return code
 	}
 	fmt.Fprintf(stdout, "Saved group @%s: %s\n", name, formatPorts(ports))
 	return exitcode.Success
@@ -106,15 +125,15 @@ func configRemove(args []string, stdout, stderr io.Writer) int {
 	if len(args) != 1 {
 		return fail(stderr, exitcode.InvalidArguments, "usage: portlens config remove <name>\n")
 	}
-	c, err := config.Load()
-	if err != nil {
-		return fail(stderr, exitcode.GeneralError, "portlens config: %v\n", err)
+	c, code := loadConfig(stderr)
+	if c == nil {
+		return code
 	}
 	if !c.RemoveGroup(args[0]) {
 		return fail(stderr, exitcode.InvalidArguments, "portlens config: group %q not found\n", args[0])
 	}
-	if err := c.Save(); err != nil {
-		return fail(stderr, exitcode.GeneralError, "portlens config: %v\n", err)
+	if code := saveConfig(c, stderr); code != exitcode.Success {
+		return code
 	}
 	fmt.Fprintf(stdout, "Removed group @%s\n", args[0])
 	return exitcode.Success

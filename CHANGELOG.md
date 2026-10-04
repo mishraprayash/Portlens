@@ -52,6 +52,11 @@ All notable changes to PortLens are documented here. The format is based on
   scan is bounded by a 10-second deadline derived from the caller's
   context; a canceled or expired context yields no completions and still
   exits 0.
+- **`--watch` rejects action flags**: `portlens watch --kill 3000` (or
+  `--watch --tree`, `-w -k`, ...) now fails with exit 2 and
+  `--watch cannot be combined with --kill, --restart, --open, --tree, or
+  --connections` instead of silently starting the monitor and ignoring the
+  action.
 - **`parseLsofFields` multi-process socket attribution**: Fixed a critical bug in `lsof` field parsing where `flush()` was not called upon encountering a new PID line, causing the trailing socket of any process to be misattributed to the subsequent process.
 - **Detached process termination on exit in `--restart`**: Replaced `exec.CommandContext` with `exec.Command` in `defaultProcessStarter` so that Go's runtime context monitor does not terminate the restarted detached process when PortLens completes execution.
 - **Interactive mode nil pointer dereference panic**: Guarded against nil `report.Process` when pressing `'c'` to copy PID, preventing panics on unprivileged or system listeners.
@@ -74,6 +79,11 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Changed
 
+- **Subcommand dispatch de-duplicated**: the eleven copies of the per-command
+  `--help` scan, the port-target pre-checks, and the action-flag injection
+  now flow through shared `wantsHelp`/`runSimple` helpers, and `config`
+  load/save failures go through `loadConfig`/`saveConfig`. Behavior and
+  messages are unchanged; new subcommands need a one-line declaration.
 - **CLI error paths share one `fail` helper**: every error message in `cmd`
   is written and its exit code returned from a single call site, so message
   and code cannot drift apart; `model.MapExitCode` now has unit coverage of

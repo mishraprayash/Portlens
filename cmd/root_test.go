@@ -413,3 +413,17 @@ func TestExecuteDebugFlag(t *testing.T) {
 		t.Fatalf("expected config path in stdout, got: %q", stdout.String())
 	}
 }
+
+func TestParseArgsWatchRejectsActionFlags(t *testing.T) {
+	for _, a := range []string{"--kill", "--restart", "--open", "--tree", "--connections"} {
+		if _, err := parseArgs([]string{"3000", "--watch", a}); err == nil {
+			t.Errorf("expected error for --watch %s", a)
+		}
+	}
+	if _, err := parseArgs([]string{"3000", "-w", "-k"}); err == nil {
+		t.Error("expected error for -w -k")
+	}
+	if opts, err := parseArgs([]string{"--watch"}); err != nil || !opts.watch {
+		t.Errorf("watch alone should stay valid, got opts=%v err=%v", opts, err)
+	}
+}
