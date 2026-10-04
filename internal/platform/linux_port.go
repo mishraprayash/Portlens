@@ -62,6 +62,19 @@ func (s *sharedInodeMap) get() map[uint64]int32 {
 
 var defaultLinuxInodeMap = newSharedInodeMap(inodeMapTTL, socketInodeMap)
 
+// refresh rebuilds the map unconditionally, publishes it, and returns the
+// fresh snapshot. ResolvePort uses it after an attribution miss: a socket
+// created since the cache was built cannot be owned by any PID recorded in a
+// stale map, so consulting the cache again would just return the same miss.
+func (s *sharedInodeMap) refresh() map[uint64]int32 {
+	m := s.build()
+	s.mu.Lock()
+	s.inodes = m
+	s.fetchedAt = time.Now()
+	s.mu.Unlock()
+	return m
+}
+
 type linuxPortResolver struct {
 	inodes *sharedInodeMap
 }
@@ -115,8 +128,21 @@ func (r *linuxPortResolver) inodeMap() map[uint64]int32 {
 }
 
 func (r *linuxPortResolver) ResolvePort(_ context.Context, port uint16, protocol model.Protocol) ([]model.Listener, error) {
+	out := resolvePortRows(port, protocol, r.inodes.get())
+	// A row whose PID is missing was created after the cached inode map was
+	// built (or is owned by a process whose fds we cannot read). Rebuild once
+	// so inspecting a server that just started still attributes its process
+	// instead of reporting an ownerless listener.
+	if anyUnattributed(out) {
+		out = resolvePortRows(port, protocol, r.inodes.refresh())
+	}
+	return out, nil
+}
+
+// resolvePortRows reads the /proc/net tables for one port using the given
+// inode map.
+func resolvePortRows(port uint16, protocol model.Protocol, inodes map[uint64]int32) []model.Listener {
 	proto := protocol.Normalize()
-	inodes := r.inodeMap()
 	var out []model.Listener
 	if proto == "" || proto == model.ProtocolTCP {
 		out = append(out, resolveProcNetPort("/proc/net/tcp", model.ProtocolTCP, port, inodes)...)
@@ -126,7 +152,17 @@ func (r *linuxPortResolver) ResolvePort(_ context.Context, port uint16, protocol
 		out = append(out, resolveProcNetPort("/proc/net/udp", model.ProtocolUDP, port, inodes)...)
 		out = append(out, resolveProcNetPort("/proc/net/udp6", model.ProtocolUDP, port, inodes)...)
 	}
-	return out, nil
+	return out
+}
+
+// anyUnattributed reports whether any listener row has no owning PID.
+func anyUnattributed(ls []model.Listener) bool {
+	for _, l := range ls {
+		if l.PID == 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func resolveProcNetPort(path string, proto model.Protocol, port uint16, inodes map[uint64]int32) []model.Listener {

@@ -8,6 +8,13 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Fixed
 
+- **Linux: a server that just started is still attributed to its process**:
+  single-port resolution rebuilds the inode→PID map once when a listening
+  row comes back without an owner, instead of answering from a cache built
+  before that socket existed. Previously `inspect`/`kill` on a freshly
+  started process could report no owning process (`kill` then failed with
+  "no owning process to terminate"), which is what made the Linux
+  `TestKillLiveServer` integration test fail.
 - **Module path matches the canonical repository**: `go.mod` and every import
   now declare `github.com/mishraprayash/Portlens` (previously
   `github.com/portlens/portlens`, which does not exist), so `go install
