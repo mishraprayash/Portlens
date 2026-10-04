@@ -92,20 +92,10 @@ func listContainerCell(c *model.Container) string {
 	if c == nil {
 		return "-"
 	}
-	if c.Name != "" {
-		return c.Name
+	if c.Name == "" && c.ID == "" {
+		return "-"
 	}
-	if c.ID != "" {
-		return shortID(c.ID)
-	}
-	return "-"
-}
-
-func containerFilterText(c *model.Container) string {
-	if c == nil {
-		return ""
-	}
-	return c.Name + " " + c.Image + " " + c.ComposeProject + " " + c.ComposeService
+	return c.DisplayName()
 }
 
 func filterEntries(in []model.PortEntry, keep func(model.PortEntry) bool) []model.PortEntry {

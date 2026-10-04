@@ -116,7 +116,7 @@ func defaultProcessStarter(_ context.Context, argv []string, cwd string) (int, e
 
 // restartContainer restarts a container via the container runtime.
 func (m *Manager) restartContainer(ctx context.Context, c *model.Container) error {
-	name := containerActionName(c)
+	name := c.DisplayName()
 	fmt.Fprintf(m.Out, "Restarting container %s\n", name)
 	if m.Confirm != nil {
 		ok, err := m.Confirm(fmt.Sprintf("Restart container %s? [y/N] ", name))

@@ -34,10 +34,11 @@ func formatHost(host string) string {
 // unlikely to be HTTP. Opening is non-destructive, so it does not prompt.
 func (m *Manager) Open(ctx context.Context, report *model.Report) error {
 	url := LocalURL(report)
+	msg := fmt.Sprintf("Opening %s\n", url)
 	if !looksLikeHTTP(report) {
-		fmt.Fprintf(m.Out, "Note: this service may not be HTTP; opening %s may fail.\n", url)
+		msg = fmt.Sprintf("Note: this service may not be HTTP; opening %s may fail.\n", url) + msg
 	}
-	fmt.Fprintf(m.Out, "Opening %s\n", url)
+	fmt.Fprint(m.Out, msg)
 	return platform.OpenURL(ctx, url)
 }
 

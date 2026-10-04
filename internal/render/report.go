@@ -100,7 +100,7 @@ func (r *Renderer) renderContainer(c *model.Container) {
 	r.section("CONTAINER", func() {
 		rows := [][2]string{
 			{"Name", c.Name},
-			{"ID", shortID(c.ID)},
+			{"ID", c.ShortID()},
 			{"Image", c.Image},
 		}
 		if c.Status != "" {
@@ -114,14 +114,6 @@ func (r *Renderer) renderContainer(c *model.Container) {
 		}
 		r.writeln(r.kv(rows))
 	})
-}
-
-// shortID trims a container ID to its leading 12 characters for readability.
-func shortID(id string) string {
-	if len(id) > 12 {
-		return id[:12]
-	}
-	return id
 }
 
 func (r *Renderer) renderProject(p *model.ProjectInfo) {

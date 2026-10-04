@@ -175,7 +175,7 @@ func (kr *KeyReader) ReadKey() (Key, error) {
 	}
 }
 
-// ReadKeyEvent reads bytes from r and decodes the next keyboard event.
-func ReadKeyEvent(r io.Reader) (Key, error) {
+// readKeyEvent reads bytes from r and decodes the next keyboard event.
+func readKeyEvent(r io.Reader) (Key, error) {
 	return NewKeyReader(r).ReadKey()
 }

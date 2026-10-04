@@ -172,21 +172,3 @@ func (d darwinNetworkInspector) Connections(ctx context.Context, pid int32) ([]m
 	}
 	return out, nil
 }
-
-func (d darwinNetworkInspector) ListenersForPID(ctx context.Context, pid int32) ([]model.Listener, error) {
-	data, err := runLsof(ctx, "-nP", "-a", "-p", strconv.Itoa(int(pid)), "-iTCP", "-sTCP:LISTEN", "-iUDP", "-FpctnT")
-	if err != nil {
-		return nil, err
-	}
-	var out []model.Listener
-	for _, rec := range parseLsofFields(data) {
-		if addr, port, ok := parseSockName(rec.name); ok {
-			proto := model.ProtocolUDP
-			if rec.state != "" {
-				proto = model.ProtocolTCP
-			}
-			out = append(out, listenerFromRecord(rec, addr, port, proto))
-		}
-	}
-	return out, nil
-}

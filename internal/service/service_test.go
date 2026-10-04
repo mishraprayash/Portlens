@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"net"
 	"testing"
 	"time"
 
@@ -113,50 +112,5 @@ func TestPortServiceScan(t *testing.T) {
 	}
 	if len(found) != 1 || found[0].Port != 3000 {
 		t.Errorf("Scan found = %v, want [3000]", found)
-	}
-}
-
-func TestPortServiceFind(t *testing.T) {
-	mock := &mockInspector{
-		pidEntries: map[int32][]model.PortEntry{
-			1234: {{Port: 8080}, {Port: 8081}},
-		},
-		nameEntries: map[string][]model.PortEntry{
-			"node": {{Port: 3000}},
-		},
-	}
-	svc := New(WithInspector(mock))
-
-	ports, err := svc.Find(context.Background(), "", 1234)
-	if err != nil || len(ports) != 2 {
-		t.Errorf("Find by pid = %v, err = %v", ports, err)
-	}
-
-	ports, err = svc.Find(context.Background(), "node", 0)
-	if err != nil || len(ports) != 1 || ports[0] != 3000 {
-		t.Errorf("Find by name = %v, err = %v", ports, err)
-	}
-
-	_, err = svc.Find(context.Background(), "", 0)
-	if !errors.Is(err, model.ErrInvalidArguments) {
-		t.Errorf("Find without args err = %v, want ErrInvalidArguments", err)
-	}
-}
-
-func TestPortServiceNextAvailable(t *testing.T) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Skip("cannot bind tcp listener")
-	}
-	defer ln.Close()
-	boundPort := int32(ln.Addr().(*net.TCPAddr).Port)
-
-	svc := New()
-	next, err := svc.NextAvailable(context.Background(), boundPort)
-	if err != nil {
-		t.Fatalf("NextAvailable err = %v", err)
-	}
-	if next == boundPort {
-		t.Errorf("NextAvailable returned occupied port %d", boundPort)
 	}
 }

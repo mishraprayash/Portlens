@@ -110,6 +110,24 @@ type Container struct {
 	ComposeService string `json:"compose_service,omitempty"`
 }
 
+// ShortID returns the container ID trimmed to its leading 12 characters,
+// the conventional display form for Docker/Compose IDs.
+func (c *Container) ShortID() string {
+	if len(c.ID) > 12 {
+		return c.ID[:12]
+	}
+	return c.ID
+}
+
+// DisplayName returns the runtime-assigned name, falling back to the short ID
+// when the runtime did not assign one.
+func (c *Container) DisplayName() string {
+	if c.Name != "" {
+		return c.Name
+	}
+	return c.ShortID()
+}
+
 // ProcessTree is a node in a process hierarchy.
 type ProcessTree struct {
 	Process  ProcessInfo    `json:"process"`

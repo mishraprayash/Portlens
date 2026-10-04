@@ -31,15 +31,6 @@ func WithColor(color bool) Option {
 	}
 }
 
-// WithWidth sets the line width for horizontal rules and tables.
-func WithWidth(width int) Option {
-	return func(r *Renderer) {
-		if width > 0 {
-			r.Width = width
-		}
-	}
-}
-
 // NewRenderer builds a Renderer using functional options.
 func NewRenderer(w io.Writer, opts ...Option) *Renderer {
 	r := &Renderer{W: w, Width: DefaultWidth}
@@ -60,12 +51,6 @@ func New(w io.Writer, color bool) *Renderer {
 	return NewRenderer(w, WithColor(color))
 }
 
-// IsInteractive reports whether the output writer is a terminal.
-func (r *Renderer) IsInteractive() bool {
-	f, ok := r.W.(*os.File)
-	return ok && term.IsTerminal(int(f.Fd()))
-}
-
 func (r *Renderer) write(s string) {
 	_, _ = io.WriteString(r.W, s)
 }
@@ -80,7 +65,6 @@ func (r *Renderer) dim(s string) string     { return r.wrap("2", s) }
 func (r *Renderer) red(s string) string     { return r.wrap("31", s) }
 func (r *Renderer) green(s string) string   { return r.wrap("32", s) }
 func (r *Renderer) yellow(s string) string  { return r.wrap("33", s) }
-func (r *Renderer) blue(s string) string    { return r.wrap("34", s) }
 func (r *Renderer) magenta(s string) string { return r.wrap("35", s) }
 func (r *Renderer) cyan(s string) string    { return r.wrap("36", s) }
 

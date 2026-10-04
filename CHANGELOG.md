@@ -88,6 +88,23 @@ All notable changes to PortLens are documented here. The format is based on
   is written and its exit code returned from a single call site, so message
   and code cannot drift apart; `model.MapExitCode` now has unit coverage of
   every branch in the `docs/exit-codes.md` table.
+- **Layer cleanup and dead-code removal**: deleted code that had zero
+  callers — seven uncalled `PortService` methods (`Kill`, `Restart`, `Open`,
+  `Tree`, `Connections`, `Find`, `NextAvailable`; the live logic lives in
+  `cmd` and `actions`), `NetworkInspector.ListenersForPID` and both platform
+  implementations, and a dozen unused helpers/options across `render`,
+  `inspector`, `cmd`, and `tui`.
+- **One container display name everywhere**: `model.Container.ShortID` and
+  `DisplayName` replace local copies of the name-or-truncated-ID logic in the
+  list table, report, summary, and kill/restart messages.
+- **TUI actions report their outcome**: browser-open and clipboard copies in
+  the TUI now run through `actions.Manager` like the CLI does, so the
+  "may not be HTTP" warning and "Opening ..." feedback surface in the status
+  bar instead of being dropped.
+- **Shared scan pipeline and action runner in `cmd`**: table and JSON scan
+  modes share one `scanAll` pipeline, kill/restart/open share `runAction`
+  (single place mapping action errors to messages and exit codes), and
+  `newService` reuses `newInspector` instead of duplicating platform wiring.
 - **`make check` now matches the CI gate**: it runs gofmt, vet, build, the full
   test suite, and the four-target cross-compile matrix — the same checks CI
   runs. `make cover` (new) prints an aggregate coverage percentage, and CI
@@ -98,13 +115,6 @@ All notable changes to PortLens are documented here. The format is based on
   the shipped shell-completion roadmap item were dropped; and `CHANGELOG.md`'s
   duplicate `[Unreleased]` sections were merged (contradictory history/`--log`
   entries pruned).
-- **Enterprise-grade Clean Architecture and Functional Options**: Decoupled core business domain from CLI delivery through a new `internal/service.PortService` facade. Refactored `inspector.New` and `render.NewRenderer` to use Functional Options and consumer-defined interfaces (`PortInspector`). Centralized domain sentinel errors in `internal/model/errors.go` and threaded signal context cancellation (`osSignalContext` / `ExecuteContext`) through all I/O and worker pool boundaries.
-- **Standard open-source subcommand CLI architecture**: Elevated primary actions to intuitive, first-class subcommands (`portlens kill`, `portlens list`/`ls`, `portlens inspect`, `portlens watch`, `portlens find`, `portlens tree`, `portlens conn`, `portlens open`, `portlens restart`) while preserving 100% backward compatibility with flag-based invocations (`portlens 3000 --kill`, `portlens 3000 -t`).
-- **Structured and modernized help output**: Redesigned `portlens --help` and added subcommand-specific `--help` usage screens following open-source CLI standards.
-- **Parallel multi-port and range scan inspection**: Replaced sequential port inspection in `scanPorts` with a concurrent worker pool (`min(2*NumCPU, 16)` workers), parallelizing inspection across active ports while maintaining exact input order and thread-safe progress reporting.
-- **Multi-port and range scan bulk pre-filtering**: Scans (`portlens 3000-8000`) now query the host's active listener table once in bulk and filter in memory, reducing 5,000-port scan times from ~42s down to ~20ms by avoiding thousands of redundant `lsof` process spawns on macOS and `/proc` parsing passes on Linux.
-- **Refined exposure risk classification**: Accurately distinguishes private LAN/VPN addresses (RFC 1918 / RFC 4193 / link-local) from public internet-routable WAN interfaces.
-
 - **Enterprise-grade Clean Architecture and Functional Options**: Decoupled core business domain from CLI delivery through a new `internal/service.PortService` facade. Refactored `inspector.New` and `render.NewRenderer` to use Functional Options and consumer-defined interfaces (`PortInspector`). Centralized domain sentinel errors in `internal/model/errors.go` and threaded signal context cancellation (`osSignalContext` / `ExecuteContext`) through all I/O and worker pool boundaries.
 - **Standard open-source subcommand CLI architecture**: Elevated primary actions to intuitive, first-class subcommands (`portlens kill`, `portlens list`/`ls`, `portlens inspect`, `portlens watch`, `portlens find`, `portlens tree`, `portlens conn`, `portlens open`, `portlens restart`) while preserving 100% backward compatibility with flag-based invocations (`portlens 3000 --kill`, `portlens 3000 -t`).
 - **Structured and modernized help output**: Redesigned `portlens --help` and added subcommand-specific `--help` usage screens following open-source CLI standards.

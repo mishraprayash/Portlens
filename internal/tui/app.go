@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -55,15 +56,27 @@ func NewApp(cfg AppConfig) *App {
 		cfg.Platform = platform.New()
 	}
 	if cfg.Service == nil {
-		cfg.Service = service.New(service.WithPlatform(cfg.Platform))
+		cfg.Service = service.New(service.WithInspector(inspector.New(cfg.Platform)))
 	}
 
-	act := actions.NewManager(cfg.Platform, io.Discard, nil)
-	return &App{
-		cfg:     cfg,
-		model:   NewModel(cfg.OnlyTCP),
-		actions: act,
+	a := &App{
+		cfg:   cfg,
+		model: NewModel(cfg.OnlyTCP),
 	}
+	// Action output (browser-open warnings, clipboard notes) surfaces in the
+	// status bar instead of being discarded.
+	a.actions = actions.NewManager(cfg.Platform, statusWriter{a: a}, nil)
+	return a
+}
+
+// statusWriter joins action-manager output into a single status-bar line.
+type statusWriter struct{ a *App }
+
+func (w statusWriter) Write(p []byte) (int, error) {
+	if msg := strings.Join(strings.Fields(string(p)), " "); msg != "" {
+		w.a.model.SetStatus(msg, false, 4*time.Second)
+	}
+	return len(p), nil
 }
 
 // Run starts the interactive TUI event loop.
@@ -206,12 +219,6 @@ func (a *App) refreshList(ctx context.Context, out chan<- []model.PortEntry) {
 			}
 		}
 	}()
-}
-
-func (a *App) ensureSelectedReport(ctx context.Context, out chan<- *model.Report) {
-	a.mu.Lock()
-	a.ensureSelectedReportLocked(ctx, out)
-	a.mu.Unlock()
 }
 
 func (a *App) ensureSelectedReportLocked(ctx context.Context, out chan<- *model.Report) {
@@ -471,12 +478,17 @@ func (a *App) openBrowser(ctx context.Context) {
 		a.model.SetStatus("No port selected to open", true, 3*time.Second)
 		return
 	}
-	url := fmt.Sprintf("http://localhost:%d", sel.Port)
-	if a.model.SelectedReport != nil {
-		url = actions.LocalURL(a.model.SelectedReport)
+	if report := a.model.SelectedReport; report != nil {
+		if err := a.actions.Open(ctx, report); err != nil {
+			a.model.SetStatus(fmt.Sprintf("Failed to open browser: %v", err), true, 4*time.Second)
+		} else {
+			a.model.SetStatus(fmt.Sprintf("Opened %s in browser", actions.LocalURL(report)), false, 3*time.Second)
+		}
+		return
 	}
-	err := platform.OpenURL(ctx, url)
-	if err != nil {
+	// Report not loaded yet: fall back to the entry's port.
+	url := fmt.Sprintf("http://localhost:%d", sel.Port)
+	if err := platform.OpenURL(ctx, url); err != nil {
 		a.model.SetStatus(fmt.Sprintf("Failed to open browser: %v", err), true, 4*time.Second)
 	} else {
 		a.model.SetStatus(fmt.Sprintf("Opened %s in browser", url), false, 3*time.Second)
@@ -490,8 +502,7 @@ func (a *App) copyPID(ctx context.Context) {
 		return
 	}
 	pidStr := strconv.Itoa(int(sel.PID))
-	err := a.cfg.Platform.Clipboard.Copy(ctx, pidStr)
-	if err != nil {
+	if err := a.actions.Copy(ctx, pidStr); err != nil {
 		a.model.SetStatus(fmt.Sprintf("Clipboard error: %v", err), true, 4*time.Second)
 	} else {
 		a.model.SetStatus(fmt.Sprintf("Copied PID %s to clipboard", pidStr), false, 3*time.Second)
@@ -508,8 +519,7 @@ func (a *App) copyURL(ctx context.Context) {
 	if a.model.SelectedReport != nil {
 		url = actions.LocalURL(a.model.SelectedReport)
 	}
-	err := a.cfg.Platform.Clipboard.Copy(ctx, url)
-	if err != nil {
+	if err := a.actions.Copy(ctx, url); err != nil {
 		a.model.SetStatus(fmt.Sprintf("Clipboard error: %v", err), true, 4*time.Second)
 	} else {
 		a.model.SetStatus(fmt.Sprintf("Copied %s to clipboard", url), false, 3*time.Second)
@@ -521,7 +531,6 @@ func RunTop(ctx context.Context, interval int, tcpOnly bool, stdout io.Writer, s
 	plat := platform.New()
 	insp := inspector.New(plat)
 	svc := service.New(
-		service.WithPlatform(plat),
 		service.WithInspector(insp),
 	)
 

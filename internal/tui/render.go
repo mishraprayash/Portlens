@@ -397,11 +397,11 @@ func renderOverviewTab(rep *model.Report, width int) []string {
 
 	// Exposure Assessment
 	if rep.Exposure != nil {
-		expText := green("LOW RISK (localhost only)")
+		expText := green(string(model.RiskLow) + " (localhost only)")
 		if rep.Exposure.Worst == model.RiskDangerous {
-			expText = red(bold("POTENTIALLY DANGEROUS - bound to public interface"))
+			expText = red(bold(string(model.RiskDangerous) + " - bound to public interface"))
 		} else if rep.Exposure.Worst == model.RiskWarning {
-			expText = yellow(bold("WARNING - wildcard bind 0.0.0.0"))
+			expText = yellow(bold(string(model.RiskWarning) + " - wildcard bind 0.0.0.0"))
 		}
 		lines = append(lines, fmt.Sprintf(" %s %s", dim("Exposure:"), expText))
 	}

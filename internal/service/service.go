@@ -6,17 +6,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net"
 	"runtime"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/mishraprayash/Portlens/internal/actions"
 	"github.com/mishraprayash/Portlens/internal/inspector"
 	"github.com/mishraprayash/Portlens/internal/model"
-	"github.com/mishraprayash/Portlens/internal/platform"
 )
 
 // ProgressFunc reports scan progress in a thread-safe manner.
@@ -25,8 +21,6 @@ type ProgressFunc func(done, total, found int, elapsed time.Duration)
 // PortService defines the business domain facade.
 type PortService struct {
 	inspector inspector.PortInspector
-	platform  *platform.Platform
-	actions   *actions.Manager
 }
 
 // Option configures a PortService.
@@ -39,34 +33,14 @@ func WithInspector(insp inspector.PortInspector) Option {
 	}
 }
 
-// WithPlatform configures the platform provider.
-func WithPlatform(plat *platform.Platform) Option {
-	return func(s *PortService) {
-		s.platform = plat
-	}
-}
-
-// WithActions configures the action manager.
-func WithActions(act *actions.Manager) Option {
-	return func(s *PortService) {
-		s.actions = act
-	}
-}
-
 // New creates a new PortService instance with sensible defaults and functional options.
 func New(opts ...Option) *PortService {
 	s := &PortService{}
 	for _, opt := range opts {
 		opt(s)
 	}
-	if s.platform == nil {
-		s.platform = platform.New()
-	}
 	if s.inspector == nil {
-		s.inspector = inspector.New(s.platform)
-	}
-	if s.actions == nil {
-		s.actions = actions.NewManager(s.platform, nil, nil)
+		s.inspector = inspector.New(nil)
 	}
 	return s
 }
@@ -216,104 +190,4 @@ func (s *PortService) Scan(ctx context.Context, ports []int32, protocol model.Pr
 	}
 
 	return found, nil
-}
-
-// Kill terminates the process owning the port or specified report.
-func (s *PortService) Kill(ctx context.Context, report *model.Report, force bool) error {
-	if report == nil {
-		return model.ErrPortNotFound
-	}
-	slog.DebugContext(ctx, "service: killing process on port", "port", report.Port, "force", force)
-	return s.actions.Kill(ctx, report, force)
-}
-
-// Restart relaunches the process owning the port or specified report.
-func (s *PortService) Restart(ctx context.Context, report *model.Report) error {
-	if report == nil {
-		return model.ErrPortNotFound
-	}
-	slog.DebugContext(ctx, "service: restarting process on port", "port", report.Port)
-	return s.actions.Restart(ctx, report)
-}
-
-// Open launches the default browser pointing to the service on the port.
-func (s *PortService) Open(ctx context.Context, report *model.Report) error {
-	if report == nil {
-		return model.ErrPortNotFound
-	}
-	slog.DebugContext(ctx, "service: opening port in browser", "port", report.Port)
-	return s.actions.Open(ctx, report)
-}
-
-// Tree resolves the deep report containing process hierarchy for the given port.
-func (s *PortService) Tree(ctx context.Context, port int32) (*model.Report, error) {
-	report, err := s.Inspect(ctx, port, "", inspector.DepthFull)
-	if err != nil {
-		return nil, err
-	}
-	if report.Status != "listening" || report.Process == nil {
-		return report, model.ErrPortNotFound
-	}
-	return report, nil
-}
-
-// Connections retrieves the deep report containing network connections for the given port.
-func (s *PortService) Connections(ctx context.Context, port int32) (*model.Report, error) {
-	report, err := s.Inspect(ctx, port, "", inspector.DepthFull)
-	if err != nil {
-		return nil, err
-	}
-	if report.Status != "listening" || report.Process == nil {
-		return report, model.ErrPortNotFound
-	}
-	return report, nil
-}
-
-// Find resolves ports listening on the host filtered by process name query or PID.
-func (s *PortService) Find(ctx context.Context, query string, pid int) ([]int32, error) {
-	slog.DebugContext(ctx, "service: finding ports", "query", query, "pid", pid)
-	if pid > 0 {
-		entries, err := s.inspector.SearchByPID(ctx, int32(pid))
-		if err != nil {
-			return nil, fmt.Errorf("finding ports for pid %d: %w", pid, err)
-		}
-		var ports []int32
-		for _, e := range entries {
-			ports = append(ports, e.Port)
-		}
-		return ports, nil
-	}
-	if query != "" {
-		entries, err := s.inspector.SearchByName(ctx, query)
-		if err != nil {
-			return nil, fmt.Errorf("finding ports matching %q: %w", query, err)
-		}
-		var ports []int32
-		for _, e := range entries {
-			ports = append(ports, e.Port)
-		}
-		return ports, nil
-	}
-	return nil, fmt.Errorf("%w: query or pid required", model.ErrInvalidArguments)
-}
-
-// NextAvailable finds the lowest unused, bindable port starting from startPort.
-func (s *PortService) NextAvailable(ctx context.Context, startPort int32) (int32, error) {
-	if startPort < 1 || startPort > 65535 {
-		startPort = 3000
-	}
-	slog.DebugContext(ctx, "service: searching next available port", "start_port", startPort)
-
-	for p := startPort; p <= 65535; p++ {
-		if ctx.Err() != nil {
-			return 0, ctx.Err()
-		}
-		// Probe TCP bindability
-		ln, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(int(p)))
-		if err == nil {
-			_ = ln.Close()
-			return p, nil
-		}
-	}
-	return 0, fmt.Errorf("%w: no available ports found above %d", model.ErrPortNotFound, startPort)
 }

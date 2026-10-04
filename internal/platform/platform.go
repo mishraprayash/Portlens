@@ -70,9 +70,6 @@ type ProcessTreeProvider interface {
 type NetworkInspector interface {
 	// Connections returns all active connections owned by a PID.
 	Connections(ctx context.Context, pid int32) ([]model.Connection, error)
-
-	// ListenersForPID returns the sockets a PID is listening on.
-	ListenersForPID(ctx context.Context, pid int32) ([]model.Listener, error)
 }
 
 // ClipboardProvider copies text to the system clipboard.

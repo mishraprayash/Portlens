@@ -51,7 +51,6 @@ type Model struct {
 
 	SelectedReport *model.Report
 	ReportCache    map[int32]*model.Report
-	LoadingReport  bool
 
 	StatusMessage string
 	StatusIsError bool

@@ -57,24 +57,10 @@ func WithPlatform(p *platform.Platform) Option {
 	}
 }
 
-// WithProjectDetector configures the heuristic project detector.
-func WithProjectDetector(d detect.ProjectDetector) Option {
-	return func(i *Inspector) {
-		i.Projects = d
-	}
-}
-
 // WithProbe enables or disables HTTP endpoint probing.
 func WithProbe(enable bool) Option {
 	return func(i *Inspector) {
 		i.EnableProbe = enable
-	}
-}
-
-// WithTimeFunc configures the clock function used for timestamps.
-func WithTimeFunc(now func() time.Time) Option {
-	return func(i *Inspector) {
-		i.Now = now
 	}
 }
 
