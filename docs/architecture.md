@@ -75,8 +75,8 @@ files so they can be unit-tested on any platform.
    command line.
 4. The `model.Report` is produced, including `Facts` (observations) and
    `Inferences` (guesses), plus an exposure assessment.
-5. `render` displays the report; `actions` (invoked through the service facade
-   or directly by the interactive paths) performs any requested mutations.
+5. `render` displays the report; `actions` (invoked directly by `cmd` and the
+   TUI interactive paths) performs any requested mutations.
 
 ## Design decisions
 
