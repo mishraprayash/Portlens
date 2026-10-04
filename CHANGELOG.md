@@ -76,9 +76,24 @@ All notable changes to PortLens are documented here. The format is based on
 - **Linux `/proc` socket link slice bounds safety**: Added defensive validation for socket symlinks in `/proc/<pid>/fd`, eliminating potential slice out-of-bounds panics on malformed symlinks.
 - **macOS `lsof` exit code 1 handling**: Fixed `runLsof` to treat exit code 1 as successful even when partial output is emitted alongside non-fatal warnings (e.g. unprivileged execution), preventing `portlens list` from failing on unprivileged runner environments.
 - **Non-blocking browser launching on Linux**: Launched browser processes asynchronously via `cmd.Start()`, preventing foreground browser processes from locking the PortLens CLI.
+- **Process-table snapshot no longer frozen for the process lifetime**: the
+  hierarchy cache behind `tree`, `connections`, and the TUI's kill/restart
+  actions is refreshed every second, so long-lived sessions see children
+  spawned after startup and never follow recycled PIDs; a failed enumeration
+  is not cached, so the next call retries.
+- **`scan` reports inspection failures**: a port whose inspection errors is
+  counted and surfaced as `portlens: warning: N of M ports could not be
+  inspected: ...` on stderr instead of silently appearing idle; partial
+  failures still exit 0.
+- **`next` and searches honor cancellation**: the next-port loop stops on a
+  canceled context instead of probing up to 65535, and `find --name`/`--pid`
+  plus project detection return early when the context is canceled.
 
 ### Changed
 
+- **`service.Scan` returns a `ScanResult`**: found reports now travel with a
+  failure count and first error (`Failed`, `FirstErr`), so callers can warn
+  about ports they could not inspect instead of dropping them silently.
 - **Subcommand dispatch de-duplicated**: the eleven copies of the per-command
   `--help` scan, the port-target pre-checks, and the action-flag injection
   now flow through shared `wantsHelp`/`runSimple` helpers, and `config`

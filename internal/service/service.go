@@ -77,11 +77,23 @@ func (s *PortService) Inspect(ctx context.Context, port int32, protocol model.Pr
 	return report, nil
 }
 
-// Scan performs parallel port inspection across a collection of ports with live progress reporting.
-func (s *PortService) Scan(ctx context.Context, ports []int32, protocol model.Protocol, onProgress ProgressFunc) ([]*model.Report, error) {
+// ScanResult holds the outcome of a parallel scan: ports confirmed in use,
+// plus any per-port inspection failures — without them a port whose
+// inspection errored would be indistinguishable from an idle port.
+type ScanResult struct {
+	Reports  []*model.Report
+	Failed   int   // ports whose inspection errored
+	FirstErr error // first inspection error, for reporting
+}
+
+// Scan performs parallel port inspection across a collection of ports with
+// live progress reporting. A non-nil error means the scan could not run at
+// all (invalid port, canceled context); per-port failures are reported via
+// ScanResult instead of failing the scan.
+func (s *PortService) Scan(ctx context.Context, ports []int32, protocol model.Protocol, onProgress ProgressFunc) (ScanResult, error) {
 	slog.DebugContext(ctx, "service: scanning ports", "count", len(ports), "protocol", protocol)
 	if len(ports) == 0 {
-		return nil, nil
+		return ScanResult{}, nil
 	}
 
 	start := time.Now()
@@ -111,7 +123,7 @@ func (s *PortService) Scan(ctx context.Context, ports []int32, protocol model.Pr
 
 	for i, p := range ports {
 		if p < 1 || p > 65535 {
-			return nil, fmt.Errorf("%w: %d", model.ErrInvalidPort, p)
+			return ScanResult{}, fmt.Errorf("%w: %d", model.ErrInvalidPort, p)
 		}
 		if activePorts != nil && !activePorts[uint16(p)] {
 			idleCount++
@@ -179,15 +191,22 @@ func (s *PortService) Scan(ctx context.Context, ports []int32, protocol model.Pr
 	}
 
 	if ctx.Err() != nil {
-		return nil, ctx.Err()
+		return ScanResult{}, ctx.Err()
 	}
 
-	var found []*model.Report
-	for _, res := range results {
-		if res.err == nil && res.report != nil && res.report.Status == "listening" {
-			found = append(found, res.report)
+	var res ScanResult
+	for _, r := range results {
+		if r.err != nil {
+			res.Failed++
+			if res.FirstErr == nil {
+				res.FirstErr = r.err
+			}
+			continue
+		}
+		if r.report != nil && r.report.Status == "listening" {
+			res.Reports = append(res.Reports, r.report)
 		}
 	}
 
-	return found, nil
+	return res, nil
 }

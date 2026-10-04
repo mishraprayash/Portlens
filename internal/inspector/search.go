@@ -28,6 +28,9 @@ func (i *Inspector) SearchByName(ctx context.Context, query string) ([]model.Por
 	entries := i.buildEntries(ctx, listeners, infos, func(p *model.ProcessInfo) bool {
 		return matcher.matches(p)
 	})
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	i.attachContainers(ctx, entries)
 	return entries, nil
 }
@@ -64,6 +67,9 @@ func (i *Inspector) SearchByPID(ctx context.Context, pid int32) ([]model.PortEnt
 	entries := i.buildEntries(ctx, listeners, infos, func(p *model.ProcessInfo) bool {
 		return p != nil && contains(p.PID)
 	})
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	i.attachContainers(ctx, entries)
 	return entries, nil
 }

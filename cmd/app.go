@@ -116,11 +116,15 @@ func scanPorts(ctx context.Context, stderr io.Writer, insp *inspector.Inspector,
 		return nil, exitcode.Success
 	}
 	svc := service.New(service.WithInspector(insp))
-	found, err := svc.Scan(ctx, ports, proto, progress)
+	res, err := svc.Scan(ctx, ports, proto, progress)
 	if err != nil {
 		return nil, fail(stderr, mapError(err), "portlens: %v\n", err)
 	}
-	return found, exitcode.Success
+	if res.Failed > 0 {
+		fmt.Fprintf(stderr, "portlens: warning: %d of %d ports could not be inspected: %v\n",
+			res.Failed, len(ports), res.FirstErr)
+	}
+	return res.Reports, exitcode.Success
 }
 
 // scanProgressReporter renders live scan progress to a stream (stderr). On a

@@ -60,3 +60,16 @@ func TestRunNextInvalidProtocol(t *testing.T) {
 		t.Errorf("expected error to name the invalid protocol, got: %s", stderr.String())
 	}
 }
+
+func TestRunNextCanceledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var stdout, stderr bytes.Buffer
+	code := runNext(ctx, nil, &stdout, &stderr)
+	if code != exitcode.Success {
+		t.Errorf("runNext(canceled) = %d, want 0", code)
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("runNext(canceled) wrote %q, want no output", stdout.String())
+	}
+}

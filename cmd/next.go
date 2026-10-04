@@ -86,6 +86,10 @@ func runNext(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 
 	for p := startPort; p <= 65535; p++ {
+		if ctx.Err() != nil {
+			// User interrupted the search: stop instead of probing up to 65535.
+			return exitcode.Success
+		}
 		if inUse[uint16(p)] {
 			continue
 		}

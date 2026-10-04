@@ -16,6 +16,7 @@ type mockInspector struct {
 	pidEntries  map[int32][]model.PortEntry
 	nameEntries map[string][]model.PortEntry
 	err         error
+	errPorts    map[int32]error
 }
 
 func (m *mockInspector) Inspect(_ context.Context, port int32, proto model.Protocol) (*model.Report, error) {
@@ -25,6 +26,9 @@ func (m *mockInspector) Inspect(_ context.Context, port int32, proto model.Proto
 func (m *mockInspector) InspectDepth(_ context.Context, port int32, _ model.Protocol, _ inspector.Depth) (*model.Report, error) {
 	if m.err != nil {
 		return nil, m.err
+	}
+	if err, ok := m.errPorts[port]; ok {
+		return nil, err
 	}
 	if r, ok := m.reports[port]; ok {
 		return r, nil
@@ -101,7 +105,7 @@ func TestPortServiceScan(t *testing.T) {
 	svc := New(WithInspector(mock))
 
 	var progressCalled bool
-	found, err := svc.Scan(context.Background(), []int32{3000, 3001, 3002}, model.ProtocolTCP, func(done, total, found int, _ time.Duration) {
+	res, err := svc.Scan(context.Background(), []int32{3000, 3001, 3002}, model.ProtocolTCP, func(done, total, found int, _ time.Duration) {
 		progressCalled = true
 	})
 	if err != nil {
@@ -110,7 +114,40 @@ func TestPortServiceScan(t *testing.T) {
 	if !progressCalled {
 		t.Errorf("Scan expected progress callback to be invoked")
 	}
-	if len(found) != 1 || found[0].Port != 3000 {
-		t.Errorf("Scan found = %v, want [3000]", found)
+	if len(res.Reports) != 1 || res.Reports[0].Port != 3000 {
+		t.Errorf("Scan found = %v, want [3000]", res.Reports)
+	}
+	if res.Failed != 0 || res.FirstErr != nil {
+		t.Errorf("Scan failed = %d (err %v), want no failures", res.Failed, res.FirstErr)
+	}
+}
+
+func TestPortServiceScanReportsInspectionFailures(t *testing.T) {
+	boom := errors.New("lsof timeout")
+	mock := &mockInspector{
+		entries: []model.PortEntry{
+			{Port: 3000, Protocol: model.ProtocolTCP},
+			{Port: 3001, Protocol: model.ProtocolTCP},
+			{Port: 3002, Protocol: model.ProtocolTCP},
+		},
+		reports: map[int32]*model.Report{
+			3000: {Port: 3000, Status: "listening", Protocol: model.ProtocolTCP},
+		},
+		errPorts: map[int32]error{3001: boom},
+	}
+	svc := New(WithInspector(mock))
+
+	res, err := svc.Scan(context.Background(), []int32{3000, 3001, 3002}, model.ProtocolTCP, nil)
+	if err != nil {
+		t.Fatalf("Scan returned error: %v", err)
+	}
+	if len(res.Reports) != 1 || res.Reports[0].Port != 3000 {
+		t.Errorf("Scan reports = %v, want [3000]", res.Reports)
+	}
+	if res.Failed != 1 {
+		t.Errorf("Scan failed = %d, want 1", res.Failed)
+	}
+	if !errors.Is(res.FirstErr, boom) {
+		t.Errorf("Scan firstErr = %v, want boom", res.FirstErr)
 	}
 }
