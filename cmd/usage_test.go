@@ -15,3 +15,16 @@ func TestPrintUsage(t *testing.T) {
 		}
 	}
 }
+
+// TestHelpListsEveryCommand guards against help/registry drift: a newly
+// registered subcommand must show up in `portlens --help`.
+func TestHelpListsEveryCommand(t *testing.T) {
+	var out bytes.Buffer
+	printUsage(&out)
+	help := out.String()
+	for _, c := range defaultSubcommandRegistry().ordered {
+		if !strings.Contains(help, c.Name()) {
+			t.Errorf("help text missing registered command %q", c.Name())
+		}
+	}
+}

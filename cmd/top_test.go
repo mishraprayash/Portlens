@@ -70,7 +70,7 @@ func TestDispatchTopRegistry(t *testing.T) {
 	if cmd := reg.Lookup("tui"); cmd == nil {
 		t.Errorf("expected 'tui' alias in registry")
 	}
-	if cmd := reg.Lookup("dashboard"); cmd == nil {
-		t.Errorf("expected 'dashboard' alias in registry")
+	if cmd := reg.Lookup("dashboard"); cmd != nil {
+		t.Errorf("undocumented 'dashboard' alias should have been removed")
 	}
 }

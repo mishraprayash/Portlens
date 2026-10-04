@@ -20,6 +20,7 @@ type Subcommand interface {
 // SubcommandRegistry manages available subcommands and their aliases.
 type SubcommandRegistry struct {
 	commands map[string]Subcommand
+	ordered  []Subcommand // canonical commands in registration order
 }
 
 func defaultSubcommandRegistry() *SubcommandRegistry {
@@ -42,6 +43,9 @@ func defaultSubcommandRegistry() *SubcommandRegistry {
 
 // Register adds a subcommand and any aliases to the registry.
 func (r *SubcommandRegistry) Register(cmd Subcommand) {
+	if _, seen := r.commands[cmd.Name()]; !seen {
+		r.ordered = append(r.ordered, cmd)
+	}
 	r.commands[cmd.Name()] = cmd
 	for _, alias := range cmd.Aliases() {
 		r.commands[alias] = cmd
@@ -114,7 +118,7 @@ func (c *listSubcommand) Run(ctx context.Context, args []string, preFlags []stri
 type inspectSubcommand struct{}
 
 func (c *inspectSubcommand) Name() string      { return "inspect" }
-func (c *inspectSubcommand) Aliases() []string { return []string{"info", "show"} }
+func (c *inspectSubcommand) Aliases() []string { return nil }
 func (c *inspectSubcommand) Description() string {
 	return "Inspect port(s) with process details and exposure"
 }
@@ -129,7 +133,7 @@ func (c *inspectSubcommand) Run(ctx context.Context, args []string, preFlags []s
 type killSubcommand struct{}
 
 func (c *killSubcommand) Name() string      { return "kill" }
-func (c *killSubcommand) Aliases() []string { return []string{"stop", "term"} }
+func (c *killSubcommand) Aliases() []string { return nil }
 func (c *killSubcommand) Description() string {
 	return "Gracefully terminate process on port(s) (SIGTERM)"
 }
@@ -189,7 +193,7 @@ func (c *treeSubcommand) Run(ctx context.Context, args []string, preFlags []stri
 type connSubcommand struct{}
 
 func (c *connSubcommand) Name() string      { return "conn" }
-func (c *connSubcommand) Aliases() []string { return []string{"connections", "net"} }
+func (c *connSubcommand) Aliases() []string { return []string{"connections"} }
 func (c *connSubcommand) Description() string {
 	return "Show active network connections for the process"
 }
@@ -220,7 +224,7 @@ func (c *watchSubcommand) Run(ctx context.Context, args []string, preFlags []str
 type findSubcommand struct{}
 
 func (c *findSubcommand) Name() string        { return "find" }
-func (c *findSubcommand) Aliases() []string   { return []string{"search"} }
+func (c *findSubcommand) Aliases() []string   { return nil }
 func (c *findSubcommand) Description() string { return "Find ports by process name/command or PID" }
 func (c *findSubcommand) Run(ctx context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	if wantsHelp(args) {

@@ -95,6 +95,12 @@ All notable changes to PortLens are documented here. The format is based on
 - **`next` and searches honor cancellation**: the next-port loop stops on a
   canceled context instead of probing up to 65535, and `find --name`/`--pid`
   plus project detection return early when the context is canceled.
+- **Shell completion scripts no longer drift from the CLI**: bash, zsh, and
+  fish scripts are generated from the subcommand registry and a single flag
+  table (asserted by tests), instead of three hand-maintained copies. The
+  `top`/`tui` command was missing from all three scripts, and `-t`, `-n`,
+  `--interval`, `--pid`, `--name`, `--protocol`, `--sort`, and `--filter`
+  were missing from some of them.
 
 ### Changed
 
@@ -219,6 +225,11 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Removed
 
+- **Removed eight undocumented command aliases**: `info` and `show`
+  (`inspect`), `stop` and `term` (`kill`), `net` (`conn`), `search` (`find`),
+  `free` (`next`), and `dashboard` (`top`) were hidden duplicate entry points
+  absent from `--help`, the docs, and the shell completions. The documented
+  aliases `ls`, `connections`, and `tui` remain.
 - **Removed `--log <file>`**: Removed internal stdout-teeing flag in favor of standard Unix redirection and pipes (`portlens 3000 > out.txt`, `portlens 3000 | tee out.txt`), simplifying flag handling and adhering to Unix philosophy.
 - **Removed local observation history (`--history`, `--no-record`, `internal/history`)**: Removed disk-based invocation logging, making PortLens completely stateless and zero-footprint, eliminating disk write overhead during scans, and removing privacy concerns around saving command arguments to disk.
 

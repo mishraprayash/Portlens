@@ -15,7 +15,7 @@ import (
 type topSubcommand struct{}
 
 func (c *topSubcommand) Name() string        { return "top" }
-func (c *topSubcommand) Aliases() []string   { return []string{"tui", "dashboard"} }
+func (c *topSubcommand) Aliases() []string   { return []string{"tui"} }
 func (c *topSubcommand) Description() string { return "Full-screen live interactive TUI dashboard" }
 
 func (c *topSubcommand) Run(ctx context.Context, args []string, preFlags []string, stdout, stderr io.Writer, stdin io.Reader) int {
