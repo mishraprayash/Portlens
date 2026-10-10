@@ -8,36 +8,32 @@ build-tagged files; the rest of the codebase is OS-independent.
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ cmd/                                                    │
-│   subcommand dispatch, CLI parsing, exit codes          │
+│   subcommand dispatch, CLI parsing, exit codes, TUI loop │
 ├─────────────────────────────────────────────────────────┤
 │ internal/service/                                       │
 │   PortService application domain facade                 │
 ├─────────────────────────────────────────────────────────┤
-│ internal/render/        internal/actions/               │
-│   terminal UI, tables,   kill / restart / open / copy   │
+│ internal/render/        internal/actions/                │
+│   terminal UI, tables,   kill / restart / open / copy     │
 │   tree, JSON                                            │
 ├─────────────────────────────────────────────────────────┤
-│ internal/tui/                                           │
-│   full-screen dashboard (portlens top), single-flight   │
-│   background refreshes                                  │
-├─────────────────────────────────────────────────────────┤
-│ internal/inspector/                                     │
-│   orchestrates providers → model.Report (+ risk)        │
+│ internal/inspector/                                      │
+│   orchestrates providers → model.Report (+ risk)          │
 ├─────────────────────────────────────────────────────────┤
 │ internal/detect/                                        │
 │   project / runtime / framework detection               │
 ├─────────────────────────────────────────────────────────┤
-│ internal/model/                                         │
+│ internal/model/                                          │
 │   shared OS-independent data types & sentinel errors    │
 ├─────────────────────────────────────────────────────────┤
-│ internal/platform/  (the OS abstraction)                │
-│   PortResolver          ProcessInspector                │
-│   NetworkInspector      ProcessTreeProvider             │
-│   ClipboardProvider     ProcessController               │
+│ internal/platform/  (the OS abstraction)                 │
+│   PortResolver          ProcessInspector                 │
+│   NetworkInspector      ProcessTreeProvider              │
+│   ClipboardProvider     ProcessController                │
 │   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
 │   │ darwin_*.go  │  │ linux_*.go   │  │ windows_*.go │  │
 │   │ sysctl+proc, │  │ /proc, xclip │  │ (planned)    │  │
-│   │ lsof fallback│  │              │  │               │ │
+│   │ lsof fallback│  │              │  │               │  │
 │   └──────────────┘  └──────────────┘  └──────────────┘  │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -56,12 +52,6 @@ implementations live in files with build constraints:
 | `ClipboardProvider`   | `pbcopy`                               | `wl-copy`/`xclip`/`xsel`       |
 | `ProcessController`   | `syscall.Kill`                         | `syscall.Kill`                 |
 
-Two OS side effects — opening a URL and posting a desktop notification — are
-not interfaces but function fields on the `platform.Platform` struct
-(`OpenURL`, `Notify`), defaulted by `platform.New()` and reachable through the
-nil-safe `OpenInBrowser`/`PostNotification` methods. Callers and tests swap
-them directly (see [testing.md](testing.md#testing-side-effects)).
-
 Process metadata is read natively on both platforms — `sysctl` and libproc
 (`proc_pidpath`/`proc_pidinfo`) on macOS, `/proc` on Linux — with no external
 commands. The process tree is built from a single native snapshot per
@@ -74,19 +64,16 @@ files so they can be unit-tested on any platform.
 
 ## Data flow
 
-1. `cmd` parses arguments, resolves the target ports, and hands the request to
-   a `service.PortService` (built with functional options; `cmd` and `internal/tui`
-   are the only constructors in production).
-2. `PortService.List` / `Scan` / `Inspect` call the `inspector.Inspector`
-   behind the facade: `PortResolver.ResolvePort` finds the listeners, then for
-   the owning PID the inspector gathers `ProcessInfo`, ancestors, descendants,
-   and connections via the platform providers.
-3. `detect` infers project/runtime/framework from the working directory and
+1. `cmd` parses arguments and builds a `platform.Platform` and an
+   `inspector.Inspector`.
+2. `Inspector.Inspect(port)` calls `PortResolver.ResolvePort` to find listeners.
+3. For the owning PID, it gathers `ProcessInfo`, ancestors, descendants, and
+   connections via the providers.
+4. `detect` infers project/runtime/framework from the working directory and
    command line.
-4. The `model.Report` is produced, including `Facts` (observations) and
+5. The `model.Report` is produced, including `Facts` (observations) and
    `Inferences` (guesses), plus an exposure assessment.
-5. `render` displays the report; `actions` (invoked directly by `cmd` and the
-   TUI interactive paths) performs any requested mutations.
+6. `render` displays the report; `actions` performs any requested mutations.
 
 ## Design decisions
 

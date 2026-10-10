@@ -3,7 +3,7 @@ package detect
 import (
 	"strings"
 
-	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/portlens/portlens/internal/model"
 )
 
 // userPathPrefixes are locations where user-installed software lives (Homebrew,
@@ -15,7 +15,6 @@ var userPathPrefixes = []string{
 	"/opt/",
 	"/Applications/",
 	"/Users/",
-	"/home/",
 }
 
 // systemPathPrefixes are locations owned by the operating system. On macOS
@@ -35,7 +34,7 @@ var systemPathPrefixes = []string{
 // always resolvable (e.g. launchd jobs or kernel threads); the name alone is a
 // reliable system signal for these.
 var systemProcessNames = map[string]bool{
-	"launchd": true, "kernel_task": true, "mdnsresponder": true, "kdc": true,
+	"launchd": true, "kernel_task": true, "mDNSResponder": true, "kdc": true,
 	"syslogd": true, "configd": true, "notifyd": true, "cfprefsd": true,
 	"taskgated": true, "securityd": true, "logd": true, "symptomsd": true,
 	"rapportd": true, "identityservicesd": true, "sharingd": true,

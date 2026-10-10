@@ -4,37 +4,15 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/portlens/portlens/internal/model"
 )
 
 var titleTagRegex = regexp.MustCompile(`(?i)<title[^>]*>([^<]+)</title>`)
-
-// probeTimeout bounds a single HTTP probe.
-const probeTimeout = 300 * time.Millisecond
-
-// probeClient is shared by every probe. The transport is safe for concurrent
-// use, so a parallel scan allocates one connection pool instead of one per
-// port; keep-alives stay disabled (probes hit many unrelated ports and must
-// not accumulate idle sockets).
-var probeClient = &http.Client{
-	Timeout: probeTimeout,
-	Transport: &http.Transport{
-		DisableKeepAlives: true,
-	},
-	CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		if len(via) >= 2 {
-			return http.ErrUseLastResponse
-		}
-		return nil
-	},
-}
 
 // ProbeHTTP sends a lightweight HTTP GET request to check for an active HTTP service,
 // extracting status code, latency, Server header, and HTML <title>.
@@ -44,9 +22,9 @@ func ProbeHTTP(ctx context.Context, addr string, port uint16) *model.HTTPProbe {
 		host = "127.0.0.1"
 	}
 
-	targetURL := fmt.Sprintf("http://%s/", net.JoinHostPort(host, strconv.Itoa(int(port))))
+	targetURL := fmt.Sprintf("http://%s:%d/", host, port)
 
-	probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+	probeCtx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, targetURL, nil)
@@ -56,8 +34,18 @@ func ProbeHTTP(ctx context.Context, addr string, port uint16) *model.HTTPProbe {
 	req.Header.Set("User-Agent", "PortLens/1.0")
 	req.Header.Set("Accept", "text/html,application/json,*/*")
 
+	client := &http.Client{
+		Timeout: 300 * time.Millisecond,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 2 {
+				return http.ErrUseLastResponse
+			}
+			return nil
+		},
+	}
+
 	start := time.Now()
-	resp, err := probeClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil
 	}

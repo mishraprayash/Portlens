@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mishraprayash/Portlens/internal/detect"
-	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/portlens/portlens/internal/detect"
+	"github.com/portlens/portlens/internal/model"
 )
 
 // Summary renders a compact at-a-glance overview of a single port: status,
@@ -26,7 +26,7 @@ func (r *Renderer) Summary(report *model.Report) {
 	rows := [][2]string{
 		{"Status", strings.ToUpper(report.Status)},
 		{"Protocol", strings.ToUpper(string(report.Protocol.Normalize()))},
-		{"Address", model.FormatAddr(report.Address, uint16(report.Port))},
+		{"Address", formatAddr(report.Address, uint16(report.Port))},
 	}
 	if report.Service != "" {
 		rows = append(rows, [2]string{"Service", report.Service})

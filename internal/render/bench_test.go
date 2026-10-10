@@ -5,7 +5,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/portlens/portlens/internal/model"
 )
 
 func benchReport() *model.Report {

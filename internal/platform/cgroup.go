@@ -26,18 +26,15 @@ func containerIDFromCgroup(text string) string {
 }
 
 func scanContainerID(line string) string {
-	offset := 0
 	for {
-		idx := containerIDToken.FindStringIndex(line[offset:])
+		idx := containerIDToken.FindStringIndex(line)
 		if idx == nil {
 			return ""
 		}
-		start := offset + idx[0]
-		end := offset + idx[1]
-		if !hexNeighbor(line, start, end) {
-			return line[start:end]
+		if !hexNeighbor(line, idx[0], idx[1]) {
+			return line[idx[0]:idx[1]]
 		}
-		offset = end
+		line = line[idx[1]:]
 	}
 }
 

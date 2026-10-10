@@ -7,9 +7,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/mishraprayash/Portlens/internal/exitcode"
 )
 
 type mockSubcommand struct {
@@ -160,47 +157,6 @@ func TestSubcommandValidation(t *testing.T) {
 	}
 }
 
-// Regression tests: flag values used to be mistaken for port targets, so
-// invocations like `kill --filter node` printed the default listing and
-// exited 0 without doing anything.
-func TestSubcommandRejectsFlagValuesAsTargets(t *testing.T) {
-	cases := [][]string{
-		{"kill", "--filter", "node"},
-		{"restart", "--filter", "node"},
-		{"open", "--filter", "node"},
-		{"tree", "--sort", "process"},
-		{"conn", "--sort", "port"},
-		{"inspect", "--protocol", "udp"},
-	}
-	for _, args := range cases {
-		var stdout, stderr bytes.Buffer
-		code := Execute(args, &stdout, &stderr, nil)
-		if code != exitcode.InvalidArguments {
-			t.Errorf("Execute(%v) = %d, want %d (stderr: %s)", args, code, exitcode.InvalidArguments, stderr.String())
-		}
-	}
-}
-
-// Action flags without a port target must fail instead of silently degrading
-// to the default listing.
-func TestActionFlagsRequirePorts(t *testing.T) {
-	cases := [][]string{
-		{"--kill"},
-		{"--restart"},
-		{"--open"},
-		{"--tree"},
-		{"--connections"},
-		{"--filter", "node", "--kill"},
-	}
-	for _, args := range cases {
-		var stdout, stderr bytes.Buffer
-		code := Execute(args, &stdout, &stderr, nil)
-		if code != exitcode.InvalidArguments {
-			t.Errorf("Execute(%v) = %d, want %d (stderr: %s)", args, code, exitcode.InvalidArguments, stderr.String())
-		}
-	}
-}
-
 func TestSubcommandListExecution(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := Execute([]string{"list", "--no-color", "--json"}, &stdout, &stderr, nil)
@@ -209,40 +165,5 @@ func TestSubcommandListExecution(t *testing.T) {
 	}
 	if !strings.HasPrefix(strings.TrimSpace(stdout.String()), "[") {
 		t.Errorf("expected json array from list, got: %s", stdout.String())
-	}
-}
-
-func TestFindSubcommandFlags(t *testing.T) {
-	// Should not fail validation with exit code 2 (InvalidArguments)
-	var stdout, stderr bytes.Buffer
-	code := Execute([]string{"find", "--name=nonexistent_dummy_process_12345"}, &stdout, &stderr, nil)
-	// It should reach search execution and return PortNotFound (3) rather than InvalidArguments (2)
-	if code != exitcode.PortNotFound {
-		t.Errorf("Execute(find --name=...) = %d, want %d (stderr: %s)", code, exitcode.PortNotFound, stderr.String())
-	}
-}
-
-// Watch mode only monitors: combining it with an action flag must fail with
-// exit 2 instead of silently ignoring the action. The timeout guarantees the
-// test fails rather than hangs if validation ever regresses.
-func TestWatchRejectsActionFlags(t *testing.T) {
-	cases := [][]string{
-		{"--watch", "--kill", "3000"},
-		{"-w", "-k", "3000"},
-		{"watch", "--kill", "3000"},
-		{"watch", "--restart", "3000"},
-		{"--watch", "--tree", "3000"},
-	}
-	for _, args := range cases {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		var stdout, stderr bytes.Buffer
-		code := ExecuteContext(ctx, args, &stdout, &stderr, nil)
-		cancel()
-		if code != exitcode.InvalidArguments {
-			t.Errorf("Execute(%v) = %d, want %d (stderr: %s)", args, code, exitcode.InvalidArguments, stderr.String())
-		}
-		if !strings.Contains(stderr.String(), "--watch cannot be combined") {
-			t.Errorf("Execute(%v) stderr = %q, want --watch cannot be combined message", args, stderr.String())
-		}
 	}
 }

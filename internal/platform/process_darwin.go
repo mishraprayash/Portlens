@@ -18,7 +18,7 @@ import (
 	"github.com/ebitengine/purego"
 	"golang.org/x/sys/unix"
 
-	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/portlens/portlens/internal/model"
 )
 
 // Native macOS process metadata. Everything is read through kernel interfaces:
@@ -93,15 +93,12 @@ func darwinProcInfo(pid int32, full bool) (*model.ProcessInfo, error) {
 	}
 
 	info := &model.ProcessInfo{PID: pid, PPID: kp.Eproc.Ppid}
-	comm := cstring(kp.Proc.P_comm[:])
+	info.Name = darwinProcName(pid, cstring(kp.Proc.P_comm[:]))
 
 	exe, cmdline, err := darwinArgs(pid)
 	if err == nil {
 		info.Exe = darwinExePath(pid, exe)
 		info.Cmdline = cmdline
-	}
-	info.Name = darwinProcName(comm, cmdline)
-	if len(cmdline) > 0 {
 		info.Command = commandFromCmdline(cmdline, info.Name)
 	}
 	if cwd := darwinCwd(pid); cwd != "" {
@@ -124,13 +121,15 @@ func darwinProcInfo(pid int32, full bool) (*model.ProcessInfo, error) {
 // darwinProcName returns the process name, extending the kernel comm (which is
 // truncated to 16 bytes) from the argv[0] basename when a longer name is known,
 // mirroring the previous gopsutil behavior.
-func darwinProcName(comm string, cmdline []string) string {
-	if len(comm) < 15 || len(cmdline) == 0 {
+func darwinProcName(pid int32, comm string) string {
+	if len(comm) < 15 {
 		return comm
 	}
-	base := filepath.Base(cmdline[0])
-	if strings.HasPrefix(base, comm) {
-		return base
+	if _, cmdline, err := darwinArgs(pid); err == nil && len(cmdline) > 0 {
+		base := filepath.Base(cmdline[0])
+		if strings.HasPrefix(base, comm) {
+			return base
+		}
 	}
 	return comm
 }
@@ -148,31 +147,22 @@ func darwinArgs(pid int32) (string, []string, error) {
 		return "", nil, ErrProcessNotFound
 	}
 	nargs := int(binary.LittleEndian.Uint32(buf[:4]))
-	rest := buf[8:]
-	idx := bytes.IndexByte(rest, 0)
-	if idx < 0 {
+	rest := bytes.Split(buf[8:], []byte{0})
+	if len(rest) == 0 {
 		return "", nil, nil
 	}
-	exe := string(rest[:idx])
-	rest = rest[idx+1:]
-
+	exe := string(rest[0])
 	argv := make([]string, 0, nargs)
-	for nargs > 0 && len(rest) > 0 {
-		nullIdx := bytes.IndexByte(rest, 0)
-		var token []byte
-		if nullIdx >= 0 {
-			token = rest[:nullIdx]
-			rest = rest[nullIdx+1:]
-		} else {
-			token = rest
-			rest = nil
-		}
-		if len(token) == 0 && len(argv) == 0 {
-			// Skip padding NUL bytes between exec path and argv[0]
+	for _, arg := range rest[1:] {
+		if len(arg) == 0 {
 			continue
 		}
-		argv = append(argv, string(token))
-		nargs--
+		if nargs > 0 {
+			argv = append(argv, string(arg))
+			nargs--
+			continue
+		}
+		break
 	}
 	return exe, argv, nil
 }

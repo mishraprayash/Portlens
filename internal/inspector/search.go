@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mishraprayash/Portlens/internal/detect"
-	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/portlens/portlens/internal/detect"
+	"github.com/portlens/portlens/internal/model"
 )
 
 // SearchByName returns the listening ports owned by processes whose name,
@@ -28,9 +28,6 @@ func (i *Inspector) SearchByName(ctx context.Context, query string) ([]model.Por
 	entries := i.buildEntries(ctx, listeners, infos, func(p *model.ProcessInfo) bool {
 		return matcher.matches(p)
 	})
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
 	i.attachContainers(ctx, entries)
 	return entries, nil
 }
@@ -67,9 +64,6 @@ func (i *Inspector) SearchByPID(ctx context.Context, pid int32) ([]model.PortEnt
 	entries := i.buildEntries(ctx, listeners, infos, func(p *model.ProcessInfo) bool {
 		return p != nil && contains(p.PID)
 	})
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
 	i.attachContainers(ctx, entries)
 	return entries, nil
 }

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/portlens/portlens/internal/model"
 )
 
 func TestSummaryListening(t *testing.T) {

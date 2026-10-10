@@ -4,9 +4,8 @@ import (
 	"context"
 	"sort"
 	"sync"
-	"time"
 
-	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/portlens/portlens/internal/model"
 )
 
 // processRow is the minimal identity needed for hierarchy operations. Building
@@ -21,81 +20,48 @@ type processRow struct {
 // maxTreeDepth guards against cycles or corrupted parent links in the table.
 const maxTreeDepth = 64
 
-// processTable is an immutable snapshot of the OS process table: hierarchy
-// operations are in-memory lookups instead of repeated system scans.
-type processTable struct {
+// processTableTreeProvider builds process hierarchies from a single snapshot of
+// the OS process table, so hierarchy operations are in-memory lookups instead
+// of repeated system scans.
+type processTableTreeProvider struct {
+	once sync.Once
+	rows []processRow
 	byID map[int32]processRow
 	kids map[int32][]int32
+	err  error
 }
-
-// processTableTreeProvider serves hierarchy queries from a short-lived
-// snapshot. The snapshot expires after procTableTTL so long-lived processes
-// (TUI, watch) see children spawned after startup and never follow recycled
-// PIDs; failed builds are never cached.
-type processTableTreeProvider struct {
-	mu      sync.Mutex
-	builtAt time.Time
-	built   bool
-	tbl     *processTable
-	err     error
-	now     func() time.Time
-	ttl     time.Duration
-}
-
-// procTableTTL bounds how stale the cached process hierarchy may be.
-const procTableTTL = time.Second
 
 func newProcessTreeProvider() ProcessTreeProvider {
-	return &processTableTreeProvider{now: time.Now, ttl: procTableTTL}
+	return &processTableTreeProvider{}
 }
 
-// fresh reports whether the cached snapshot may still be used at time now.
-// Failed builds are never fresh, so a transient enumeration error does not
-// stick for the process lifetime.
-func (p *processTableTreeProvider) fresh(now time.Time) bool {
-	return p.built && p.err == nil && now.Sub(p.builtAt) < p.ttl
-}
-
-// table returns the current snapshot, rebuilding it when expired. The
-// returned table is immutable; a rebuild swaps in a new one, so callers that
-// hold it are unaffected by concurrent refreshes.
-func (p *processTableTreeProvider) table() (*processTable, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.fresh(p.now()) {
-		return p.tbl, p.err
-	}
-	p.err = nil
-	p.built = false
-	rows, err := loadProcessTable()
-	if err != nil {
-		p.err = err
-		return nil, err
-	}
-	tbl := &processTable{
-		byID: map[int32]processRow{},
-		kids: map[int32][]int32{},
-	}
-	for _, r := range rows {
-		tbl.byID[r.pid] = r
-		if r.ppid > 0 {
-			tbl.kids[r.ppid] = append(tbl.kids[r.ppid], r.pid)
+func (p *processTableTreeProvider) load() {
+	p.once.Do(func() {
+		p.byID = map[int32]processRow{}
+		p.kids = map[int32][]int32{}
+		rows, err := loadProcessTable()
+		if err != nil {
+			p.err = err
+			return
 		}
-	}
-	for _, kids := range tbl.kids {
-		sort.Slice(kids, func(i, j int) bool { return kids[i] < kids[j] })
-	}
-	p.tbl = tbl
-	p.builtAt = p.now()
-	p.built = true
-	return tbl, nil
+		p.rows = rows
+		for _, r := range rows {
+			p.byID[r.pid] = r
+			if r.ppid > 0 {
+				p.kids[r.ppid] = append(p.kids[r.ppid], r.pid)
+			}
+		}
+		for _, kids := range p.kids {
+			sort.Slice(kids, func(i, j int) bool { return kids[i] < kids[j] })
+		}
+	})
 }
 
 // Ancestors returns the chain from the PID up to the root, oldest first.
 func (p *processTableTreeProvider) Ancestors(_ context.Context, pid int32) ([]*model.ProcessInfo, error) {
-	tbl, err := p.table()
-	if err != nil {
-		return nil, err
+	p.load()
+	if p.err != nil {
+		return nil, p.err
 	}
 	var chain []*model.ProcessInfo
 	seen := map[int32]bool{}
@@ -105,7 +71,7 @@ func (p *processTableTreeProvider) Ancestors(_ context.Context, pid int32) ([]*m
 			break
 		}
 		seen[cur] = true
-		row, ok := tbl.byID[cur]
+		row, ok := p.byID[cur]
 		if !ok {
 			break
 		}
@@ -121,14 +87,14 @@ func (p *processTableTreeProvider) Ancestors(_ context.Context, pid int32) ([]*m
 
 // Children returns the direct children of a PID from the same snapshot.
 func (p *processTableTreeProvider) Children(_ context.Context, pid int32) ([]*model.ProcessInfo, error) {
-	tbl, err := p.table()
-	if err != nil {
-		return nil, err
+	p.load()
+	if p.err != nil {
+		return nil, p.err
 	}
-	kids := tbl.kids[pid]
+	kids := p.kids[pid]
 	out := make([]*model.ProcessInfo, 0, len(kids))
 	for _, k := range kids {
-		r := tbl.byID[k]
+		r := p.byID[k]
 		out = append(out, &model.ProcessInfo{PID: r.pid, PPID: r.ppid, Name: r.name})
 	}
 	return out, nil
@@ -136,11 +102,11 @@ func (p *processTableTreeProvider) Children(_ context.Context, pid int32) ([]*mo
 
 // Descendants returns the full descendant tree from the same snapshot.
 func (p *processTableTreeProvider) Descendants(_ context.Context, pid int32) (*model.ProcessTree, error) {
-	tbl, err := p.table()
-	if err != nil {
-		return nil, err
+	p.load()
+	if p.err != nil {
+		return nil, p.err
 	}
-	row, ok := tbl.byID[pid]
+	row, ok := p.byID[pid]
 	if !ok {
 		return nil, ErrProcessNotFound
 	}
@@ -151,8 +117,8 @@ func (p *processTableTreeProvider) Descendants(_ context.Context, pid int32) (*m
 			return
 		}
 		seen[current] = true
-		for _, k := range tbl.kids[current] {
-			kr := tbl.byID[k]
+		for _, k := range p.kids[current] {
+			kr := p.byID[k]
 			child := &model.ProcessTree{Process: model.ProcessInfo{PID: kr.pid, PPID: kr.ppid, Name: kr.name}}
 			node.Children = append(node.Children, child)
 			build(child, k, depth+1, seen)

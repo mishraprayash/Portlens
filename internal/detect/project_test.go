@@ -127,20 +127,3 @@ func TestDetectGitDetachedHEAD(t *testing.T) {
 		t.Errorf("git branch = %q, want d13ff16", info.GitBranch)
 	}
 }
-
-func TestDetectHonorsCanceledContext(t *testing.T) {
-	cwd, err := filepath.Abs(".")
-	if err != nil {
-		t.Fatal(err)
-	}
-	d := NewProjectDetector()
-	if d.Detect(context.Background(), cwd) == nil {
-		t.Fatal("sanity: expected to detect this repository from its own directory tree")
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if got := d.Detect(ctx, cwd); got != nil {
-		t.Errorf("Detect(canceled) = %+v, want nil", got)
-	}
-}

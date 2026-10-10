@@ -28,8 +28,7 @@ or reworked:
 
 1. **Local-first, always.** Never add telemetry, cloud calls, or anything that
    transmits process/environment data. PortLens reads the machine it runs on
-   and keeps everything (config) on that machine; it writes no history or
-   telemetry files.
+   and keeps everything (history, config) on that machine.
 2. **Never silently kill.** Destructive actions must confirm first. Graceful
    (SIGTERM) before force (SIGKILL), and never escalate privileges.
 3. **Separate facts from inferences.** Anything guessed must be labeled as
@@ -77,7 +76,6 @@ internal/            Non-exported implementation packages
   detect/            Project/runtime/framework detection heuristics
   service/           Application service facade coordinating domain use cases
   render/            Human output (summary, report, tree, connections, JSON)
-  tui/               Full-screen interactive dashboard (portlens top / tui)
   actions/           State-changing operations (kill, restart, open, copy)
   config/            User config: named port groups (@name)
   exitcode/          Process exit codes
@@ -97,8 +95,7 @@ past `internal/platform`.
 make fmt             # gofmt all files
 make lint            # gofmt check (fails) + go vet
 make test            # full unit + integration suite (no cache)
-make cover           # same suite with an aggregate coverage percentage
-make check           # lint + build + test + cross: the gate CI runs
+make check           # lint + test: the same gate CI runs
 make build           # build to ./bin/portlens
 make install         # install to $GOBIN
 make cross           # verify macOS/Linux cross-compilation
@@ -116,19 +113,13 @@ make build
 
 ## Running and testing
 
-> **Always go through `make`.** A bare `go test ./...` uses the toolchain's
-> default `CGO_ENABLED=1`, which on macOS + Go 1.23 produces test binaries that
-> dyld refuses to load (`missing LC_UUID load command`, `signal: abort trap`).
-> The `Makefile` exports `CGO_ENABLED=0`, so `make test` / `make check` always
-> work. See [docs/testing.md](docs/testing.md) for the full testing guide.
-
 - **Unit tests** live next to the code they test (`package_test.go`), in the
   same package. Test pure logic with no OS involvement whenever possible
   (parsers, matchers, config round-trips, render output).
 - **Integration tests** live in `tests/integration` and spawn **controlled**
   test processes (an HTTP server helper). Never assume a particular process is
   running on the developer's machine.
-- Run everything with `make check` before opening a PR. CI runs the same
+- Run everything with `make test` before opening a PR. CI runs the same
   commands with `-count=1` on both Linux and macOS.
 
 When writing tests:
@@ -158,36 +149,6 @@ When writing tests:
 - **No secrets, ever.** The user configuration is user-local; keep it that way
   and never log its contents.
 
-### House patterns
-
-These conventions came out of the architecture cleanup; follow them when
-adding code so the codebase stays consistent:
-
-- **Inject side effects, don't call them.** Anything that leaves the process —
-  opening a browser, posting a desktop notification — goes through a function
-  field on `platform.Platform` (`OpenURL`, `Notify`; nil-safe wrappers
-  `OpenInBrowser`/`PostNotification`). Tests pass fakes instead of stubbing a
-  global. See `internal/actions/open_test.go`.
-- **CLI errors go through one helper.** Return the exit code from
-  `fail(stderr, code, format, args...)` (see `cmd/errors.go`) and map errors
-  with `mapError`/`model.MapExitCode`, so message and code cannot drift apart.
-- **Caches: TTL, never cache failures.** Shared caches (Docker list, inode
-  map, project-detection memo) expire after a fixed window and skip storing
-  errors, so a transient failure is retried. Correctness beats cache hits on
-  the single-port resolve path — see the rebuild-on-miss rule in
-  `internal/platform/linux_port.go`.
-- **Publish immutable snapshots.** Shared tables (the darwin process table,
-  cache contents) are built aside and swapped in under a mutex; readers use
-  the returned snapshot, never fields being mutated in place. This is what
-  keeps the suite race-clean.
-- **Coalesce background work.** TUI refreshes/refetches go through the
-  `singleFlight` helper (`internal/tui/flight.go`) so slow scans cannot stack
-  one goroutine per tick or keystroke.
-- **Inject the clock in tests.** Anything time-based takes an
-  `now func() time.Time` (or a controllable cache clock) so tests advance time
-  explicitly instead of sleeping — see `internal/platform/container_test.go`
-  and `internal/detect/memo_test.go`.
-
 ## How to add a feature
 
 A typical end-to-end feature touches:
@@ -201,10 +162,6 @@ A typical end-to-end feature touches:
 6. **`cmd/usage.go`** and `README.md` / `docs/usage.md` — help text and docs.
 7. **`CHANGELOG.md`** — a bullet under `[Unreleased]`.
 
-If the feature performs an action or surfaces one interactively, wire it
-through `internal/actions` (and `internal/tui` if the TUI should expose it)
-rather than calling platform functions directly.
-
 Write tests as you go; don't defer them to the end.
 
 ## How to add a platform (e.g. Windows)
@@ -212,10 +169,9 @@ Write tests as you go; don't defer them to the end.
 To support a new OS, create `internal/platform/windows_*.go` files that
 implement the existing interfaces — `PortResolver`, `NetworkInspector`,
 `ProcessInspector`, `ProcessTreeProvider`, `ClipboardProvider`,
-`ProcessController` — plus the small standalone functions (`Notify`,
-`OpenURL`), which `New()` wires into the `Platform`'s `Notify`/`OpenURL`
-fields. Wire the constructors into `internal/platform/new.go`. No other code
-needs to change. Keep every platform command inside these files.
+`ProcessController` — plus the small standalone functions (`Notify`, `OpenURL`).
+Wire the constructors into `internal/platform/new.go`. No other code needs to
+change. Keep every platform command inside these files.
 
 ## Commits and pull requests
 
@@ -231,9 +187,7 @@ needs to change. Keep every platform command inside these files.
    make check
    ```
    This runs `gofmt` check, `go vet`, and the full test suite. CI runs the same
-   thing on Linux and macOS, plus a `-race` job and a coverage job on Linux —
-   all must pass. (`-race` needs cgo, which is blocked on macOS by the
-   toolchain issue described above; rely on the Linux race job.)
+   thing on Linux and macOS and must pass.
 5. **Update `CHANGELOG.md`** under `[Unreleased]`, and `README.md`/docs if the
    user-facing behavior changed.
 6. **Review:** keep PRs reviewable — add a short description, reference the

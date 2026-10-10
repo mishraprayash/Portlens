@@ -3,7 +3,7 @@ package inspector
 import (
 	"strings"
 
-	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/portlens/portlens/internal/model"
 )
 
 var shellNames = map[string]bool{

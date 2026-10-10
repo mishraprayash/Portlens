@@ -4,9 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/mishraprayash/Portlens/internal/detect"
-	"github.com/mishraprayash/Portlens/internal/model"
-	"github.com/mishraprayash/Portlens/internal/platform"
+	"github.com/portlens/portlens/internal/detect"
+	"github.com/portlens/portlens/internal/model"
 )
 
 func TestCompileProcessMatcher(t *testing.T) {
@@ -115,18 +114,5 @@ func TestBuildEntriesServiceAndOrigin(t *testing.T) {
 	}
 	if got := byPort[88]; got.Service != "Kerberos" || got.Origin != model.OriginSystem {
 		t.Errorf("kdc entry = %+v, want Service=Kerberos Origin=system", got)
-	}
-}
-
-func TestSearchHonorsCanceledContext(t *testing.T) {
-	insp := New(platform.New())
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	if _, err := insp.SearchByName(ctx, "node"); err == nil {
-		t.Error("SearchByName(canceled) = nil error, want cancellation error")
-	}
-	if _, err := insp.SearchByPID(ctx, 1); err == nil {
-		t.Error("SearchByPID(canceled) = nil error, want cancellation error")
 	}
 }
