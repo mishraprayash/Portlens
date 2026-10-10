@@ -39,11 +39,29 @@ jobs:
       - name: Test
         run: go test -count=1 ./...
 
-      - name: Cross-compile (linux/amd64)
-        run: GOOS=linux GOARCH=amd64 go build -o /dev/null .
+      - name: Cross-compile matrix
+        run: make cross
 
-      - name: Cross-compile (darwin/arm64)
-        run: GOOS=darwin GOARCH=arm64 go build -o /dev/null .
+  coverage:
+    name: coverage (linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+
+      - name: Coverage
+        run: |
+          make cover | tee coverage.txt
+          {
+            echo '### Coverage'
+            echo '```'
+            tail -n 1 coverage.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   race:
     name: race detector (linux)

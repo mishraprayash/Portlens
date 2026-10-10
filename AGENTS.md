@@ -21,8 +21,8 @@ runs. Before opening a PR or pushing to `main`:
    ```bash
    make check        # gofmt check + go vet + full test suite (-count=1)
    ```
-   CI runs the same checks on Linux and macOS; if CI fails, fix it before
-   pushing further.
+   CI runs the same checks on Linux and macOS, plus a `-race` job and a
+   coverage job on Linux; if CI fails, fix it before pushing further.
 4. For every change:
    - Add/update tests covering the change.
    - Update `CHANGELOG.md` under `[Unreleased]`.

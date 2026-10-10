@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/platform"
+	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/platform"
 )
 
 type stubController struct {

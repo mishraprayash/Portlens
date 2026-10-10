@@ -14,10 +14,10 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/portlens/portlens/internal/config"
-	"github.com/portlens/portlens/internal/exitcode"
-	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/version"
+	"github.com/mishraprayash/Portlens/internal/config"
+	"github.com/mishraprayash/Portlens/internal/exitcode"
+	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/version"
 )
 
 var errHelp = errors.New("help requested")
@@ -84,7 +84,7 @@ func ExecuteContext(ctx context.Context, args []string, stdout, stderr io.Writer
 
 	for _, a := range args {
 		if a == "--_complete_ports" {
-			return runCompletePorts(stdout)
+			return runCompletePorts(ctx, stdout)
 		}
 	}
 
@@ -99,9 +99,7 @@ func ExecuteContext(ctx context.Context, args []string, stdout, stderr io.Writer
 func executeCore(ctx context.Context, args []string, stdout, stderr io.Writer, stdin io.Reader) int {
 	expanded, err := expandGroups(args, configGroupLookup)
 	if err != nil {
-		fmt.Fprintf(stderr, "portlens: %v\n", err)
-		fmt.Fprintf(stderr, "Manage groups with: portlens config add <name> <port> [port ...]\n")
-		return exitcode.InvalidArguments
+		return fail(stderr, exitcode.InvalidArguments, "portlens: %v\nManage groups with: portlens config add <name> <port> [port ...]\n", err)
 	}
 
 	opts, err := parseArgs(expanded)
@@ -110,9 +108,7 @@ func executeCore(ctx context.Context, args []string, stdout, stderr io.Writer, s
 		return exitcode.Success
 	}
 	if err != nil {
-		fmt.Fprintf(stderr, "portlens: %v\n", err)
-		fmt.Fprintf(stderr, "Run 'portlens --help' for usage.\n")
-		return exitcode.InvalidArguments
+		return fail(stderr, exitcode.InvalidArguments, "portlens: %v\nRun 'portlens --help' for usage.\n", err)
 	}
 	if opts.help {
 		printUsage(stdout)
@@ -130,6 +126,12 @@ func executeCore(ctx context.Context, args []string, stdout, stderr io.Writer, s
 		}
 	}
 
+	// Actions and per-port views need a concrete target. Without one they
+	// would silently degrade to the default listing (e.g. `portlens --kill`).
+	if len(opts.ports) == 0 && requiresPortTarget(opts) {
+		return fail(stderr, exitcode.InvalidArguments, "portlens: no ports to act on; pass port(s), --all, --pid, or --name\nRun 'portlens --help' for usage.\n")
+	}
+
 	if opts.watch {
 		return runWatch(ctx, stdout, stderr, opts)
 	}
@@ -145,6 +147,91 @@ func parseArgs(args []string) (*options, error) {
 	fs := flag.NewFlagSet("portlens", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 
+	registerFlags(fs, opts)
+
+	reordered := reorderArgs(args)
+	if err := fs.Parse(reordered.flags); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil, errHelp
+		}
+		return nil, err
+	}
+
+	// Record which flags were explicitly supplied so zero values can be
+	// distinguished from "not provided" during validation.
+	provided := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { provided[f.Name] = true })
+
+	if provided["pid"] && opts.pid <= 0 {
+		return nil, fmt.Errorf("--pid must be a positive process ID")
+	}
+	if provided["name"] && strings.TrimSpace(opts.name) == "" {
+		return nil, fmt.Errorf("--name must not be empty")
+	}
+	if provided["interval"] && opts.interval <= 0 {
+		return nil, fmt.Errorf("--interval must be a positive number of seconds")
+	}
+	if opts.interval > 0 && !opts.watch {
+		return nil, fmt.Errorf("--interval requires --watch")
+	}
+	if opts.notify && !opts.watch {
+		return nil, fmt.Errorf("--notify requires --watch")
+	}
+	// Watch mode only monitors; running an action once per tick was
+	// previously accepted and silently ignored.
+	if opts.watch && (opts.kill || opts.restart || opts.open || opts.tree || opts.connections) {
+		return nil, fmt.Errorf("--watch cannot be combined with --kill, --restart, --open, --tree, or --connections")
+	}
+
+	rest := reordered.positional
+	if len(rest) > 0 && (opts.all || opts.pid > 0 || opts.name != "") {
+		return nil, fmt.Errorf("cannot combine explicit ports with --all, --pid, or --name")
+	}
+	for _, arg := range rest {
+		if strings.HasPrefix(arg, "@") {
+			return nil, fmt.Errorf("unknown port group %q", arg)
+		}
+		ports, err := parsePortArg(arg)
+		if err != nil {
+			return nil, err
+		}
+		opts.ports = append(opts.ports, ports...)
+	}
+	opts.ports = dedupePorts(opts.ports)
+
+	switch strings.ToLower(opts.protocol) {
+	case "", "tcp", "tcp4", "tcp6":
+		if opts.protocol != "" {
+			opts.onlyTCP = true
+		}
+	case "udp", "udp4", "udp6":
+	default:
+		return nil, fmt.Errorf("invalid --protocol %q (must be tcp or udp)", opts.protocol)
+	}
+
+	if opts.onlyTCP && opts.protocol == "" {
+		opts.protocol = "tcp"
+	}
+
+	switch opts.sortBy {
+	case "", "port":
+		opts.sortBy = "port"
+	case "process", "project", "runtime":
+	default:
+		return nil, fmt.Errorf("invalid --sort %q (must be port, process, project, or runtime)", opts.sortBy)
+	}
+
+	if opts.force && !opts.kill {
+		return nil, fmt.Errorf("--force requires --kill")
+	}
+
+	return opts, nil
+}
+
+// registerFlags declares every root-level flag on fs. parseArgs uses it to
+// parse arguments and tests/completion use it to enumerate the same set, so
+// the CLI's flag inventory exists in exactly one place.
+func registerFlags(fs *flag.FlagSet, opts *options) {
 	fs.BoolVar(&opts.tree, "tree", false, "")
 	fs.BoolVar(&opts.tree, "t", false, "")
 	fs.BoolVar(&opts.connections, "connections", false, "")
@@ -183,71 +270,6 @@ func parseArgs(args []string) (*options, error) {
 	fs.StringVar(&opts.protocol, "protocol", "", "")
 	fs.StringVar(&opts.sortBy, "sort", "port", "")
 	fs.StringVar(&opts.filter, "filter", "", "")
-
-	reordered := reorderArgs(args)
-	if err := fs.Parse(reordered.flags); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return nil, errHelp
-		}
-		return nil, err
-	}
-
-	// Record which flags were explicitly supplied so zero values can be
-	// distinguished from "not provided" during validation.
-	provided := map[string]bool{}
-	fs.Visit(func(f *flag.Flag) { provided[f.Name] = true })
-
-	if provided["pid"] && opts.pid <= 0 {
-		return nil, fmt.Errorf("--pid must be a positive process ID")
-	}
-	if provided["name"] && strings.TrimSpace(opts.name) == "" {
-		return nil, fmt.Errorf("--name must not be empty")
-	}
-	if provided["interval"] && opts.interval <= 0 {
-		return nil, fmt.Errorf("--interval must be a positive number of seconds")
-	}
-	if opts.interval > 0 && !opts.watch {
-		return nil, fmt.Errorf("--interval requires --watch")
-	}
-	if opts.notify && !opts.watch {
-		return nil, fmt.Errorf("--notify requires --watch")
-	}
-
-	rest := reordered.positional
-	if len(rest) > 0 && (opts.all || opts.pid > 0 || opts.name != "") {
-		return nil, fmt.Errorf("cannot combine explicit ports with --all, --pid, or --name")
-	}
-	for _, arg := range rest {
-		if strings.HasPrefix(arg, "@") {
-			return nil, fmt.Errorf("unknown port group %q", arg)
-		}
-		ports, err := parsePortArg(arg)
-		if err != nil {
-			return nil, err
-		}
-		opts.ports = append(opts.ports, ports...)
-	}
-	opts.ports = dedupePorts(opts.ports)
-
-	switch strings.ToLower(opts.protocol) {
-	case "", "tcp", "tcp4", "tcp6":
-		if opts.protocol != "" {
-			opts.onlyTCP = true
-		}
-	case "udp", "udp4", "udp6":
-	default:
-		return nil, fmt.Errorf("invalid --protocol %q (must be tcp or udp)", opts.protocol)
-	}
-
-	if opts.onlyTCP && opts.protocol == "" {
-		opts.protocol = "tcp"
-	}
-
-	if opts.force && !opts.kill {
-		return nil, fmt.Errorf("--force requires --kill")
-	}
-
-	return opts, nil
 }
 
 // parsePortArg parses a single port or a port range: "3000", "3000-3010", or
@@ -309,6 +331,35 @@ func reorderArgs(args []string) argSplit {
 		out.positional = append(out.positional, a)
 	}
 	return out
+}
+
+// hasPortTarget reports whether args carries a port target: a positional
+// port, range, or @group, or a dynamic source (--all, --pid, --name) that is
+// resolved at runtime by resolveDynamicPorts. Flag values such as
+// "--filter node" are not mistaken for ports.
+func hasPortTarget(args []string) bool {
+	split := reorderArgs(args)
+	if len(split.positional) > 0 {
+		return true
+	}
+	for _, f := range split.flags {
+		name := strings.TrimLeft(f, "-")
+		if eq := strings.IndexByte(name, '='); eq >= 0 {
+			name = name[:eq]
+		}
+		switch name {
+		case "all", "pid", "name":
+			return true
+		}
+	}
+	return false
+}
+
+// requiresPortTarget reports whether opts requests an action or per-port view
+// that cannot apply to the default listing. Such invocations need at least
+// one resolved port to do anything meaningful.
+func requiresPortTarget(opts *options) bool {
+	return opts.kill || opts.restart || opts.open || opts.tree || opts.connections
 }
 
 // dedupePorts removes duplicate ports while preserving first-seen order.
@@ -380,8 +431,7 @@ func osSignalContext() (context.Context, context.CancelFunc) {
 // exitcode.Success on success or a nonzero exit code on failure.
 func resolveDynamicPorts(ctx context.Context, stdout, stderr io.Writer, opts *options) int {
 	if len(opts.ports) > 0 {
-		fmt.Fprintf(stderr, "portlens: cannot combine explicit ports with --all/--pid/--name\n")
-		return exitcode.InvalidArguments
+		return fail(stderr, exitcode.InvalidArguments, "portlens: cannot combine explicit ports with --all/--pid/--name\n")
 	}
 	insp := newInspector(opts)
 	var entries []model.PortEntry
@@ -395,12 +445,10 @@ func resolveDynamicPorts(ctx context.Context, stdout, stderr io.Writer, opts *op
 		entries, err = insp.List(ctx)
 	}
 	if err != nil {
-		fmt.Fprintf(stderr, "portlens: %v\n", err)
-		return mapError(err)
+		return fail(stderr, mapError(err), "portlens: %v\n", err)
 	}
 	if len(entries) == 0 {
-		fmt.Fprintf(stderr, "portlens: no %s\n", describeTarget(opts))
-		return exitcode.PortNotFound
+		return fail(stderr, exitcode.PortNotFound, "portlens: no %s\n", describeTarget(opts))
 	}
 	for _, e := range entries {
 		opts.ports = append(opts.ports, e.Port)

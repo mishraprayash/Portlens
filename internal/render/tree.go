@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 // procLabel returns a short, readable label for a process in the tree view.
@@ -12,21 +12,10 @@ func procLabel(p *model.ProcessInfo) string {
 	if p == nil {
 		return "?"
 	}
-	if p.Command != "" && !isGenericName(p.Name) {
-		return p.Command
-	}
 	if p.Command != "" {
 		return p.Command
 	}
 	return p.Name
-}
-
-func isGenericName(name string) bool {
-	switch strings.ToLower(name) {
-	case "node", "python", "python3", "ruby", "java", "sh", "bash", "zsh":
-		return true
-	}
-	return false
 }
 
 // treeNode is a rendering-oriented process tree node.
@@ -51,10 +40,13 @@ func (r *Renderer) renderProcessTree(report *model.Report) string {
 func buildTree(report *model.Report) *treeNode {
 	var root, cur *treeNode
 	for _, a := range report.Ancestors {
-		node := &treeNode{info: a}
+		info := a
+		isTarget := false
 		if report.Process != nil && a.PID == report.Process.PID {
-			node.isTarget = true
+			isTarget = true
+			info = report.Process
 		}
+		node := &treeNode{info: info, isTarget: isTarget}
 		if root == nil {
 			root, cur = node, node
 			continue

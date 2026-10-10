@@ -8,6 +8,7 @@ package model
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -107,6 +108,24 @@ type Container struct {
 	Status         string `json:"status,omitempty"` // e.g. "running", "exited"
 	ComposeProject string `json:"compose_project,omitempty"`
 	ComposeService string `json:"compose_service,omitempty"`
+}
+
+// ShortID returns the container ID trimmed to its leading 12 characters,
+// the conventional display form for Docker/Compose IDs.
+func (c *Container) ShortID() string {
+	if len(c.ID) > 12 {
+		return c.ID[:12]
+	}
+	return c.ID
+}
+
+// DisplayName returns the runtime-assigned name, falling back to the short ID
+// when the runtime did not assign one.
+func (c *Container) DisplayName() string {
+	if c.Name != "" {
+		return c.Name
+	}
+	return c.ShortID()
 }
 
 // ProcessTree is a node in a process hierarchy.
@@ -223,6 +242,52 @@ type PortEntry struct {
 	Address   string     `json:"address"`
 	Status    string     `json:"status"`
 	Origin    Origin     `json:"origin,omitempty"` // system | user (heuristic)
+}
+
+// FormatAddr renders an address:port pair for display, bracketing IPv6
+// literals ([::1]:5432) so they stay unambiguous. It is the single place
+// PortLens formats socket addresses for humans; JSON output uses the raw
+// Address and Port fields instead.
+func FormatAddr(addr string, port uint16) string {
+	if strings.Contains(addr, ":") {
+		return fmt.Sprintf("[%s]:%d", addr, port)
+	}
+	return fmt.Sprintf("%s:%d", addr, port)
+}
+
+// Matches reports whether the entry contains q as a case-insensitive
+// substring of any searchable field: port, process, service, project,
+// runtime, address, status, origin, protocol, or the container's name,
+// image, and compose coordinates. Surrounding whitespace in q is ignored,
+// and an empty query matches every entry.
+//
+// This is the one filter predicate behind both the rendered table's --filter
+// flag and the interactive TUI's filter mode.
+func (e *PortEntry) Matches(q string) bool {
+	if q == "" {
+		return true
+	}
+	q = strings.ToLower(strings.TrimSpace(q))
+	if strings.Contains(strconv.Itoa(int(e.Port)), q) {
+		return true
+	}
+	for _, field := range []string{e.Process, e.Service, e.Project, e.Runtime, e.Address, e.Status, string(e.Origin)} {
+		if strings.Contains(strings.ToLower(field), q) {
+			return true
+		}
+	}
+	if strings.Contains(strings.ToLower(string(e.Protocol)), q) ||
+		strings.Contains(string(e.Protocol.Normalize()), q) {
+		return true
+	}
+	if c := e.Container; c != nil {
+		for _, field := range []string{c.Name, c.Image, c.ComposeProject, c.ComposeService} {
+			if strings.Contains(strings.ToLower(field), q) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // FormatDuration renders a duration in a compact human-friendly form.

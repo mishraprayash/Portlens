@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/portlens/portlens/internal/actions"
+	"github.com/mishraprayash/Portlens/internal/actions"
 )
 
 func isTerminalFd(fd uintptr) bool {

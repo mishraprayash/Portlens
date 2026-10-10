@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/platform"
+	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/platform"
 )
 
 // stubContainer is a recordContainerProvider that records container actions.

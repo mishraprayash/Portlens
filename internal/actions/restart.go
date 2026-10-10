@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/portlens/portlens/internal/inspector"
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/inspector"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 // Restart relaunches the owning process (or restarts the owning container). For
@@ -89,8 +89,10 @@ func (m *Manager) Restart(ctx context.Context, report *model.Report) error {
 
 // defaultProcessStarter spawns a process detached from the current terminal
 // session with stdio connected to os.DevNull so background logs do not bleed into the shell.
-func defaultProcessStarter(ctx context.Context, argv []string, cwd string) (int, error) {
-	run := exec.CommandContext(ctx, argv[0], argv[1:]...)
+func defaultProcessStarter(_ context.Context, argv []string, cwd string) (int, error) {
+	// exec.Command without context is required so that Go's runtime does not kill
+	// the detached process when PortLens exits and ctx is cancelled.
+	run := exec.Command(argv[0], argv[1:]...)
 	if cwd != "" {
 		run.Dir = cwd
 	}
@@ -114,7 +116,7 @@ func defaultProcessStarter(ctx context.Context, argv []string, cwd string) (int,
 
 // restartContainer restarts a container via the container runtime.
 func (m *Manager) restartContainer(ctx context.Context, c *model.Container) error {
-	name := containerActionName(c)
+	name := c.DisplayName()
 	fmt.Fprintf(m.Out, "Restarting container %s\n", name)
 	if m.Confirm != nil {
 		ok, err := m.Confirm(fmt.Sprintf("Restart container %s? [y/N] ", name))
