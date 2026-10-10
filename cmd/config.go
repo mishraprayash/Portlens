@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mishraprayash/Portlens/internal/config"
-	"github.com/mishraprayash/Portlens/internal/exitcode"
+	"github.com/portlens/portlens/internal/config"
+	"github.com/portlens/portlens/internal/exitcode"
 )
 
 // runConfig dispatches the `portlens config` subcommand, which manages named
@@ -39,29 +39,11 @@ func runConfig(args []string, stdout, stderr io.Writer) int {
 	}
 }
 
-// loadConfig reads the group config, reporting the standard
-// "portlens config: %v" error (exit 1) when the file cannot be read.
-// On failure it returns a nil config and the exit code to return.
-func loadConfig(stderr io.Writer) (*config.Config, int) {
+func configList(stdout, stderr io.Writer) int {
 	c, err := config.Load()
 	if err != nil {
-		return nil, fail(stderr, exitcode.GeneralError, "portlens config: %v\n", err)
-	}
-	return c, exitcode.Success
-}
-
-// saveConfig writes the group config back with the standard error handling.
-func saveConfig(c *config.Config, stderr io.Writer) int {
-	if err := c.Save(); err != nil {
-		return fail(stderr, exitcode.GeneralError, "portlens config: %v\n", err)
-	}
-	return exitcode.Success
-}
-
-func configList(stdout, stderr io.Writer) int {
-	c, code := loadConfig(stderr)
-	if c == nil {
-		return code
+		fmt.Fprintf(stderr, "portlens config: %v\n", err)
+		return exitcode.GeneralError
 	}
 	names := c.GroupNames()
 	if len(names) == 0 {
@@ -78,15 +60,18 @@ func configList(stdout, stderr io.Writer) int {
 
 func configShow(args []string, stdout, stderr io.Writer) int {
 	if len(args) != 1 {
-		return fail(stderr, exitcode.InvalidArguments, "usage: portlens config show <name>\n")
+		fmt.Fprintln(stderr, "usage: portlens config show <name>")
+		return exitcode.InvalidArguments
 	}
-	c, code := loadConfig(stderr)
-	if c == nil {
-		return code
+	c, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(stderr, "portlens config: %v\n", err)
+		return exitcode.GeneralError
 	}
 	ports, ok := c.Ports(args[0])
 	if !ok {
-		return fail(stderr, exitcode.InvalidArguments, "portlens config: group %q not found\n", args[0])
+		fmt.Fprintf(stderr, "portlens config: group %q not found\n", args[0])
+		return exitcode.InvalidArguments
 	}
 	fmt.Fprintln(stdout, formatPorts(ports))
 	return exitcode.Success
@@ -94,28 +79,33 @@ func configShow(args []string, stdout, stderr io.Writer) int {
 
 func configAdd(args []string, stdout, stderr io.Writer) int {
 	if len(args) < 2 {
-		return fail(stderr, exitcode.InvalidArguments, "usage: portlens config add <name> <port|range> [port|range ...]\n")
+		fmt.Fprintln(stderr, "usage: portlens config add <name> <port|range> [port|range ...]")
+		return exitcode.InvalidArguments
 	}
 	name := args[0]
 	var ports []int32
 	for _, a := range args[1:] {
 		p, err := parsePortArg(a)
 		if err != nil {
-			return fail(stderr, exitcode.InvalidArguments, "portlens config: %v\n", err)
+			fmt.Fprintf(stderr, "portlens config: %v\n", err)
+			return exitcode.InvalidArguments
 		}
 		ports = append(ports, p...)
 	}
 	ports = dedupePorts(ports)
 
-	c, code := loadConfig(stderr)
-	if c == nil {
-		return code
+	c, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(stderr, "portlens config: %v\n", err)
+		return exitcode.GeneralError
 	}
 	if err := c.SetGroup(name, ports); err != nil {
-		return fail(stderr, exitcode.InvalidArguments, "portlens config: %v\n", err)
+		fmt.Fprintf(stderr, "portlens config: %v\n", err)
+		return exitcode.InvalidArguments
 	}
-	if code := saveConfig(c, stderr); code != exitcode.Success {
-		return code
+	if err := c.Save(); err != nil {
+		fmt.Fprintf(stderr, "portlens config: %v\n", err)
+		return exitcode.GeneralError
 	}
 	fmt.Fprintf(stdout, "Saved group @%s: %s\n", name, formatPorts(ports))
 	return exitcode.Success
@@ -123,17 +113,21 @@ func configAdd(args []string, stdout, stderr io.Writer) int {
 
 func configRemove(args []string, stdout, stderr io.Writer) int {
 	if len(args) != 1 {
-		return fail(stderr, exitcode.InvalidArguments, "usage: portlens config remove <name>\n")
+		fmt.Fprintln(stderr, "usage: portlens config remove <name>")
+		return exitcode.InvalidArguments
 	}
-	c, code := loadConfig(stderr)
-	if c == nil {
-		return code
+	c, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(stderr, "portlens config: %v\n", err)
+		return exitcode.GeneralError
 	}
 	if !c.RemoveGroup(args[0]) {
-		return fail(stderr, exitcode.InvalidArguments, "portlens config: group %q not found\n", args[0])
+		fmt.Fprintf(stderr, "portlens config: group %q not found\n", args[0])
+		return exitcode.InvalidArguments
 	}
-	if code := saveConfig(c, stderr); code != exitcode.Success {
-		return code
+	if err := c.Save(); err != nil {
+		fmt.Fprintf(stderr, "portlens config: %v\n", err)
+		return exitcode.GeneralError
 	}
 	fmt.Fprintf(stdout, "Removed group @%s\n", args[0])
 	return exitcode.Success

@@ -3,11 +3,12 @@ package service
 import (
 	"context"
 	"errors"
+	"net"
 	"testing"
 	"time"
 
-	"github.com/mishraprayash/Portlens/internal/inspector"
-	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/portlens/portlens/internal/inspector"
+	"github.com/portlens/portlens/internal/model"
 )
 
 type mockInspector struct {
@@ -16,7 +17,6 @@ type mockInspector struct {
 	pidEntries  map[int32][]model.PortEntry
 	nameEntries map[string][]model.PortEntry
 	err         error
-	errPorts    map[int32]error
 }
 
 func (m *mockInspector) Inspect(_ context.Context, port int32, proto model.Protocol) (*model.Report, error) {
@@ -26,9 +26,6 @@ func (m *mockInspector) Inspect(_ context.Context, port int32, proto model.Proto
 func (m *mockInspector) InspectDepth(_ context.Context, port int32, _ model.Protocol, _ inspector.Depth) (*model.Report, error) {
 	if m.err != nil {
 		return nil, m.err
-	}
-	if err, ok := m.errPorts[port]; ok {
-		return nil, err
 	}
 	if r, ok := m.reports[port]; ok {
 		return r, nil
@@ -105,7 +102,7 @@ func TestPortServiceScan(t *testing.T) {
 	svc := New(WithInspector(mock))
 
 	var progressCalled bool
-	res, err := svc.Scan(context.Background(), []int32{3000, 3001, 3002}, model.ProtocolTCP, func(done, total, found int, _ time.Duration) {
+	found, err := svc.Scan(context.Background(), []int32{3000, 3001, 3002}, model.ProtocolTCP, func(done, total, found int, _ time.Duration) {
 		progressCalled = true
 	})
 	if err != nil {
@@ -114,40 +111,52 @@ func TestPortServiceScan(t *testing.T) {
 	if !progressCalled {
 		t.Errorf("Scan expected progress callback to be invoked")
 	}
-	if len(res.Reports) != 1 || res.Reports[0].Port != 3000 {
-		t.Errorf("Scan found = %v, want [3000]", res.Reports)
-	}
-	if res.Failed != 0 || res.FirstErr != nil {
-		t.Errorf("Scan failed = %d (err %v), want no failures", res.Failed, res.FirstErr)
+	if len(found) != 1 || found[0].Port != 3000 {
+		t.Errorf("Scan found = %v, want [3000]", found)
 	}
 }
 
-func TestPortServiceScanReportsInspectionFailures(t *testing.T) {
-	boom := errors.New("lsof timeout")
+func TestPortServiceFind(t *testing.T) {
 	mock := &mockInspector{
-		entries: []model.PortEntry{
-			{Port: 3000, Protocol: model.ProtocolTCP},
-			{Port: 3001, Protocol: model.ProtocolTCP},
-			{Port: 3002, Protocol: model.ProtocolTCP},
+		pidEntries: map[int32][]model.PortEntry{
+			1234: {{Port: 8080}, {Port: 8081}},
 		},
-		reports: map[int32]*model.Report{
-			3000: {Port: 3000, Status: "listening", Protocol: model.ProtocolTCP},
+		nameEntries: map[string][]model.PortEntry{
+			"node": {{Port: 3000}},
 		},
-		errPorts: map[int32]error{3001: boom},
 	}
 	svc := New(WithInspector(mock))
 
-	res, err := svc.Scan(context.Background(), []int32{3000, 3001, 3002}, model.ProtocolTCP, nil)
+	ports, err := svc.Find(context.Background(), "", 1234)
+	if err != nil || len(ports) != 2 {
+		t.Errorf("Find by pid = %v, err = %v", ports, err)
+	}
+
+	ports, err = svc.Find(context.Background(), "node", 0)
+	if err != nil || len(ports) != 1 || ports[0] != 3000 {
+		t.Errorf("Find by name = %v, err = %v", ports, err)
+	}
+
+	_, err = svc.Find(context.Background(), "", 0)
+	if !errors.Is(err, model.ErrInvalidArguments) {
+		t.Errorf("Find without args err = %v, want ErrInvalidArguments", err)
+	}
+}
+
+func TestPortServiceNextAvailable(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("Scan returned error: %v", err)
+		t.Skip("cannot bind tcp listener")
 	}
-	if len(res.Reports) != 1 || res.Reports[0].Port != 3000 {
-		t.Errorf("Scan reports = %v, want [3000]", res.Reports)
+	defer ln.Close()
+	boundPort := int32(ln.Addr().(*net.TCPAddr).Port)
+
+	svc := New()
+	next, err := svc.NextAvailable(context.Background(), boundPort)
+	if err != nil {
+		t.Fatalf("NextAvailable err = %v", err)
 	}
-	if res.Failed != 1 {
-		t.Errorf("Scan failed = %d, want 1", res.Failed)
-	}
-	if !errors.Is(res.FirstErr, boom) {
-		t.Errorf("Scan firstErr = %v, want boom", res.FirstErr)
+	if next == boundPort {
+		t.Errorf("NextAvailable returned occupied port %d", boundPort)
 	}
 }

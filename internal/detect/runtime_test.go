@@ -3,7 +3,7 @@ package detect
 import (
 	"testing"
 
-	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/portlens/portlens/internal/model"
 )
 
 func TestDetectRuntime(t *testing.T) {

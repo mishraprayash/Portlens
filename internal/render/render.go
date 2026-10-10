@@ -6,7 +6,6 @@ package render
 import (
 	"io"
 	"os"
-	"strings"
 
 	"golang.org/x/term"
 )
@@ -31,10 +30,21 @@ func WithColor(color bool) Option {
 	}
 }
 
+// WithWidth sets the line width for horizontal rules and tables.
+func WithWidth(width int) Option {
+	return func(r *Renderer) {
+		if width > 0 {
+			r.Width = width
+		}
+	}
+}
+
 // NewRenderer builds a Renderer using functional options.
 func NewRenderer(w io.Writer, opts ...Option) *Renderer {
 	r := &Renderer{W: w, Width: DefaultWidth}
+	isTerm := false
 	if f, ok := w.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		isTerm = true
 		r.Color = true
 		if width, _, err := term.GetSize(int(f.Fd())); err == nil && width > 0 {
 			r.Width = width
@@ -43,12 +53,22 @@ func NewRenderer(w io.Writer, opts ...Option) *Renderer {
 	for _, opt := range opts {
 		opt(r)
 	}
+	// Piped or non-terminal output never carries color escapes unless w is a terminal.
+	if !isTerm {
+		r.Color = false
+	}
 	return r
 }
 
 // New builds a Renderer with color flag (retained for backward compatibility).
 func New(w io.Writer, color bool) *Renderer {
 	return NewRenderer(w, WithColor(color))
+}
+
+// IsInteractive reports whether the output writer is a terminal.
+func (r *Renderer) IsInteractive() bool {
+	f, ok := r.W.(*os.File)
+	return ok && term.IsTerminal(int(f.Fd()))
 }
 
 func (r *Renderer) write(s string) {
@@ -65,6 +85,7 @@ func (r *Renderer) dim(s string) string     { return r.wrap("2", s) }
 func (r *Renderer) red(s string) string     { return r.wrap("31", s) }
 func (r *Renderer) green(s string) string   { return r.wrap("32", s) }
 func (r *Renderer) yellow(s string) string  { return r.wrap("33", s) }
+func (r *Renderer) blue(s string) string    { return r.wrap("34", s) }
 func (r *Renderer) magenta(s string) string { return r.wrap("35", s) }
 func (r *Renderer) cyan(s string) string    { return r.wrap("36", s) }
 
@@ -105,14 +126,11 @@ func (r *Renderer) kv(rows [][2]string) string {
 		}
 	}
 	pad += 3
-	var sb strings.Builder
+	out := ""
 	for _, row := range rows {
-		sb.WriteString(r.dim(row[0]))
-		sb.WriteString(spaces(pad - len(row[0])))
-		sb.WriteString(row[1])
-		sb.WriteByte('\n')
+		out += r.dim(row[0]) + spaces(pad-len(row[0])) + row[1] + "\n"
 	}
-	return sb.String()
+	return out
 }
 
 func spaces(n int) string {

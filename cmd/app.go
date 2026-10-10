@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mishraprayash/Portlens/internal/actions"
-	"github.com/mishraprayash/Portlens/internal/exitcode"
-	"github.com/mishraprayash/Portlens/internal/inspector"
-	"github.com/mishraprayash/Portlens/internal/model"
-	"github.com/mishraprayash/Portlens/internal/platform"
-	"github.com/mishraprayash/Portlens/internal/render"
-	"github.com/mishraprayash/Portlens/internal/service"
+	"github.com/portlens/portlens/internal/actions"
+	"github.com/portlens/portlens/internal/exitcode"
+	"github.com/portlens/portlens/internal/inspector"
+	"github.com/portlens/portlens/internal/model"
+	"github.com/portlens/portlens/internal/platform"
+	"github.com/portlens/portlens/internal/render"
+	"github.com/portlens/portlens/internal/service"
 )
 
 // newInspector builds an inspector honoring the --no-docker escape hatch: when
@@ -32,17 +32,30 @@ func newInspector(opts *options) *inspector.Inspector {
 	return inspector.New(plat, inspOpts...)
 }
 
-// newService builds the list/scan service on top of newInspector so the
-// platform wiring (no-docker, probe flags) lives in one place.
-func newService(opts *options) *service.PortService {
-	return service.New(service.WithInspector(newInspector(opts)))
+func newService(opts *options, out io.Writer, confirm actions.ConfirmFunc) *service.PortService {
+	plat := platform.New()
+	if opts != nil && opts.noDocker {
+		plat.Containers = nil
+	}
+	var inspOpts []inspector.Option
+	if opts != nil && opts.probe {
+		inspOpts = append(inspOpts, inspector.WithProbe(true))
+	}
+	insp := inspector.New(plat, inspOpts...)
+	act := actions.NewManager(plat, out, confirm)
+	return service.New(
+		service.WithPlatform(plat),
+		service.WithInspector(insp),
+		service.WithActions(act),
+	)
 }
 
 func runListing(ctx context.Context, stdout, stderr io.Writer, opts *options) int {
-	svc := newService(opts)
+	svc := newService(opts, stdout, nil)
 	entries, err := svc.List(ctx, opts.onlyTCP)
 	if err != nil {
-		return fail(stderr, mapError(err), "portlens: %v\n", err)
+		fmt.Fprintf(stderr, "portlens: %v\n", err)
+		return mapError(err)
 	}
 	if opts.jsonOut {
 		_ = render.JSONList(stdout, entries)
@@ -116,15 +129,12 @@ func scanPorts(ctx context.Context, stderr io.Writer, insp *inspector.Inspector,
 		return nil, exitcode.Success
 	}
 	svc := service.New(service.WithInspector(insp))
-	res, err := svc.Scan(ctx, ports, proto, progress)
+	found, err := svc.Scan(ctx, ports, proto, progress)
 	if err != nil {
-		return nil, fail(stderr, mapError(err), "portlens: %v\n", err)
+		fmt.Fprintf(stderr, "portlens: %v\n", err)
+		return nil, mapError(err)
 	}
-	if res.Failed > 0 {
-		fmt.Fprintf(stderr, "portlens: warning: %d of %d ports could not be inspected: %v\n",
-			res.Failed, len(ports), res.FirstErr)
-	}
-	return res.Reports, exitcode.Success
+	return found, exitcode.Success
 }
 
 // scanProgressReporter renders live scan progress to a stream (stderr). On a
@@ -168,31 +178,23 @@ func (p *scanProgressReporter) Finish() {
 // Progress goes to stderr so stdout stays clean for the results. The shared
 // scanPorts loop and the --log stdout tee keep this free of per-command logic.
 func runScan(ctx context.Context, stdout, stderr io.Writer, opts *options) int {
+	insp := newInspector(opts)
+	proto := protocolFrom(opts)
+
 	total := len(opts.ports)
+	start := time.Now()
 	fmt.Fprintf(stdout, "%s\n", scanHeader(opts.ports))
 
-	found, worst, elapsed := scanAll(ctx, stderr, opts)
+	reporter := newScanProgressReporter(stderr)
+	found, worst := scanPorts(ctx, stderr, insp, proto, opts.ports, reporter.Report)
+	reporter.Finish()
+	elapsed := time.Since(start)
 
 	entries := reportsToEntries(found)
 	r := render.New(stdout, !opts.noColor)
 	r.List(entries, render.ListOptions{SortBy: opts.sortBy, Filter: opts.filter, OnlyTCP: opts.onlyTCP})
 	fmt.Fprintf(stdout, "\nFound %d of %d ports in use in %s.\n", len(found), total, formatElapsed(elapsed))
 	return worst
-}
-
-// scanAll runs the shared scan pipeline — progress reporting to progressW,
-// then parallel collection — and returns the in-use reports. Callers print
-// the header and summary on the stream their output format requires.
-func scanAll(ctx context.Context, progressW io.Writer, opts *options) (found []*model.Report, worst int, elapsed time.Duration) {
-	insp := newInspector(opts)
-	proto := protocolFrom(opts)
-
-	start := time.Now()
-	reporter := newScanProgressReporter(progressW)
-	found, worst = scanPorts(ctx, progressW, insp, proto, opts.ports, reporter.Report)
-	reporter.Finish()
-	elapsed = time.Since(start)
-	return found, worst, elapsed
 }
 
 // writeScanProgress writes a progress line with count, percent, ETA, and the
@@ -263,10 +265,17 @@ func formatElapsed(d time.Duration) string {
 // The scan preamble and live progress go to stderr so stdout stays a pure JSON
 // payload, ready to pipe into jq or a file.
 func runPortsJSON(ctx context.Context, stdout, stderr io.Writer, opts *options) int {
+	insp := newInspector(opts)
+	proto := protocolFrom(opts)
+
 	total := len(opts.ports)
+	start := time.Now()
 	fmt.Fprintln(stderr, scanHeader(opts.ports))
 
-	found, worst, elapsed := scanAll(ctx, stderr, opts)
+	reporter := newScanProgressReporter(stderr)
+	found, worst := scanPorts(ctx, stderr, insp, proto, opts.ports, reporter.Report)
+	reporter.Finish()
+	elapsed := time.Since(start)
 
 	_ = render.JSONReports(stdout, found)
 	fmt.Fprintf(stderr, "Found %d of %d ports in use in %s.\n", len(found), total, formatElapsed(elapsed))
@@ -281,6 +290,14 @@ func protocolFrom(opts *options) model.Protocol {
 	default:
 		return model.ProtocolTCP
 	}
+}
+
+// maxExit returns the more severe exit code (higher numeric value wins).
+func maxExit(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // renderReport renders a report: the compact Summary by default, or the full
@@ -309,7 +326,8 @@ func runPort(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, opt
 			}
 			return exitcode.PortNotFound
 		}
-		return fail(stderr, mapError(err), "portlens: %v\n", err)
+		fmt.Fprintf(stderr, "portlens: %v\n", err)
+		return mapError(err)
 	}
 
 	r := render.New(stdout, !opts.noColor)
@@ -349,51 +367,39 @@ func runPort(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, opt
 	}
 }
 
-// runAction executes an actions.Manager call and translates its error into a
-// fail() message and exit code. special handles action-specific errors with
-// tailored messages; otherwise the failure is reported as "<label> failed: %v"
-// with the exit code from model.MapExitCode.
-func runAction(out io.Writer, label string, fn func() error, special func(err error) (int, string, bool)) int {
-	if err := fn(); err != nil {
-		if special != nil {
-			if code, msg, ok := special(err); ok {
-				return fail(out, code, "%s", msg)
-			}
+func runKill(ctx context.Context, mgr *actions.Manager, report *model.Report, opts *options) int {
+	err := mgr.Kill(ctx, report, opts.force)
+	if err != nil {
+		var still *actions.ErrStillRunning
+		if errors.As(err, &still) {
+			fmt.Fprintf(mgr.Out, "Process %d did not exit; use --kill --force to force termination.\n", still.PID)
+			return exitcode.ProcessActionFailed
 		}
-		return fail(out, mapError(err), "%s failed: %v\n", label, err)
+		fmt.Fprintf(mgr.Out, "kill failed: %v\n", err)
+		return mapError(err)
 	}
 	return exitcode.Success
 }
 
-func runKill(ctx context.Context, mgr *actions.Manager, report *model.Report, opts *options) int {
-	return runAction(mgr.Out, "kill", func() error {
-		return mgr.Kill(ctx, report, opts.force)
-	}, func(err error) (int, string, bool) {
-		var still *actions.ErrStillRunning
-		if errors.As(err, &still) {
-			return exitcode.ProcessActionFailed,
-				fmt.Sprintf("Process %d did not exit; use --kill --force to force termination.\n", still.PID), true
-		}
-		return 0, "", false
-	})
-}
-
 func runRestart(ctx context.Context, mgr *actions.Manager, report *model.Report) int {
-	return runAction(mgr.Out, "restart", func() error {
-		return mgr.Restart(ctx, report)
-	}, func(err error) (int, string, bool) {
+	if err := mgr.Restart(ctx, report); err != nil {
 		if errors.Is(err, actions.ErrRestartUnavailable) {
-			return exitcode.ProcessActionFailed,
-				"Automatic restart is unavailable.\nThe process was not launched from an interactive shell in a way PortLens can reproduce.\n", true
+			fmt.Fprintf(mgr.Out, "Automatic restart is unavailable.\n")
+			fmt.Fprintf(mgr.Out, "The process was not launched from an interactive shell in a way PortLens can reproduce.\n")
+			return exitcode.ProcessActionFailed
 		}
-		return 0, "", false
-	})
+		fmt.Fprintf(mgr.Out, "restart failed: %v\n", err)
+		return mapError(err)
+	}
+	return exitcode.Success
 }
 
 func runOpen(ctx context.Context, mgr *actions.Manager, report *model.Report) int {
-	return runAction(mgr.Out, "open", func() error {
-		return mgr.Open(ctx, report)
-	}, nil)
+	if err := mgr.Open(ctx, report); err != nil {
+		fmt.Fprintf(mgr.Out, "open failed: %v\n", err)
+		return mapError(err)
+	}
+	return exitcode.Success
 }
 
 func mapError(err error) int {

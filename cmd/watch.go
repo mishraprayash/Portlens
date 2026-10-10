@@ -12,11 +12,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mishraprayash/Portlens/internal/exitcode"
-	"github.com/mishraprayash/Portlens/internal/inspector"
-	"github.com/mishraprayash/Portlens/internal/model"
-	"github.com/mishraprayash/Portlens/internal/platform"
-	"github.com/mishraprayash/Portlens/internal/render"
+	"github.com/portlens/portlens/internal/exitcode"
+	"github.com/portlens/portlens/internal/inspector"
+	"github.com/portlens/portlens/internal/model"
+	"github.com/portlens/portlens/internal/platform"
+	"github.com/portlens/portlens/internal/render"
 )
 
 // watchSnap captures the observed state of the watched targets at one point in
@@ -41,8 +41,6 @@ func runWatch(ctx context.Context, stdout, stderr io.Writer, opts *options) int 
 
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
-
-	plat := platform.New()
 
 	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	defer ticker.Stop()
@@ -86,7 +84,7 @@ func runWatch(ctx context.Context, stdout, stderr io.Writer, opts *options) int 
 		// The first tick only establishes a baseline; notifications are posted
 		// when a later tick detects an actual change.
 		if opts.notify && !first {
-			notifyChanges(plat, ctx, diffWatch(prev, cur))
+			notifyChanges(ctx, diffWatch(prev, cur))
 		}
 		prev = cur
 		first = false
@@ -192,7 +190,7 @@ func isDown(v string) bool {
 	return strings.HasPrefix(v, "down")
 }
 
-func notifyChanges(plat *platform.Platform, ctx context.Context, changes []watchChange) {
+func notifyChanges(ctx context.Context, changes []watchChange) {
 	for _, c := range changes {
 		title := "PortLens"
 		switch c.kind {
@@ -201,7 +199,7 @@ func notifyChanges(plat *platform.Platform, ctx context.Context, changes []watch
 		case "down":
 			title = "PortLens: down"
 		}
-		_ = plat.PostNotification(ctx, title, changeText(c))
+		_ = platform.Notify(ctx, title, changeText(c))
 	}
 }
 

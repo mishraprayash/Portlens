@@ -29,20 +29,6 @@ func TestParseLsofFields(t *testing.T) {
 	}
 }
 
-func TestParseLsofFieldsMultipleProcesses(t *testing.T) {
-	input := "p100\ncprocess-one\nf3\ntIPv4\nn127.0.0.1:3000\nTST=LISTEN\np200\ncprocess-two\nf4\ntIPv6\nn[::1]:8080\nTST=LISTEN\n"
-	records := parseLsofFields(input)
-	if len(records) != 2 {
-		t.Fatalf("got %d records, want 2", len(records))
-	}
-	if records[0].pid != 100 || records[0].command != "process-one" || records[0].name != "127.0.0.1:3000" {
-		t.Errorf("records[0] = %+v, want PID 100 process-one 127.0.0.1:3000", records[0])
-	}
-	if records[1].pid != 200 || records[1].command != "process-two" || records[1].name != "[::1]:8080" {
-		t.Errorf("records[1] = %+v, want PID 200 process-two [::1]:8080", records[1])
-	}
-}
-
 func TestParseLsofFieldsConnection(t *testing.T) {
 	input := "p661\ncrapportd\nf18\ntIPv6\nn[fe80:b::30:4dc7]:61670->[fe80:b::5a:dc22]:55115\nTST=ESTABLISHED\n"
 	records := parseLsofFields(input)

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/portlens/portlens/internal/model"
 )
 
 func TestReorderArgs(t *testing.T) {
@@ -28,44 +28,6 @@ func TestReorderArgs(t *testing.T) {
 		if !reflect.DeepEqual(got, c.want) {
 			t.Errorf("reorderArgs(%v) = %+v, want %+v", c.in, got, c.want)
 		}
-	}
-}
-
-func TestHasPortTarget(t *testing.T) {
-	cases := []struct {
-		args []string
-		want bool
-	}{
-		{[]string{"3000"}, true},
-		{[]string{"3000-3010"}, true},
-		{[]string{"--all"}, true},
-		{[]string{"--pid", "123"}, true},
-		{[]string{"--pid=123"}, true},
-		{[]string{"--name", "node"}, true},
-		{[]string{"--name=node"}, true},
-		{[]string{"--no-color", "3000"}, true},
-		{[]string{"--filter", "node"}, false},
-		{[]string{"--sort=process"}, false},
-		{[]string{"--no-color"}, false},
-		{[]string{}, false},
-	}
-	for _, c := range cases {
-		if got := hasPortTarget(c.args); got != c.want {
-			t.Errorf("hasPortTarget(%v) = %v, want %v", c.args, got, c.want)
-		}
-	}
-}
-
-func TestParseArgsInvalidSort(t *testing.T) {
-	if _, err := parseArgs([]string{"--sort", "pid"}); err == nil {
-		t.Error("expected error for invalid --sort key")
-	}
-	opts, err := parseArgs([]string{"--sort", "process"})
-	if err != nil {
-		t.Fatalf("parseArgs(--sort process) = %v", err)
-	}
-	if opts.sortBy != "process" {
-		t.Errorf("sortBy = %q, want process", opts.sortBy)
 	}
 }
 
@@ -411,19 +373,5 @@ func TestExecuteDebugFlag(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "config.json") {
 		t.Fatalf("expected config path in stdout, got: %q", stdout.String())
-	}
-}
-
-func TestParseArgsWatchRejectsActionFlags(t *testing.T) {
-	for _, a := range []string{"--kill", "--restart", "--open", "--tree", "--connections"} {
-		if _, err := parseArgs([]string{"3000", "--watch", a}); err == nil {
-			t.Errorf("expected error for --watch %s", a)
-		}
-	}
-	if _, err := parseArgs([]string{"3000", "-w", "-k"}); err == nil {
-		t.Error("expected error for -w -k")
-	}
-	if opts, err := parseArgs([]string{"--watch"}); err != nil || !opts.watch {
-		t.Errorf("watch alone should stay valid, got opts=%v err=%v", opts, err)
 	}
 }

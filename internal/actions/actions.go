@@ -10,8 +10,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/mishraprayash/Portlens/internal/model"
-	"github.com/mishraprayash/Portlens/internal/platform"
+	"github.com/portlens/portlens/internal/model"
+	"github.com/portlens/portlens/internal/platform"
 )
 
 // ConfirmFunc prompts the user and reports whether to proceed.
@@ -191,7 +191,7 @@ func (m *Manager) lookupContainer(ctx context.Context, report *model.Report) *mo
 // confirms first; a force stop mirrors the process force-kill semantics and
 // does not prompt.
 func (m *Manager) killContainer(ctx context.Context, c *model.Container, force bool) error {
-	name := c.DisplayName()
+	name := containerActionName(c)
 	if force {
 		fmt.Fprintf(m.Out, "Force-stopping container %s\n", name)
 		if err := m.Platform.Containers.Kill(ctx, c.ID); err != nil {
@@ -219,7 +219,18 @@ func (m *Manager) killContainer(ctx context.Context, c *model.Container, force b
 
 // containerActionName renders a container name for messages, using the runtime
 // name when available and a short ID otherwise.
-// Copy places text on the system clipboard.
+func containerActionName(c *model.Container) string {
+	if c.Name != "" {
+		return c.Name
+	}
+	id := c.ID
+	if len(id) > 12 {
+		id = id[:12]
+	}
+	return id
+}
+
+// Copy sends text to the system clipboard.
 func (m *Manager) Copy(ctx context.Context, text string) error {
 	return m.Platform.Clipboard.Copy(ctx, text)
 }

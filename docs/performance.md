@@ -55,14 +55,10 @@ Design rules for the hot path:
 - **No process-table scans.** Children/Descendants/Ancestors are computed only
   at deep depth, from one native snapshot.
 - **Lazy project/runtime detection** (walk-up from the working directory) runs
-  only when an owning process is confirmed, and is memoized per working
-  directory for five seconds (negative results included), so scans across a
-  range of ports hit the filesystem once per project, not once per port.
+  only when an owning process is confirmed.
 - **Container detection** fails fast: on Linux it reads `/proc/<pid>/cgroup`
   (a kernel fact); the Docker daemon socket is only dialed afterwards and a
-  missing socket fails immediately. A successful container list is shared for
-  one second, so a multi-port scan makes one daemon round trip instead of one
-  per port. Failures are never cached.
+  missing socket fails immediately.
 
 ## Cold (deep) path
 
@@ -167,10 +163,8 @@ Inspection micro-benchmarks (live port, owned by the benchmark process):
 ## Syscall strategy
 
 - **Linux port lookup:** read `/proc/net/{tcp,tcp6,udp,udp6}`, then map socket
-  inodes to owners with one `/proc/<pid>/fd` scan cached in a shared
-  one-second-TTL map (`sharedInodeMap`). Single-port resolution rebuilds the
-  map once when a listening row comes back without an owner, so a server that
-  just started is still attributed correctly. Zero external processes.
+  inodes to owners with one `/proc/<pid>/fd` scan per invocation (cached via
+  `sync.Once`). Zero external processes.
 - **macOS port lookup:** one `lsof` spawn (see Known bottlenecks).
 - **Process tree:** one snapshot per invocation (sysctl or /proc); hierarchy
   queries are pure in-memory lookups afterwards.
@@ -192,35 +186,11 @@ Inspection micro-benchmarks (live port, owned by the benchmark process):
 
 ## Concurrency strategy
 
-Inspection and scan paths are **synchronous** — a single port needs one
-`lsof`/`/proc` read and one metadata call, so goroutine/channel overhead
-exceeds the work. Deep inspection is sequential over the shared in-memory
-table. If per-port inspection of *very large* scans ever becomes a
-bottleneck, bounded worker pools would be evaluated — never unbounded
-per-process goroutines.
-
-Background work that does run concurrently (the TUI's periodic refreshes and
-report refetches) is coalesced with a **single-flight** helper
-(`internal/tui/flight.go`): at most one run executes at a time and any calls
-arriving mid-run collapse into exactly one queued follow-up, so slow scans
-stack up as one pending rerun instead of a goroutine per tick or keystroke.
-
-## Caching strategy
-
-Shared hot-path caches follow three rules:
-
-1. **TTL, not forever** — the Linux inode→PID map and the Docker container
-   list are reused for one second; project detection is memoized per working
-   directory for five seconds.
-2. **Never cache failures** — a failed Docker query or project detection miss
-   is retried on the next lookup rather than poisoning the cache.
-3. **Correctness first on the resolve path** — single-port resolution
-   refreshes the inode map when a listener has no owner (see Syscall
-   strategy); caches serve listing/watch throughput, not truth.
-
-Published snapshots (the darwin process table, cache contents) are immutable:
-they are built off to the side and swapped in under a mutex, never mutated in
-place while readers hold them.
+Intentionally **no goroutines** in the lookup paths. A single port needs one
+`lsof`/`/proc` read and one metadata call; goroutine/channel overhead exceeds
+the work. Deep inspection is sequential over the shared in-memory table. If
+per-port inspection of *very large* scans ever becomes a bottleneck, bounded
+worker pools would be evaluated — never unbounded per-process goroutines.
 
 ## Build profile
 

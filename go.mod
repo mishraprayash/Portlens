@@ -1,4 +1,4 @@
-module github.com/mishraprayash/Portlens
+module github.com/portlens/portlens
 
 go 1.23.0
 

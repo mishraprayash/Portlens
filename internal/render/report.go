@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mishraprayash/Portlens/internal/detect"
-	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/portlens/portlens/internal/detect"
+	"github.com/portlens/portlens/internal/model"
 )
 
 // Report renders the full human-facing inspection for a single port.
@@ -24,7 +24,7 @@ func (r *Renderer) Report(report *model.Report) {
 	rows := [][2]string{
 		{"Status", strings.ToUpper(report.Status)},
 		{"Protocol", strings.ToUpper(string(report.Protocol.Normalize()))},
-		{"Address", model.FormatAddr(report.Address, uint16(report.Port))},
+		{"Address", formatAddr(report.Address, uint16(report.Port))},
 	}
 	if report.Service != "" {
 		rows = append(rows, [2]string{"Service", report.Service})
@@ -100,7 +100,7 @@ func (r *Renderer) renderContainer(c *model.Container) {
 	r.section("CONTAINER", func() {
 		rows := [][2]string{
 			{"Name", c.Name},
-			{"ID", c.ShortID()},
+			{"ID", shortID(c.ID)},
 			{"Image", c.Image},
 		}
 		if c.Status != "" {
@@ -114,6 +114,14 @@ func (r *Renderer) renderContainer(c *model.Container) {
 		}
 		r.writeln(r.kv(rows))
 	})
+}
+
+// shortID trims a container ID to its leading 12 characters for readability.
+func shortID(id string) string {
+	if len(id) > 12 {
+		return id[:12]
+	}
+	return id
 }
 
 func (r *Renderer) renderProject(p *model.ProjectInfo) {
@@ -224,6 +232,13 @@ func (r *Renderer) renderActions() {
 		r.writeln(r.dim("[n]") + " Connections")
 		r.writeln(r.dim("[q]") + " Quit")
 	})
+}
+
+func formatAddr(addr string, port uint16) string {
+	if strings.Contains(addr, ":") {
+		return fmt.Sprintf("[%s]:%d", addr, port)
+	}
+	return fmt.Sprintf("%s:%d", addr, port)
 }
 
 func shortenHome(path string) string {

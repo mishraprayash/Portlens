@@ -9,20 +9,22 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mishraprayash/Portlens/internal/exitcode"
-	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/portlens/portlens/internal/exitcode"
+	"github.com/portlens/portlens/internal/model"
 )
 
 // nextSubcommand handles `portlens next [start-port]`.
 type nextSubcommand struct{}
 
 func (n *nextSubcommand) Name() string        { return "next" }
-func (n *nextSubcommand) Aliases() []string   { return nil }
+func (n *nextSubcommand) Aliases() []string   { return []string{"free"} }
 func (n *nextSubcommand) Description() string { return "Find the lowest available/free port" }
 func (n *nextSubcommand) Run(ctx context.Context, args []string, preFlags []string, stdout, stderr io.Writer, _ io.Reader) int {
-	if wantsHelp(args) {
-		printNextUsage(stdout)
-		return exitcode.Success
+	for _, a := range args {
+		if a == "--help" || a == "-h" || a == "help" {
+			printNextUsage(stdout)
+			return exitcode.Success
+		}
 	}
 	return runNext(ctx, append(preFlags, args...), stdout, stderr)
 }
@@ -49,27 +51,25 @@ func runNext(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 	reordered := reorderArgs(args)
 	if err := fs.Parse(reordered.flags); err != nil {
-		return fail(stderr, exitcode.InvalidArguments, "portlens next: %v\n", err)
+		fmt.Fprintf(stderr, "portlens next: %v\n", err)
+		return exitcode.InvalidArguments
 	}
 
 	startPort := 3000
 	if len(reordered.positional) > 0 {
 		p, err := strconv.Atoi(reordered.positional[0])
 		if err != nil || p < 1 || p > 65535 {
-			return fail(stderr, exitcode.InvalidArguments, "portlens next: invalid start port %q (must be 1-65535)\n", reordered.positional[0])
+			fmt.Fprintf(stderr, "portlens next: invalid start port %q (must be 1-65535)\n", reordered.positional[0])
+			return exitcode.InvalidArguments
 		}
 		startPort = p
 	}
 
 	proto := model.ProtocolTCP
 	network := "tcp"
-	switch strings.ToLower(protocol) {
-	case "", "tcp", "tcp4", "tcp6":
-	case "udp", "udp4", "udp6":
+	if strings.ToLower(protocol) == "udp" {
 		proto = model.ProtocolUDP
 		network = "udp"
-	default:
-		return fail(stderr, exitcode.InvalidArguments, "portlens next: invalid --protocol %q (must be tcp or udp)\n", protocol)
 	}
 
 	insp := newInspector(&options{})
@@ -86,10 +86,6 @@ func runNext(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 
 	for p := startPort; p <= 65535; p++ {
-		if ctx.Err() != nil {
-			// User interrupted the search: stop instead of probing up to 65535.
-			return exitcode.Success
-		}
 		if inUse[uint16(p)] {
 			continue
 		}
@@ -112,5 +108,6 @@ func runNext(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		}
 	}
 
-	return fail(stderr, exitcode.PortNotFound, "portlens next: no available %s ports found starting from %d\n", network, startPort)
+	fmt.Fprintf(stderr, "portlens next: no available %s ports found starting from %d\n", network, startPort)
+	return exitcode.PortNotFound
 }

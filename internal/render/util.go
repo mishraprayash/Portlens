@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/portlens/portlens/internal/model"
 )
 
 func reportNow() time.Time { return time.Now() }
@@ -18,7 +18,10 @@ func containerLabel(c *model.Container) string {
 	if c == nil {
 		return ""
 	}
-	name := c.DisplayName()
+	name := c.Name
+	if name == "" {
+		name = c.ID
+	}
 	image := c.Image
 	if image == "" {
 		image = c.Status

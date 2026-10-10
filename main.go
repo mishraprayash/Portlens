@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/mishraprayash/Portlens/cmd"
+	"github.com/portlens/portlens/cmd"
 )
 
 func main() {

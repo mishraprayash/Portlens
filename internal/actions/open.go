@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/portlens/portlens/internal/model"
+	"github.com/portlens/portlens/internal/platform"
 )
 
 // LocalURL builds the most appropriate HTTP URL for a listener. Wildcard and
@@ -19,10 +20,10 @@ func LocalURL(report *model.Report) string {
 	case "127.0.0.1", "::1":
 		host = "localhost"
 	}
-	return fmt.Sprintf("http://%s:%d", formatHost(host), report.Port)
+	return fmt.Sprintf("http://%s:%d", joinHostPort(host, int(report.Port)), report.Port)
 }
 
-func formatHost(host string) string {
+func joinHostPort(host string, port int) string {
 	if strings.Contains(host, ":") {
 		return "[" + host + "]"
 	}
@@ -33,12 +34,11 @@ func formatHost(host string) string {
 // unlikely to be HTTP. Opening is non-destructive, so it does not prompt.
 func (m *Manager) Open(ctx context.Context, report *model.Report) error {
 	url := LocalURL(report)
-	msg := fmt.Sprintf("Opening %s\n", url)
 	if !looksLikeHTTP(report) {
-		msg = fmt.Sprintf("Note: this service may not be HTTP; opening %s may fail.\n", url) + msg
+		fmt.Fprintf(m.Out, "Note: this service may not be HTTP; opening %s may fail.\n", url)
 	}
-	fmt.Fprint(m.Out, msg)
-	return m.Platform.OpenInBrowser(ctx, url)
+	fmt.Fprintf(m.Out, "Opening %s\n", url)
+	return platform.OpenURL(ctx, url)
 }
 
 // looksLikeHTTP makes a conservative guess about whether a process serves HTTP,

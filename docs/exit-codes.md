@@ -32,9 +32,3 @@ Notes:
   exit code together.
 - A `--kill` that is refused because stdin is not a terminal (and no `--yes` /
   `--force` was given) is reported as an error; use `--yes` to script it.
-- **Scan mode (several ports/ranges) treats "not listening" as normal**, not
-  as exit `3`: idle ports are skipped and the command exits `0`. Ports that
-  could not be inspected print `portlens: warning: N of M ports could not be
-  inspected: ...` on stderr and also exit `0`; only a fatal error (bad
-  arguments, permission problems aborting the run, Ctrl-C) sets a non-zero
-  code.
