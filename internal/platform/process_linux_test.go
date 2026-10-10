@@ -128,7 +128,7 @@ func TestIsProcessAliveZombie(t *testing.T) {
 	pid := int32(os.Getpid())
 	// The check reads /proc/<pid>/stat; verify the parser used for the state
 	// char handles the ')' + space + state layout.
-	data, err := os.ReadFile(formatProcPath(pid, "stat"))
+	data, err := os.ReadFile(procDir(pid) + "/stat")
 	if err != nil {
 		t.Fatal(err)
 	}

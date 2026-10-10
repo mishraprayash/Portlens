@@ -74,23 +74,23 @@ func parseProcNetBytes(data []byte) []procNetRow {
 		}
 		var fields [10][]byte
 		restLine := line
-		count := 0
-		for len(restLine) > 0 && count < 10 {
-			for len(restLine) > 0 && restLine[0] == ' ' {
+		fieldCount := 0
+		for fieldCount < 10 {
+			for len(restLine) > 0 && (restLine[0] == ' ' || restLine[0] == '	') {
 				restLine = restLine[1:]
 			}
 			if len(restLine) == 0 {
 				break
 			}
 			end := 0
-			for end < len(restLine) && restLine[end] != ' ' {
+			for end < len(restLine) && restLine[end] != ' ' && restLine[end] != '	' {
 				end++
 			}
-			fields[count] = restLine[:end]
+			fields[fieldCount] = restLine[:end]
+			fieldCount++
 			restLine = restLine[end:]
-			count++
 		}
-		if count < 10 {
+		if fieldCount < 10 {
 			continue
 		}
 		local := fields[1]
@@ -146,9 +146,17 @@ func parseHexUint(b []byte, maxBits int) (uint64, bool) {
 		return 0, false
 	}
 	var v uint64
-	for _, c := range b {
-		d, ok := hexDigit(c)
-		if !ok {
+	for i := 0; i < len(b); i++ {
+		c := b[i]
+		var d byte
+		switch {
+		case c >= '0' && c <= '9':
+			d = c - '0'
+		case c >= 'a' && c <= 'f':
+			d = c - 'a' + 10
+		case c >= 'A' && c <= 'F':
+			d = c - 'A' + 10
+		default:
 			return 0, false
 		}
 		v = v<<4 | uint64(d)
@@ -207,7 +215,25 @@ func decodeAddrBytes(b []byte) string {
 				buf[n] = '.'
 				n++
 			}
-			n += appendDecimal(buf[n:], uint64(raw[i]))
+
+			v := uint64(raw[i])
+			if v >= 100 {
+				buf[n] = byte('0' + v/100)
+				n++
+				v %= 100
+				buf[n] = byte('0' + v/10)
+				n++
+				buf[n] = byte('0' + v%10)
+				n++
+			} else if v >= 10 {
+				buf[n] = byte('0' + v/10)
+				n++
+				buf[n] = byte('0' + v%10)
+				n++
+			} else {
+				buf[n] = byte('0' + v)
+				n++
+			}
 		}
 		return string(buf[:n])
 	}
