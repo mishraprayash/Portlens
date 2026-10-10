@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 // BenchmarkDarwinResolvePort measures the lsof-based port lookup on macOS — the

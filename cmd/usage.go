@@ -25,6 +25,7 @@ COMMANDS
   tree <port>              Display process ancestor and descendant hierarchy
   conn, connections <port> Show active network connections for the process
   watch [port...]          Live-monitor port states with desktop notifications
+  top, tui                 Full-screen live interactive dashboard
   find <query>             Find ports by process name/command or PID (--pid)
   next [start]             Find the lowest available/free port (default 3000)
   config                   Manage named port groups (@name)
@@ -45,7 +46,7 @@ GENERAL FLAGS
 
 LISTING & FILTER FLAGS
       --sort <key>  Sort listing by: port, process, project, runtime
-      --filter <s>  Filter listing by substring (matches process, service, project)
+      --filter <s>  Filter listing by substring across all fields
       --tcp         Only show TCP listeners
 
 WATCH FLAGS
@@ -187,5 +188,37 @@ FLAGS
   -j, --json        Output pure JSON
   -v, --verbose     Full detailed report
   -h, --help        Show this help
+`)
+}
+
+func printTopUsage(w io.Writer) {
+	fmt.Fprint(w, `portlens top — Full-screen live interactive dashboard
+
+USAGE
+  portlens top [flags]
+  portlens tui [flags]
+
+FLAGS
+  -i, --interval <sec>  Refresh interval in seconds (default: 2)
+      --tcp             Only show TCP listeners
+  -h, --help            Show this help
+
+KEYBINDINGS
+  ↑, k / ↓, j           Navigate ports up / down
+  PgUp / PgDn           Scroll one page up / down
+  Home, g / End, G      Jump to first / last port
+  /                     Search & filter listening ports in real time
+  k                     Gracefully terminate process (SIGTERM)
+  f                     Force terminate process (SIGKILL)
+  r                     Restart process using detected launch command
+  o                     Open service in default browser
+  c                     Copy PID to system clipboard
+  u                     Copy local URL (http://localhost:<port>) to clipboard
+  1                     Switch to Overview tab
+  2, t                  Switch to Process Tree tab
+  3, n                  Switch to Connections tab
+  ?                     Show help overlay
+  Esc                   Clear filter or dismiss modal
+  q, Ctrl+C             Quit dashboard
 `)
 }

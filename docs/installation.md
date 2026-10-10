@@ -47,7 +47,7 @@ Or install the official tarball: <https://go.dev/dl/>.
 ### 2. Clone and install
 
 ```bash
-git clone https://github.com/portlens/portlens.git
+git clone https://github.com/mishraprayash/Portlens.git
 cd portlens
 make install
 ```
@@ -160,7 +160,7 @@ rm -rf "$HOME/.local/share/portlens"                  # Linux
 Prebuilt releases and package managers are on the roadmap but not yet published:
 
 - **Homebrew tap** (macOS) — planned.
-- **`go install github.com/portlens/portlens@latest`** — will work once the
+- **`go install github.com/mishraprayash/Portlens@latest`** — will work once the
   module is published to the Go proxy (requires the same
   `CGO_ENABLED=0` note above).
 - **Distro packages / apt / AUR** — planned.

@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
-	"github.com/portlens/portlens/internal/detect"
-	"github.com/portlens/portlens/internal/exitcode"
-	"github.com/portlens/portlens/internal/platform"
+	"github.com/mishraprayash/Portlens/internal/detect"
+	"github.com/mishraprayash/Portlens/internal/exitcode"
+	"github.com/mishraprayash/Portlens/internal/platform"
 )
 
 // completionSubcommand handles `portlens completion <bash|zsh|fish>`.
@@ -28,31 +29,166 @@ func runCompletion(args []string, stdout, stderr io.Writer) int {
 	if len(args) > 0 {
 		shell = strings.ToLower(strings.TrimSpace(args[0]))
 	}
+	script, ok := renderCompletion(shell)
+	if !ok {
+		return fail(stderr, exitcode.InvalidArguments, "portlens completion: unsupported shell %q (supported: bash, zsh, fish)\n", shell)
+	}
+	fmt.Fprint(stdout, script)
+	return exitcode.Success
+}
 
+// flagDoc documents one root flag for shell completion. flagDocs is the only
+// copy of the flag inventory used by completion; a test asserts it matches
+// registerFlags so the two cannot drift.
+type flagDoc struct {
+	long  string
+	short string
+	desc  string
+}
+
+var flagDocs = []flagDoc{
+	{long: "tree", short: "t", desc: "Show process hierarchy"},
+	{long: "connections", short: "n", desc: "Show network connections"},
+	{long: "json", short: "j", desc: "JSON output"},
+	{long: "kill", short: "k", desc: "Gracefully terminate owning process"},
+	{long: "force", short: "f", desc: "Force SIGKILL"},
+	{long: "restart", short: "r", desc: "Restart process"},
+	{long: "open", short: "o", desc: "Open in browser"},
+	{long: "yes", short: "y", desc: "Skip confirmations"},
+	{long: "no-color", desc: "Plain text output"},
+	{long: "no-docker", desc: "Disable container detection"},
+	{long: "tcp", desc: "Only show TCP listeners"},
+	{long: "all", desc: "Act on all listening ports"},
+	{long: "watch", short: "w", desc: "Re-render every interval"},
+	{long: "notify", desc: "Desktop notification on state change"},
+	{long: "verbose", short: "v", desc: "Full detailed report"},
+	{long: "debug", short: "d", desc: "Diagnostic debug logging"},
+	{long: "probe", short: "p", desc: "Probe HTTP endpoint for status and title"},
+	{long: "interval", desc: "Watch re-render interval in seconds"},
+	{long: "pid", desc: "Target process by PID"},
+	{long: "name", desc: "Target process by name"},
+	{long: "help", short: "h", desc: "Show help"},
+	{long: "version", desc: "Print version"},
+	{long: "protocol", desc: "Protocol filter (tcp or udp)"},
+	{long: "sort", desc: "Sort key (port, process, project, runtime)"},
+	{long: "filter", desc: "Filter by process name"},
+}
+
+// completionCommand is one completable subcommand name with its description.
+type completionCommand struct {
+	name string
+	desc string
+}
+
+// completionCommands enumerates every registered subcommand and alias in
+// registration order, so the scripts always match the dispatch registry.
+func completionCommands() []completionCommand {
+	reg := defaultSubcommandRegistry()
+	out := make([]completionCommand, 0, len(reg.commands))
+	for _, c := range reg.ordered {
+		out = append(out, completionCommand{name: c.Name(), desc: c.Description()})
+		for _, a := range c.Aliases() {
+			out = append(out, completionCommand{name: a, desc: c.Description()})
+		}
+	}
+	return out
+}
+
+// renderCompletion fills the {{COMMANDS}} and {{FLAGS}} placeholders of the
+// requested shell's script template. Reports ok=false for unknown shells.
+func renderCompletion(shell string) (string, bool) {
+	var tmpl string
 	switch shell {
 	case "bash":
-		fmt.Fprint(stdout, bashCompletionScript)
-		return exitcode.Success
+		tmpl = bashCompletionScript
 	case "zsh":
-		fmt.Fprint(stdout, zshCompletionScript)
-		return exitcode.Success
+		tmpl = zshCompletionScript
 	case "fish":
-		fmt.Fprint(stdout, fishCompletionScript)
-		return exitcode.Success
+		tmpl = fishCompletionScript
 	default:
-		fmt.Fprintf(stderr, "portlens completion: unsupported shell %q (supported: bash, zsh, fish)\n", shell)
-		return exitcode.InvalidArguments
+		return "", false
 	}
+	s := strings.ReplaceAll(tmpl, "{{COMMANDS}}", completionChunk(shell, true))
+	s = strings.ReplaceAll(s, "{{FLAGS}}", completionChunk(shell, false))
+	return s, true
+}
+
+// completionChunk renders either the subcommand list or the flag list for a
+// shell, in that shell's native syntax.
+func completionChunk(shell string, commands bool) string {
+	if commands {
+		switch shell {
+		case "bash":
+			cmds := completionCommands()
+			names := make([]string, len(cmds))
+			for i, c := range cmds {
+				names[i] = c.name
+			}
+			return strings.Join(names, " ")
+		case "zsh":
+			var b strings.Builder
+			for i, c := range completionCommands() {
+				if i > 0 {
+					b.WriteByte('\n')
+				}
+				fmt.Fprintf(&b, "        '%s:%s'", c.name, c.desc)
+			}
+			return b.String()
+		case "fish":
+			var lines []string
+			for _, c := range completionCommands() {
+				lines = append(lines, fmt.Sprintf("complete -c portlens -n '__fish_use_subcommand' -a '%s' -d '%s'", c.name, c.desc))
+			}
+			return strings.Join(lines, "\n")
+		}
+		return ""
+	}
+	switch shell {
+	case "bash":
+		var parts []string
+		for _, f := range flagDocs {
+			parts = append(parts, "--"+f.long)
+			if f.short != "" {
+				parts = append(parts, "-"+f.short)
+			}
+		}
+		return strings.Join(parts, " ")
+	case "zsh":
+		var lines []string
+		for _, f := range flagDocs {
+			lines = append(lines, fmt.Sprintf("        '--%s[%s]'", f.long, f.desc))
+			if f.short != "" {
+				lines = append(lines, fmt.Sprintf("        '-%s[%s]'", f.short, f.desc))
+			}
+		}
+		return strings.Join(lines, "\n")
+	case "fish":
+		var lines []string
+		for _, f := range flagDocs {
+			line := "complete -c portlens -l " + f.long
+			if f.short != "" {
+				line += " -s " + f.short
+			}
+			lines = append(lines, line+" -d '"+f.desc+"'")
+		}
+		return strings.Join(lines, "\n")
+	}
+	return ""
 }
 
 // runCompletePorts outputs "port:description" for all current listening sockets,
 // powering dynamic shell autocompletion.
-func runCompletePorts(stdout io.Writer) int {
+func runCompletePorts(ctx context.Context, stdout io.Writer) int {
 	plat := platform.New()
 	if plat.Ports == nil {
 		return exitcode.Success
 	}
-	listeners, err := plat.Ports.Listeners(context.Background())
+	// A completion request must never hang the shell: bound the listener scan
+	// even when the caller's context carries no deadline. On timeout the
+	// error path below silently yields no completions.
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	listeners, err := plat.Ports.Listeners(ctx)
 	if err != nil {
 		return exitcode.Success
 	}
@@ -99,12 +235,12 @@ _portlens_completions() {
     fi
 
     if [[ "$cur" == -* ]]; then
-        local flags="--verbose -v --probe -p --tree --connections --json -j --kill -k --restart -r --open -o --watch -w --notify --yes -y --force -f --no-color --no-docker --debug -d --help -h --version --all --tcp --sort --filter"
+        local flags="{{FLAGS}}"
         COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
         return 0
     fi
 
-    local subcmds="list ls inspect kill restart open tree conn connections watch find next config completion"
+    local subcmds="{{COMMANDS}}"
     local ports=$(portlens --_complete_ports 2>/dev/null | cut -d: -f1)
     COMPREPLY=( $(compgen -W "$subcmds $ports" -- "$cur") )
 }
@@ -131,54 +267,12 @@ _portlens() {
 
     local -a subcommands
     subcommands=(
-        'list:List active listening ports'
-        'ls:List active listening ports'
-        'inspect:Inspect port(s) with process details and exposure'
-        'kill:Gracefully terminate process on port(s)'
-        'restart:Restart process if launch command is known'
-        'open:Open service in default browser'
-        'tree:Display process hierarchy'
-        'conn:Show active network connections'
-        'connections:Show active network connections'
-        'watch:Live-monitor port states with desktop notifications'
-        'find:Find ports by process name or PID'
-        'next:Find lowest available/free port'
-        'config:Manage named port groups (@name)'
-        'completion:Generate shell autocompletion script'
+{{COMMANDS}}
     )
 
     local -a flags
     flags=(
-        '--verbose[Full detailed report (-v)]'
-        '-v[Full detailed report]'
-        '--probe[Probe HTTP endpoint for status, title, & server]'
-        '-p[Probe HTTP endpoint for status, title, & server]'
-        '--tree[Show complete process hierarchy]'
-        '--connections[Show network connections]'
-        '--json[JSON output]'
-        '-j[JSON output]'
-        '--kill[Gracefully terminate the owning process]'
-        '-k[Gracefully terminate the owning process]'
-        '--restart[Restart the process if launch command is known]'
-        '-r[Restart the process]'
-        '--open[Open service in browser]'
-        '-o[Open service in browser]'
-        '--watch[Re-render every interval]'
-        '-w[Re-render every interval]'
-        '--notify[Desktop notification on state change]'
-        '--yes[Skip confirmations]'
-        '-y[Skip confirmations]'
-        '--force[Force SIGKILL]'
-        '-f[Force SIGKILL]'
-        '--no-color[Plain text output]'
-        '--no-docker[Disable container detection]'
-        '--debug[Diagnostic debug logging]'
-        '-d[Diagnostic debug logging]'
-        '--help[Show help]'
-        '-h[Show help]'
-        '--version[Print version]'
-        '--all[Act on all listening ports]'
-        '--tcp[Only show TCP listeners]'
+{{FLAGS}}
     )
 
     _arguments -C \
@@ -219,32 +313,5 @@ end
 
 complete -c portlens -f
 complete -c portlens -n '__fish_use_subcommand' -a '(__portlens_ports)' -d 'Listening port'
-complete -c portlens -n '__fish_use_subcommand' -a 'list' -d 'List active listening ports'
-complete -c portlens -n '__fish_use_subcommand' -a 'inspect' -d 'Inspect port details'
-complete -c portlens -n '__fish_use_subcommand' -a 'kill' -d 'Terminate process on port'
-complete -c portlens -n '__fish_use_subcommand' -a 'restart' -d 'Restart process'
-complete -c portlens -n '__fish_use_subcommand' -a 'open' -d 'Open in browser'
-complete -c portlens -n '__fish_use_subcommand' -a 'tree' -d 'Show process hierarchy'
-complete -c portlens -n '__fish_use_subcommand' -a 'conn' -d 'Show network connections'
-complete -c portlens -n '__fish_use_subcommand' -a 'watch' -d 'Live monitor ports'
-complete -c portlens -n '__fish_use_subcommand' -a 'find' -d 'Find ports by name or PID'
-complete -c portlens -n '__fish_use_subcommand' -a 'next' -d 'Find next available port'
-complete -c portlens -n '__fish_use_subcommand' -a 'config' -d 'Manage named port groups'
-complete -c portlens -n '__fish_use_subcommand' -a 'completion' -d 'Generate completion script'
-complete -c portlens -l verbose -s v -d 'Full detailed report'
-complete -c portlens -l probe -s p -d 'Probe HTTP endpoint'
-complete -c portlens -l tree -d 'Show process hierarchy'
-complete -c portlens -l connections -d 'Show network connections'
-complete -c portlens -l json -s j -d 'JSON output'
-complete -c portlens -l kill -s k -d 'Gracefully terminate owning process'
-complete -c portlens -l restart -s r -d 'Restart process'
-complete -c portlens -l open -s o -d 'Open in browser'
-complete -c portlens -l watch -s w -d 'Watch mode'
-complete -c portlens -l notify -d 'Desktop notification'
-complete -c portlens -l yes -s y -d 'Skip confirmations'
-complete -c portlens -l force -s f -d 'Force SIGKILL'
-complete -c portlens -l no-color -d 'Plain output'
-complete -c portlens -l no-docker -d 'Disable container detection'
-complete -c portlens -l help -s h -d 'Show help'
-complete -c portlens -l version -d 'Show version'
-`
+{{COMMANDS}}
+{{FLAGS}}`

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/portlens/portlens/internal/exitcode"
+	"github.com/mishraprayash/Portlens/internal/exitcode"
 )
 
 func TestRunNextDefault(t *testing.T) {
@@ -47,5 +47,29 @@ func TestRunNextInvalidPort(t *testing.T) {
 	code := runNext(context.Background(), []string{"99999"}, &stdout, &stderr)
 	if code != exitcode.InvalidArguments {
 		t.Fatalf("runNext returned %d, want %d", code, exitcode.InvalidArguments)
+	}
+}
+
+func TestRunNextInvalidProtocol(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := runNext(context.Background(), []string{"--protocol", "icmp"}, &stdout, &stderr)
+	if code != exitcode.InvalidArguments {
+		t.Fatalf("runNext(--protocol icmp) = %d, want %d", code, exitcode.InvalidArguments)
+	}
+	if !strings.Contains(stderr.String(), "icmp") {
+		t.Errorf("expected error to name the invalid protocol, got: %s", stderr.String())
+	}
+}
+
+func TestRunNextCanceledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var stdout, stderr bytes.Buffer
+	code := runNext(ctx, nil, &stdout, &stderr)
+	if code != exitcode.Success {
+		t.Errorf("runNext(canceled) = %d, want 0", code)
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("runNext(canceled) wrote %q, want no output", stdout.String())
 	}
 }

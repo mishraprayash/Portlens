@@ -7,9 +7,9 @@ GO ?= go
 export CGO_ENABLED := 0
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-LDFLAGS := -s -w -X github.com/portlens/portlens/internal/version.Version=$(VERSION)
+LDFLAGS := -s -w -X github.com/mishraprayash/Portlens/internal/version.Version=$(VERSION)
 
-.PHONY: build build-release install test vet fmt lint check clean cross bench profile race
+.PHONY: build build-release install test vet fmt lint check cover clean cross bench profile race
 
 build:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/$(BINARY) .
@@ -43,8 +43,15 @@ lint:
 	fi
 	$(GO) vet ./...
 
-# check is the full local gate; CI runs the same set of checks.
-check: lint test
+# cover runs the full suite with a whole-module coverage profile and prints the
+# aggregate statement percentage (see docs/testing.md).
+cover:
+	$(GO) test -count=1 -coverpkg=./... -coverprofile=coverage.out ./...
+	$(GO) tool cover -func=coverage.out | tail -n 1
+
+# check is the full local gate: formatting, vet, build, tests, and the
+# cross-compile matrix. CI runs the same checks (see .github/workflows/ci.yml).
+check: lint build test cross
 
 # bench runs the performance regression suite (see docs/performance.md).
 bench:
@@ -58,9 +65,9 @@ profile:
 	@echo "CPU:     go tool pprof /tmp/portlens-cpu.out"
 	@echo "Memory:  go tool pprof /tmp/portlens-mem.out"
 
-# race runs the race detector. NOTE: on macOS this is blocked by a pre-existing
-# gopsutil/purego incompatibility with the Go race runtime (see
-# docs/performance.md); CI does not run -race.
+# race runs the race detector. NOTE: only on Linux. The race runtime requires
+# cgo, and on macOS Go 1.23.x produces test binaries missing the LC_UUID load
+# command that dyld refuses to run; CI runs -race on ubuntu only.
 race:
 	$(GO) test -race -count=1 ./...
 
