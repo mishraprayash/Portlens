@@ -291,15 +291,20 @@ var (
 // username resolves a numeric uid to a login name with a per-invocation cache.
 func username(uid uint32) string {
 	userMu.Lock()
-	defer userMu.Unlock()
 	if name, ok := userMap[uid]; ok {
+		userMu.Unlock()
 		return name
 	}
+	userMu.Unlock()
+
 	name := ""
 	if u, err := user.LookupId(strconv.FormatUint(uint64(uid), 10)); err == nil {
 		name = u.Username
 	}
+
+	userMu.Lock()
 	userMap[uid] = name
+	userMu.Unlock()
 	return name
 }
 

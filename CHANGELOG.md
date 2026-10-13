@@ -8,6 +8,11 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Fixed
 
+- **Platform OpenURL now accepts only `http`/`https` URLs**, rejecting other
+  schemes and malformed input before invoking the OS browser opener.
+- **Darwin username cache no longer holds the mutex during UID lookups**,
+  reducing lock contention while resolving process owners.
+
 - **Linux: a server that just started is still attributed to its process**:
   single-port resolution rebuilds the inode→PID map once when a listening
   row comes back without an owner, instead of answering from a cache built
