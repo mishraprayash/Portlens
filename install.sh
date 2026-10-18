@@ -1,7 +1,7 @@
 #!/bin/sh
 # Install the latest PortLens release binary for macOS or Linux.
 #   curl -fsSL https://raw.githubusercontent.com/mishraprayash/Portlens/main/install.sh | sh
-# Environment: PORTLENS_VERSION (default: latest, e.g. v0.2.0), INSTALL_DIR (default: /usr/local/bin).
+# Environment: PORTLENS_VERSION (default: latest, e.g. v0.3.0), INSTALL_DIR (default: /usr/local/bin).
 set -eu
 
 repo="mishraprayash/Portlens"
