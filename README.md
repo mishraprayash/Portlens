@@ -176,6 +176,7 @@ portlens top, tui                  Full-screen live interactive TUI dashboard
 portlens find <query|pid>          Find ports by process name or PID (--pid)
 portlens next [start]              Find lowest available/free port (default 3000)
 portlens config                    Manage named port groups (@name)
+portlens doctor                    Check which features work on this machine
 portlens completion <shell>        Generate shell autocompletion (bash, zsh, fish)
 portlens 4000-4010                 Scan a range (only in-use ports printed)
 portlens @dev                      Inspect a named group from your config
@@ -191,7 +192,7 @@ also honors `PORTLENS_DEBUG=1`), `--protocol <tcp|udp>`, `--no-color`, `--no-doc
 
 Listing flags: `--sort <port|process|project|runtime>`, `--filter <text>`, `--tcp`.
 
-Watch flags: `--interval <secs>` (default 1), `--notify` (desktop notification on state change).
+Watch flags: `--interval <secs>` (default 1), `--notify` (desktop notification on state change), `--json` (stream `snapshot`/`up`/`down`/`changed` events as JSON lines).
 
 ## 4.1 Usage & use cases
 

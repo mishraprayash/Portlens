@@ -633,3 +633,33 @@ $ portlens 3<TAB>
 ```
 
 
+
+---
+
+## Checking your setup — `portlens doctor`
+
+```
+$ portlens doctor
+ok    platform           darwin/arm64, portlens 0.2.0
+ok    port source        lsof at /usr/sbin/lsof
+ok    listing ports      9 listeners, all owners resolved
+warn  container runtime  socket ... exists but is not reachable
+                         ↳ check that the daemon is running ...
+```
+
+Statuses: `ok` (working), `warn` (a feature is degraded or unavailable),
+`fail` (core functionality broken; exit code 1), `skip` (optional integration
+not present). `--json` prints the checks as an array of
+`{name, status, detail, hint}`.
+
+## Streaming changes — `portlens watch --json`
+
+```
+$ portlens watch 3000 --json
+{"time":"...","event":"snapshot","targets":{"Port 3000":"up:4821:node"}}
+{"time":"...","event":"down","target":"Port 3000"}
+{"time":"...","event":"up","target":"Port 3000","detail":"up:4890:node"}
+```
+
+One JSON object per line, ideal for `jq` or a log shipper. `--interval` still
+applies and Ctrl-C ends the stream cleanly.

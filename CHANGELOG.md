@@ -8,6 +8,14 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Added
 
+- **`portlens doctor`** reports what works on this machine: port enumeration
+  (and listeners with unknown owners), clipboard, browser opener,
+  notifications, container runtime reachability, config validity, and root
+  privileges. `--json` supported; exits 1 only when a core check fails.
+- **`watch --json`** streams newline-delimited JSON events: one `snapshot`,
+  then `up` / `down` / `changed` with `time`, `target` and `detail`. Human
+  frames are suppressed.
+
 - **`--project <name>`** selects every listening port whose detected project
   matches (like `--name`/`--pid`), e.g. `portlens kill --project orbit`.
 - **`--dry-run`** with `--kill` prints what would be signaled (or which

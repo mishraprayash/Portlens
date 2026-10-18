@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -111,5 +112,22 @@ func TestRunPortsSinglePortLoop(t *testing.T) {
 	opts := &options{ports: []int32{1}}
 	if got := runPorts(context.Background(), &stdout, &stderr, strings.NewReader(""), opts); got != exitcode.PortNotFound {
 		t.Errorf("runPorts(port 1) = %d, want %d", got, exitcode.PortNotFound)
+	}
+}
+
+func TestEmitWatchEvent(t *testing.T) {
+	var buf bytes.Buffer
+	emitWatchEvent(&buf, watchEvent{Event: "snapshot", Targets: watchSnap{"Port 3000": "down"}})
+	emitWatchEvent(&buf, watchEvent{Event: "up", Target: "Port 3000", Detail: "up:42:node"})
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("want 2 lines, got %q", buf.String())
+	}
+	var ev watchEvent
+	if err := json.Unmarshal([]byte(lines[1]), &ev); err != nil {
+		t.Fatal(err)
+	}
+	if ev.Event != "up" || ev.Target != "Port 3000" || ev.Time == "" {
+		t.Errorf("event = %+v", ev)
 	}
 }
