@@ -14,7 +14,26 @@ cross-compiling for another platform, verifying the install, and uninstalling.
 
 ---
 
-## Option 1 — Build from source (recommended)
+## Option 0 — Prebuilt binary (no Go required)
+
+Each tagged release publishes static `linux`/`darwin` × `amd64`/`arm64`
+archives plus a `checksums.txt` (SHA-256) on the
+[Releases page](https://github.com/mishraprayash/Portlens/releases).
+
+One-line installer (verifies the checksum before installing):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mishraprayash/Portlens/main/install.sh | sh
+```
+
+Set `PORTLENS_VERSION=v0.2.0` to pin a version and `INSTALL_DIR=$HOME/.local/bin`
+to install without sudo. To do it by hand, download the archive and
+`checksums.txt`, run `shasum -a 256 -c --ignore-missing checksums.txt`, then
+extract `portlens` onto your `PATH`.
+
+---
+
+## Option 1 — Build from source
 
 ### 1. Install Go
 
@@ -83,7 +102,7 @@ Then open a new terminal (or `source` the file) and verify:
 
 ```bash
 $ portlens --version
-portlens 0.1.0
+portlens 0.2.0
 ```
 
 ---
@@ -132,7 +151,7 @@ Copy the resulting binary to the target and place it on `PATH` (e.g.
 
 ```bash
 $ portlens --version
-portlens 0.1.0
+portlens 0.2.0
 
 $ portlens --help        # shows the command reference
 

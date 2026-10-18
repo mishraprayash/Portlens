@@ -38,6 +38,16 @@ never collects or transmits any data.
 - Go 1.23+ (to build from source)
 - macOS or Linux
 
+### Quick install (prebuilt binary)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mishraprayash/Portlens/main/install.sh | sh
+```
+
+Downloads the latest release for your OS/arch and verifies its SHA-256
+checksum. See [docs/installation.md](docs/installation.md) for pinning a
+version and manual download.
+
 ### Quick install (from source)
 
 ```bash
