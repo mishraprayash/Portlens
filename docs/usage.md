@@ -453,6 +453,9 @@ $ portlens 3000-3010                 # a range
 $ portlens kill 4000-4010 --yes      # kill everything in a range
 $ portlens @dev                      # a group from your config
 $ portlens kill --all --force        # stop every listening process
+$ portlens kill --project orbit --dry-run   # preview: what would be stopped?
+$ portlens kill --project orbit      # stop every listener in project "orbit"
+$ portlens kill --name node --dry-run
 ```
 
 ### Scan mode

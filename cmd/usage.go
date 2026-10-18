@@ -31,6 +31,13 @@ COMMANDS
   config                   Manage named port groups (@name)
   completion <shell>       Generate shell autocompletion (bash, zsh, fish)
 
+TARGETING FLAGS (kill and other actions)
+      --all             Every listening port
+      --pid <n>         Ports owned by process <n>
+      --name <s>        Ports owned by processes matching <s>
+      --project <s>     Ports owned by processes in project <s>
+      --dry-run         With --kill: show what would be terminated; change nothing
+
 GENERAL FLAGS
   -v, --verbose     Full detailed report instead of compact summary
   -j, --json        Output pure JSON (array of in-use ports for scans/multi-port)
@@ -100,11 +107,15 @@ func printKillUsage(w io.Writer) {
 USAGE
   portlens kill <port...> [flags]
   portlens kill --all [flags]
+  portlens kill --name <name> | --project <project> [--dry-run]
 
 FLAGS
   -f, --force       Force immediate termination (SIGKILL)
   -y, --yes         Skip interactive confirmation prompt
       --all         Terminate all listening processes
+      --name <s>    Terminate processes whose name/command matches <s>
+      --project <s> Terminate processes belonging to project <s>
+      --dry-run     Show what would be terminated; change nothing
   -v, --verbose     Show detailed report before terminating
   -h, --help        Show this help
 `)

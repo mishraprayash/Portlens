@@ -115,6 +115,43 @@ func (m *Manager) Kill(ctx context.Context, report *model.Report, force bool) er
 	return nil
 }
 
+// PlanKill describes what Kill would do for report without signaling or
+// stopping anything. It returns an error in the same cases Kill would refuse.
+func (m *Manager) PlanKill(ctx context.Context, report *model.Report, force bool) (string, error) {
+	if report == nil {
+		return "", fmt.Errorf("no report to act on")
+	}
+	if c := m.lookupContainer(ctx, report); c != nil {
+		if force {
+			return fmt.Sprintf("would force-stop container %s", c.DisplayName()), nil
+		}
+		return fmt.Sprintf("would stop container %s", c.DisplayName()), nil
+	}
+	if report.Process == nil {
+		return "", fmt.Errorf("no owning process to terminate")
+	}
+	if err := checkProtected(report.Process.PID); err != nil {
+		return "", err
+	}
+	sig := "SIGTERM"
+	if force {
+		sig = "SIGKILL"
+	}
+	pids := []int32{report.Process.PID}
+	if m.Platform != nil && m.Platform.Tree != nil {
+		if tree, err := m.Platform.Tree.Descendants(ctx, report.Process.PID); err == nil {
+			pids = TreePIDs(tree)
+		}
+	}
+	n := 0
+	for _, p := range pids {
+		if checkProtected(p) == nil {
+			n++
+		}
+	}
+	return fmt.Sprintf("would send %s to %d process(es) (root pid %d, %s)", sig, n, report.Process.PID, report.Process.Name), nil
+}
+
 // TerminateTree terminates the process tree rooted at pid without prompting.
 // When force is false it sends SIGTERM, waits up to m.Wait for the root process to exit,
 // and returns nil on success. When force is true it sends SIGKILL.
