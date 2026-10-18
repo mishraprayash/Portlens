@@ -8,6 +8,11 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Added
 
+- Test coverage for the kill/restart paths (`internal/actions`: tree ordering,
+  decline/abort, force, still-running, signal errors, starter failures,
+  protected PIDs) and for `internal/inspector` (full/fast reports, unknown or
+  exited owners, listing, search by name/PID, summaries).
+
 - **`portlens doctor`** reports what works on this machine: port enumeration
   (and listeners with unknown owners), clipboard, browser opener,
   notifications, container runtime reachability, config validity, and root
@@ -38,6 +43,10 @@ All notable changes to PortLens are documented here. The format is based on
   unchecked errors it flagged.
 
 ### Fixed
+
+- **Kill/restart always signal the target PID**: if the process-tree provider
+  returned no tree (without an error), the target itself was skipped. The
+  target is now always included.
 
 - **No ANSI escapes in piped output**: color is applied only when stdout is a
   terminal, and `NO_COLOR` is honored. Previously `portlens | grep` and
