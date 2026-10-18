@@ -50,7 +50,7 @@ Make sure `$GOBIN` (`~/go/bin`) is on your `PATH`, then:
 
 ```bash
 $ portlens --version
-portlens 0.1.0
+portlens 0.2.0
 ```
 
 ### Other install methods
@@ -245,8 +245,9 @@ PortLens is **local-first** by design:
 - **No privilege escalation.** If a process requires elevated privileges to
   inspect or signal, PortLens reports the permission problem rather than trying
   to escalate.
-- **Completely stateless.** PortLens performs real-time queries and leaves zero
-  disk footprint. No background daemon, no history files, and no telemetry.
+- **No history, no daemon.** PortLens performs real-time queries. The only file
+  it ever writes is the optional port-group config (`portlens config`); there
+  are no history files, no background daemon, and no telemetry.
 
 ## 7. Architecture overview
 
