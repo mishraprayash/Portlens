@@ -16,6 +16,14 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Fixed
 
+- **No ANSI escapes in piped output**: color is applied only when stdout is a
+  terminal, and `NO_COLOR` is honored. Previously `portlens | grep` and
+  `portlens > file` were full of escape codes.
+- **Outbound UDP sockets are no longer listed as listeners** on macOS
+  (`local->remote` lsof names were mis-parsed into a bogus address).
+- **Kill/restart refuse protected processes**: PID <= 1 and PortLens itself
+  are never signaled, even as descendants of the target.
+
 - README and `docs/security.md` no longer claim zero disk footprint; the
   optional port-group config file is documented.
 

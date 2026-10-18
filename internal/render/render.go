@@ -35,7 +35,7 @@ func WithColor(color bool) Option {
 func NewRenderer(w io.Writer, opts ...Option) *Renderer {
 	r := &Renderer{W: w, Width: DefaultWidth}
 	if f, ok := w.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
-		r.Color = true
+		r.Color = os.Getenv("NO_COLOR") == ""
 		if width, _, err := term.GetSize(int(f.Fd())); err == nil && width > 0 {
 			r.Width = width
 		}
@@ -43,12 +43,24 @@ func NewRenderer(w io.Writer, opts ...Option) *Renderer {
 	for _, opt := range opts {
 		opt(r)
 	}
+	if os.Getenv("NO_COLOR") != "" {
+		r.Color = false
+	}
 	return r
 }
 
 // New builds a Renderer with color flag (retained for backward compatibility).
+//
+// Color is applied only when requested, w is a terminal, and NO_COLOR is
+// unset, so piped and redirected output stays free of escape sequences.
 func New(w io.Writer, color bool) *Renderer {
-	return NewRenderer(w, WithColor(color))
+	return NewRenderer(w, WithColor(color && isTerminal(w)))
+}
+
+// isTerminal reports whether w is an interactive terminal.
+func isTerminal(w io.Writer) bool {
+	f, ok := w.(*os.File)
+	return ok && term.IsTerminal(int(f.Fd()))
 }
 
 func (r *Renderer) write(s string) {

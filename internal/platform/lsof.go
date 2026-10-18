@@ -75,7 +75,9 @@ func parseLsofFields(data string) []lsofField {
 // parseSockName splits an lsof socket name into address and port. IPv6
 // addresses are wrapped in brackets by lsof; wildcard is "*".
 func parseSockName(s string) (addr string, port uint16, ok bool) {
-	if s == "" {
+	// "local->remote" names are connected sockets, not listeners; callers that
+	// want connections split on "->" first.
+	if s == "" || strings.Contains(s, "->") {
 		return "", 0, false
 	}
 	if strings.HasPrefix(s, "[") {
