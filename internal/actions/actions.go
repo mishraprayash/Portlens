@@ -66,6 +66,19 @@ func TreePIDs(tree *model.ProcessTree) []int32 {
 	return out
 }
 
+// treePIDs returns pid and its descendants (deepest first). It always includes
+// pid itself, even when the tree provider is missing, fails, or returns nothing.
+func (m *Manager) treePIDs(ctx context.Context, pid int32) []int32 {
+	if m.Platform != nil && m.Platform.Tree != nil {
+		if tree, err := m.Platform.Tree.Descendants(ctx, pid); err == nil {
+			if pids := TreePIDs(tree); len(pids) > 0 {
+				return pids
+			}
+		}
+	}
+	return []int32{pid}
+}
+
 // Kill terminates the process owning the report's port. When the port belongs
 // to a container, the container is stopped instead of its host-side process
 // (on macOS the host-side "process" is the Docker VM, which must never be
@@ -82,10 +95,7 @@ func (m *Manager) Kill(ctx context.Context, report *model.Report, force bool) er
 	if report.Process == nil {
 		return fmt.Errorf("no owning process to terminate")
 	}
-	pids := []int32{report.Process.PID}
-	if tree, err := m.Platform.Tree.Descendants(ctx, report.Process.PID); err == nil {
-		pids = TreePIDs(tree)
-	}
+	pids := m.treePIDs(ctx, report.Process.PID)
 	if len(pids) == 1 {
 		_, _ = fmt.Fprintf(m.Out, "Terminating process %d (%s)\n", report.Process.PID, report.Process.Name)
 	} else {
@@ -137,12 +147,7 @@ func (m *Manager) PlanKill(ctx context.Context, report *model.Report, force bool
 	if force {
 		sig = "SIGKILL"
 	}
-	pids := []int32{report.Process.PID}
-	if m.Platform != nil && m.Platform.Tree != nil {
-		if tree, err := m.Platform.Tree.Descendants(ctx, report.Process.PID); err == nil {
-			pids = TreePIDs(tree)
-		}
-	}
+	pids := m.treePIDs(ctx, report.Process.PID)
 	n := 0
 	for _, p := range pids {
 		if checkProtected(p) == nil {
@@ -159,12 +164,7 @@ func (m *Manager) TerminateTree(ctx context.Context, pid int32, force bool) erro
 	if err := checkProtected(pid); err != nil {
 		return err
 	}
-	pids := []int32{pid}
-	if m.Platform != nil && m.Platform.Tree != nil {
-		if tree, err := m.Platform.Tree.Descendants(ctx, pid); err == nil {
-			pids = TreePIDs(tree)
-		}
-	}
+	pids := m.treePIDs(ctx, pid)
 
 	sig := platform.SignalTerm
 	label := "SIGTERM"
