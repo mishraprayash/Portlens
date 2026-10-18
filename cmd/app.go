@@ -48,7 +48,7 @@ func runListing(ctx context.Context, stdout, stderr io.Writer, opts *options) in
 		_ = render.JSONList(stdout, entries)
 		return exitcode.Success
 	}
-	r := render.NewRenderer(stdout, render.WithColor(!opts.noColor))
+	r := render.New(stdout, !opts.noColor)
 	r.List(entries, render.ListOptions{SortBy: opts.sortBy, Filter: opts.filter, OnlyTCP: opts.onlyTCP})
 	return exitcode.Success
 }

@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/mishraprayash/Portlens/internal/model"
@@ -118,6 +119,9 @@ func (m *Manager) Kill(ctx context.Context, report *model.Report, force bool) er
 // When force is false it sends SIGTERM, waits up to m.Wait for the root process to exit,
 // and returns nil on success. When force is true it sends SIGKILL.
 func (m *Manager) TerminateTree(ctx context.Context, pid int32, force bool) error {
+	if err := checkProtected(pid); err != nil {
+		return err
+	}
 	pids := []int32{pid}
 	if m.Platform != nil && m.Platform.Tree != nil {
 		if tree, err := m.Platform.Tree.Descendants(ctx, pid); err == nil {
@@ -136,6 +140,9 @@ func (m *Manager) TerminateTree(ctx context.Context, pid int32, force bool) erro
 	// Signal deepest-first so children are cleaned up before their parent.
 	var firstErr error
 	for _, p := range pids {
+		if checkProtected(p) != nil {
+			continue // never signal PID 1 or PortLens itself, even as a descendant
+		}
 		if err := m.Platform.Controller.Signal(ctx, p, sig); err != nil {
 			if firstErr == nil {
 				firstErr = err
@@ -164,6 +171,18 @@ func (m *Manager) TerminateTree(ctx context.Context, pid int32, force bool) erro
 		time.Sleep(150 * time.Millisecond)
 	}
 	return &ErrStillRunning{PID: pid}
+}
+
+// ErrProtectedProcess is returned when asked to signal a process PortLens must
+// never terminate: PID 1 (or a non-positive PID, which kill(2) treats as a
+// process group) and PortLens itself.
+var ErrProtectedProcess = fmt.Errorf("refusing to signal a protected process")
+
+func checkProtected(pid int32) error {
+	if pid <= 1 || int(pid) == os.Getpid() {
+		return fmt.Errorf("%w (pid %d)", ErrProtectedProcess, pid)
+	}
+	return nil
 }
 
 // lookupContainer resolves the container owning a report's port, preferring the
