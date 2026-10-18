@@ -79,6 +79,10 @@ func newContainerProvider() ContainerProvider {
 	return nil
 }
 
+// ContainerSocketPaths returns the candidate container daemon sockets PortLens
+// probes, in order of preference (used by `portlens doctor`).
+func ContainerSocketPaths() []string { return dockerSocketPaths() }
+
 // dockerSocketPaths returns candidate container daemon socket paths in order of
 // preference (Docker then Podman), honoring DOCKER_HOST and CONTAINER_HOST.
 func dockerSocketPaths() []string {

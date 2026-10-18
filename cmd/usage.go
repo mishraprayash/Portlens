@@ -29,6 +29,7 @@ COMMANDS
   find <query>             Find ports by process name/command or PID (--pid)
   next [start]             Find the lowest available/free port (default 3000)
   config                   Manage named port groups (@name)
+  doctor                   Check which features work on this machine
   completion <shell>       Generate shell autocompletion (bash, zsh, fish)
 
 TARGETING FLAGS (kill and other actions)
@@ -169,6 +170,23 @@ FLAGS
 `)
 }
 
+func printDoctorUsage(w io.Writer) {
+	fmt.Fprint(w, `portlens doctor — Check which PortLens features work on this machine
+
+USAGE
+  portlens doctor [flags]
+
+Reports port enumeration, clipboard, browser, notification and container
+runtime support, config validity, and privileges. Exits 1 only if a core check
+fails.
+
+FLAGS
+  -j, --json        Output the checks as a JSON array
+      --no-color    Disable colored output
+  -h, --help        Show this help
+`)
+}
+
 func printWatchUsage(w io.Writer) {
 	fmt.Fprint(w, `portlens watch — Live-monitor port states with desktop notifications
 
@@ -178,6 +196,7 @@ USAGE
 FLAGS
       --interval <s> Poll interval in seconds (default: 1)
       --notify       Desktop notification on port state change
+  -j, --json         Stream events as JSON lines (snapshot, then up/down/changed)
   -v, --verbose      Detailed report for watched ports
       --no-color     Disable colored output
   -h, --help         Show this help

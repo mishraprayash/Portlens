@@ -37,6 +37,7 @@ func defaultSubcommandRegistry() *SubcommandRegistry {
 	r.Register(&nextSubcommand{})
 	r.Register(&topSubcommand{})
 	r.Register(&configSubcommand{})
+	r.Register(&doctorSubcommand{})
 	r.Register(&completionSubcommand{})
 	return r
 }
