@@ -6,6 +6,16 @@ All notable changes to PortLens are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Release automation**: `.goreleaser.yaml` and a tag-triggered
+  `release.yml` workflow publish static linux/darwin (amd64, arm64) archives
+  with SHA-256 `checksums.txt` to GitHub Releases, after running the test suite.
+- `install.sh`: one-line installer that downloads the right archive and
+  verifies its checksum.
+- `portlens --version` now reports the module version for
+  `go install ...@vX.Y.Z` builds (unstamped local builds report `dev`).
+
 ### Changed
 
 - **HTTP probing is opt-in**: deep inspection no longer sends a `GET /` to the
