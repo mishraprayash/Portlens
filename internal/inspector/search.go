@@ -49,15 +49,7 @@ func (i *Inspector) SearchByPID(ctx context.Context, pid int32) ([]model.PortEnt
 		if hit, ok := ancestors[owner]; ok {
 			return hit
 		}
-		hit := false
-		if chain, err := i.Platform.Tree.Ancestors(ctx, owner); err == nil {
-			for _, a := range chain {
-				if a != nil && a.PID == pid {
-					hit = true
-					break
-				}
-			}
-		}
+		hit := i.isAncestor(ctx, owner, pid)
 		ancestors[owner] = hit
 		return hit
 	}
@@ -66,6 +58,20 @@ func (i *Inspector) SearchByPID(ctx context.Context, pid int32) ([]model.PortEnt
 	})
 	i.attachContainers(ctx, entries)
 	return entries, nil
+}
+
+// isAncestor returns whether targetPID is in the ancestor chain of owner.
+func (i *Inspector) isAncestor(ctx context.Context, owner, targetPID int32) bool {
+	chain, err := i.Platform.Tree.Ancestors(ctx, owner)
+	if err != nil {
+		return false
+	}
+	for _, a := range chain {
+		if a != nil && a.PID == targetPID {
+			return true
+		}
+	}
+	return false
 }
 
 // processInfos resolves process metadata for each unique listener PID. It uses
