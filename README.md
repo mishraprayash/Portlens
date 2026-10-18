@@ -60,7 +60,7 @@ Make sure `$GOBIN` (`~/go/bin`) is on your `PATH`, then:
 
 ```bash
 $ portlens --version
-portlens 0.2.0
+portlens 0.3.0
 ```
 
 ### Other install methods
