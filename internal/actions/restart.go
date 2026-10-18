@@ -102,7 +102,7 @@ func defaultProcessStarter(_ context.Context, argv []string, cwd string) (int, e
 
 	devNull, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
 	if err == nil {
-		defer devNull.Close()
+		defer func() { _ = devNull.Close() }()
 		run.Stdin = devNull
 		run.Stdout = devNull
 		run.Stderr = devNull

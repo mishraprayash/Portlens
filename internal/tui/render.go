@@ -102,7 +102,6 @@ func cyan(s string) string    { return "\x1b[36m" + s + "\x1b[0m" }
 func green(s string) string   { return "\x1b[32m" + s + "\x1b[0m" }
 func yellow(s string) string  { return "\x1b[33m" + s + "\x1b[0m" }
 func red(s string) string     { return "\x1b[31m" + s + "\x1b[0m" }
-func magenta(s string) string { return "\x1b[35m" + s + "\x1b[0m" }
 func inverse(s string) string { return "\x1b[7m" + s + "\x1b[0m" }
 
 // Render produces the complete screen frame for the terminal.

@@ -139,7 +139,7 @@ func readRawKey(f *os.File) (byte, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer term.Restore(fd, old)
+	defer func() { _ = term.Restore(fd, old) }()
 
 	buf := make([]byte, 1)
 	if _, err := f.Read(buf); err != nil {

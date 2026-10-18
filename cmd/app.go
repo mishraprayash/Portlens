@@ -121,7 +121,7 @@ func scanPorts(ctx context.Context, stderr io.Writer, insp *inspector.Inspector,
 		return nil, fail(stderr, mapError(err), "portlens: %v\n", err)
 	}
 	if res.Failed > 0 {
-		fmt.Fprintf(stderr, "portlens: warning: %d of %d ports could not be inspected: %v\n",
+		_, _ = fmt.Fprintf(stderr, "portlens: warning: %d of %d ports could not be inspected: %v\n",
 			res.Failed, len(ports), res.FirstErr)
 	}
 	return res.Reports, exitcode.Success
@@ -159,7 +159,7 @@ func (p *scanProgressReporter) Report(done, total, found int, elapsed time.Durat
 // fresh line when running on a terminal.
 func (p *scanProgressReporter) Finish() {
 	if p.interactive {
-		fmt.Fprintln(p.w)
+		_, _ = fmt.Fprintln(p.w)
 	}
 }
 
@@ -169,14 +169,14 @@ func (p *scanProgressReporter) Finish() {
 // scanPorts loop and the --log stdout tee keep this free of per-command logic.
 func runScan(ctx context.Context, stdout, stderr io.Writer, opts *options) int {
 	total := len(opts.ports)
-	fmt.Fprintf(stdout, "%s\n", scanHeader(opts.ports))
+	_, _ = fmt.Fprintf(stdout, "%s\n", scanHeader(opts.ports))
 
 	found, worst, elapsed := scanAll(ctx, stderr, opts)
 
 	entries := reportsToEntries(found)
 	r := render.New(stdout, !opts.noColor)
 	r.List(entries, render.ListOptions{SortBy: opts.sortBy, Filter: opts.filter, OnlyTCP: opts.onlyTCP})
-	fmt.Fprintf(stdout, "\nFound %d of %d ports in use in %s.\n", len(found), total, formatElapsed(elapsed))
+	_, _ = fmt.Fprintf(stdout, "\nFound %d of %d ports in use in %s.\n", len(found), total, formatElapsed(elapsed))
 	return worst
 }
 
@@ -212,7 +212,7 @@ func writeScanProgress(w io.Writer, done, total int, elapsed time.Duration, foun
 		fmt.Fprint(w, "\r"+line)
 		return
 	}
-	fmt.Fprintln(w, line)
+	_, _ = fmt.Fprintln(w, line)
 }
 
 func padTo(s string, n int) string {
@@ -264,7 +264,7 @@ func formatElapsed(d time.Duration) string {
 // payload, ready to pipe into jq or a file.
 func runPortsJSON(ctx context.Context, stdout, stderr io.Writer, opts *options) int {
 	total := len(opts.ports)
-	fmt.Fprintln(stderr, scanHeader(opts.ports))
+	_, _ = fmt.Fprintln(stderr, scanHeader(opts.ports))
 
 	found, worst, elapsed := scanAll(ctx, stderr, opts)
 
@@ -326,11 +326,11 @@ func runPort(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, opt
 	switch {
 	case opts.kill:
 		renderReport(r, report, opts)
-		fmt.Fprintln(stdout)
+		_, _ = fmt.Fprintln(stdout)
 		return runKill(ctx, mgr, report, opts)
 	case opts.restart:
 		renderReport(r, report, opts)
-		fmt.Fprintln(stdout)
+		_, _ = fmt.Fprintln(stdout)
 		return runRestart(ctx, mgr, report)
 	case opts.open:
 		return runOpen(ctx, mgr, report)
