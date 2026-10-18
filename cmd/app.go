@@ -327,6 +327,9 @@ func runPort(ctx context.Context, stdout, stderr io.Writer, stdin io.Reader, opt
 	case opts.kill:
 		renderReport(r, report, opts)
 		_, _ = fmt.Fprintln(stdout)
+		if opts.dryRun {
+			return runKillDryRun(ctx, mgr, report, opts)
+		}
 		return runKill(ctx, mgr, report, opts)
 	case opts.restart:
 		renderReport(r, report, opts)
@@ -376,6 +379,16 @@ func runKill(ctx context.Context, mgr *actions.Manager, report *model.Report, op
 		}
 		return 0, "", false
 	})
+}
+
+// runKillDryRun prints what kill would do without signaling anything.
+func runKillDryRun(ctx context.Context, mgr *actions.Manager, report *model.Report, opts *options) int {
+	plan, err := mgr.PlanKill(ctx, report, opts.force)
+	if err != nil {
+		return fail(mgr.Out, mapError(err), "kill dry-run failed: %v\n", err)
+	}
+	_, _ = fmt.Fprintf(mgr.Out, "Dry run: %s\nNothing was changed.\n", plan)
+	return exitcode.Success
 }
 
 func runRestart(ctx context.Context, mgr *actions.Manager, report *model.Report) int {

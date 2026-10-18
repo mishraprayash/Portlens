@@ -8,6 +8,11 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Added
 
+- **`--project <name>`** selects every listening port whose detected project
+  matches (like `--name`/`--pid`), e.g. `portlens kill --project orbit`.
+- **`--dry-run`** with `--kill` prints what would be signaled (or which
+  container would be stopped) without changing anything.
+
 - **Release automation**: `.goreleaser.yaml` and a tag-triggered
   `release.yml` workflow publish static linux/darwin (amd64, arm64) archives
   with SHA-256 `checksums.txt` to GitHub Releases, after running the test suite.

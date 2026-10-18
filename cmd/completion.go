@@ -67,6 +67,8 @@ var flagDocs = []flagDoc{
 	{long: "interval", desc: "Watch re-render interval in seconds"},
 	{long: "pid", desc: "Target process by PID"},
 	{long: "name", desc: "Target process by name"},
+	{long: "project", desc: "Target processes belonging to a project"},
+	{long: "dry-run", desc: "With --kill: show what would happen, change nothing"},
 	{long: "help", short: "h", desc: "Show help"},
 	{long: "version", desc: "Print version"},
 	{long: "protocol", desc: "Protocol filter (tcp or udp)"},

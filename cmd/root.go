@@ -45,9 +45,11 @@ type options struct {
 	filter  string
 	onlyTCP bool
 
-	all  bool
-	pid  int
-	name string
+	all     bool
+	pid     int
+	name    string
+	project string
+	dryRun  bool
 
 	watch    bool
 	interval int
@@ -120,7 +122,7 @@ func executeCore(ctx context.Context, args []string, stdout, stderr io.Writer, s
 	}
 
 	// Dynamic port sources resolve at runtime: --all, --pid, and --name.
-	if opts.all || opts.pid > 0 || opts.name != "" {
+	if opts.all || opts.pid > 0 || opts.name != "" || opts.project != "" {
 		if code := resolveDynamicPorts(ctx, stdout, stderr, opts); code != exitcode.Success {
 			return code
 		}
@@ -129,7 +131,7 @@ func executeCore(ctx context.Context, args []string, stdout, stderr io.Writer, s
 	// Actions and per-port views need a concrete target. Without one they
 	// would silently degrade to the default listing (e.g. `portlens --kill`).
 	if len(opts.ports) == 0 && requiresPortTarget(opts) {
-		return fail(stderr, exitcode.InvalidArguments, "portlens: no ports to act on; pass port(s), --all, --pid, or --name\nRun 'portlens --help' for usage.\n")
+		return fail(stderr, exitcode.InvalidArguments, "portlens: no ports to act on; pass port(s), --all, --pid, --name, or --project\nRun 'portlens --help' for usage.\n")
 	}
 
 	if opts.watch {
@@ -168,6 +170,12 @@ func parseArgs(args []string) (*options, error) {
 	if provided["name"] && strings.TrimSpace(opts.name) == "" {
 		return nil, fmt.Errorf("--name must not be empty")
 	}
+	if provided["project"] && strings.TrimSpace(opts.project) == "" {
+		return nil, fmt.Errorf("--project must not be empty")
+	}
+	if opts.dryRun && !opts.kill {
+		return nil, fmt.Errorf("--dry-run requires --kill")
+	}
 	if provided["interval"] && opts.interval <= 0 {
 		return nil, fmt.Errorf("--interval must be a positive number of seconds")
 	}
@@ -184,8 +192,8 @@ func parseArgs(args []string) (*options, error) {
 	}
 
 	rest := reordered.positional
-	if len(rest) > 0 && (opts.all || opts.pid > 0 || opts.name != "") {
-		return nil, fmt.Errorf("cannot combine explicit ports with --all, --pid, or --name")
+	if len(rest) > 0 && (opts.all || opts.pid > 0 || opts.name != "" || opts.project != "") {
+		return nil, fmt.Errorf("cannot combine explicit ports with --all, --pid, --name, or --project")
 	}
 	for _, arg := range rest {
 		if strings.HasPrefix(arg, "@") {
@@ -264,6 +272,8 @@ func registerFlags(fs *flag.FlagSet, opts *options) {
 	fs.IntVar(&opts.interval, "interval", 0, "")
 	fs.IntVar(&opts.pid, "pid", 0, "")
 	fs.StringVar(&opts.name, "name", "", "")
+	fs.StringVar(&opts.project, "project", "", "")
+	fs.BoolVar(&opts.dryRun, "dry-run", false, "")
 	fs.BoolVar(&opts.help, "help", false, "")
 	fs.BoolVar(&opts.help, "h", false, "")
 	fs.BoolVar(&opts.showVer, "version", false, "")
@@ -303,7 +313,7 @@ type argSplit struct {
 }
 
 var valueFlags = map[string]bool{
-	"protocol": true, "sort": true, "filter": true, "name": true, "pid": true, "interval": true,
+	"protocol": true, "sort": true, "filter": true, "name": true, "project": true, "pid": true, "interval": true,
 }
 
 func reorderArgs(args []string) argSplit {
@@ -348,7 +358,7 @@ func hasPortTarget(args []string) bool {
 			name = name[:eq]
 		}
 		switch name {
-		case "all", "pid", "name":
+		case "all", "pid", "name", "project":
 			return true
 		}
 	}
@@ -431,7 +441,7 @@ func osSignalContext() (context.Context, context.CancelFunc) {
 // exitcode.Success on success or a nonzero exit code on failure.
 func resolveDynamicPorts(ctx context.Context, stdout, stderr io.Writer, opts *options) int {
 	if len(opts.ports) > 0 {
-		return fail(stderr, exitcode.InvalidArguments, "portlens: cannot combine explicit ports with --all/--pid/--name\n")
+		return fail(stderr, exitcode.InvalidArguments, "portlens: cannot combine explicit ports with --all/--pid/--name/--project\n")
 	}
 	insp := newInspector(opts)
 	var entries []model.PortEntry
@@ -441,6 +451,9 @@ func resolveDynamicPorts(ctx context.Context, stdout, stderr io.Writer, opts *op
 		entries, err = insp.SearchByPID(ctx, int32(opts.pid))
 	case opts.name != "":
 		entries, err = insp.SearchByName(ctx, opts.name)
+	case opts.project != "":
+		entries, err = insp.List(ctx)
+		entries = filterByProject(entries, opts.project)
 	default:
 		entries, err = insp.List(ctx)
 	}
@@ -457,6 +470,19 @@ func resolveDynamicPorts(ctx context.Context, stdout, stderr io.Writer, opts *op
 	return exitcode.Success
 }
 
+// filterByProject keeps entries whose detected project name equals project
+// (case-insensitive).
+func filterByProject(entries []model.PortEntry, project string) []model.PortEntry {
+	project = strings.TrimSpace(project)
+	var out []model.PortEntry
+	for _, e := range entries {
+		if e.Project != "" && strings.EqualFold(e.Project, project) {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
 // describeTarget returns a human-readable description of the port source for
 // error messages and watch-mode headers.
 func describeTarget(opts *options) string {
@@ -465,6 +491,8 @@ func describeTarget(opts *options) string {
 		return fmt.Sprintf("listening port owned by process %d", opts.pid)
 	case opts.name != "":
 		return fmt.Sprintf("listening port owned by a process matching %q", opts.name)
+	case opts.project != "":
+		return fmt.Sprintf("listening port belonging to project %q", opts.project)
 	case opts.all:
 		return "listening port"
 	default:

@@ -427,3 +427,35 @@ func TestParseArgsWatchRejectsActionFlags(t *testing.T) {
 		t.Errorf("watch alone should stay valid, got opts=%v err=%v", opts, err)
 	}
 }
+
+func TestParseArgsProjectAndDryRun(t *testing.T) {
+	opts, err := parseArgs([]string{"--kill", "--project", "orbit", "--dry-run"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.project != "orbit" || !opts.dryRun || !opts.kill {
+		t.Fatalf("got %+v", opts)
+	}
+	for _, args := range [][]string{
+		{"--dry-run", "3000"},                    // requires --kill
+		{"--kill", "--project", " ", "3000"},     // empty project
+		{"--kill", "3000", "--project", "orbit"}, // ports + project
+	} {
+		if _, err := parseArgs(args); err == nil {
+			t.Errorf("parseArgs(%v) succeeded, want error", args)
+		}
+	}
+	if !hasPortTarget([]string{"--project", "orbit"}) {
+		t.Error("--project should count as a port target")
+	}
+}
+
+func TestFilterByProject(t *testing.T) {
+	entries := []model.PortEntry{
+		{Port: 1, Project: "Orbit"}, {Port: 2, Project: "other"}, {Port: 3},
+	}
+	got := filterByProject(entries, " orbit ")
+	if len(got) != 1 || got[0].Port != 1 {
+		t.Fatalf("got %+v", got)
+	}
+}
