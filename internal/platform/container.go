@@ -287,7 +287,7 @@ func (d *dockerProvider) get(ctx context.Context, path string, out any) error {
 	if err != nil {
 		return fmt.Errorf("docker daemon unreachable: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return dockerHTTPError(path, resp)
 	}
@@ -309,7 +309,7 @@ func (d *dockerProvider) post(ctx context.Context, path string, timeout time.Dur
 	if err != nil {
 		return fmt.Errorf("docker daemon unreachable: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return dockerHTTPError(path, resp)
 	}

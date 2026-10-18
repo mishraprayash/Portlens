@@ -86,9 +86,9 @@ func (m *Manager) Kill(ctx context.Context, report *model.Report, force bool) er
 		pids = TreePIDs(tree)
 	}
 	if len(pids) == 1 {
-		fmt.Fprintf(m.Out, "Terminating process %d (%s)\n", report.Process.PID, report.Process.Name)
+		_, _ = fmt.Fprintf(m.Out, "Terminating process %d (%s)\n", report.Process.PID, report.Process.Name)
 	} else {
-		fmt.Fprintf(m.Out, "Terminating process %d (%s) and %d descendant(s)\n",
+		_, _ = fmt.Fprintf(m.Out, "Terminating process %d (%s) and %d descendant(s)\n",
 			report.Process.PID, report.Process.Name, len(pids)-1)
 	}
 
@@ -107,7 +107,7 @@ func (m *Manager) Kill(ctx context.Context, report *model.Report, force bool) er
 		return err
 	}
 	if force {
-		fmt.Fprintf(m.Out, "Process %d terminated\n", report.Process.PID)
+		_, _ = fmt.Fprintf(m.Out, "Process %d terminated\n", report.Process.PID)
 	} else {
 		fmt.Fprintf(m.Out, "Process %d exited gracefully\n", report.Process.PID)
 	}

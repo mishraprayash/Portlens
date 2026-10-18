@@ -214,7 +214,7 @@ func libprocPath() (uintptr, func(), error) {
 	}
 	runtime.LockOSThread()
 	return lib, func() {
-		purego.Dlclose(lib)
+		_ = purego.Dlclose(lib)
 		runtime.UnlockOSThread()
 	}, nil
 }

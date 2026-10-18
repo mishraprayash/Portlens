@@ -60,13 +60,12 @@ func (r *Renderer) writeln(s string) {
 }
 
 // Styles return ANSI-wrapped strings when color is enabled.
-func (r *Renderer) bold(s string) string    { return r.wrap("1", s) }
-func (r *Renderer) dim(s string) string     { return r.wrap("2", s) }
-func (r *Renderer) red(s string) string     { return r.wrap("31", s) }
-func (r *Renderer) green(s string) string   { return r.wrap("32", s) }
-func (r *Renderer) yellow(s string) string  { return r.wrap("33", s) }
-func (r *Renderer) magenta(s string) string { return r.wrap("35", s) }
-func (r *Renderer) cyan(s string) string    { return r.wrap("36", s) }
+func (r *Renderer) bold(s string) string   { return r.wrap("1", s) }
+func (r *Renderer) dim(s string) string    { return r.wrap("2", s) }
+func (r *Renderer) red(s string) string    { return r.wrap("31", s) }
+func (r *Renderer) green(s string) string  { return r.wrap("32", s) }
+func (r *Renderer) yellow(s string) string { return r.wrap("33", s) }
+func (r *Renderer) cyan(s string) string   { return r.wrap("36", s) }
 
 func (r *Renderer) wrap(code, s string) string {
 	if !r.Color || s == "" {

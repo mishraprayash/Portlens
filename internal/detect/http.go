@@ -61,7 +61,7 @@ func ProbeHTTP(ctx context.Context, addr string, port uint16) *model.HTTPProbe {
 	if err != nil {
 		return nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	latency := time.Since(start)
 
 	probe := &model.HTTPProbe{

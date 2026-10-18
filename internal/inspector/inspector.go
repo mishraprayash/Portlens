@@ -175,8 +175,9 @@ func (i *Inspector) InspectDepth(ctx context.Context, port int32, protocol model
 		i.interpret(report)
 	}
 
-	// Lightweight HTTP service probing when enabled or during deep inspection
-	if (i.EnableProbe || depth == DepthFull) && primary.Protocol.Normalize() == model.ProtocolTCP {
+	// HTTP probing sends a real request to the service, so it only runs when
+	// explicitly enabled (--probe).
+	if i.EnableProbe && primary.Protocol.Normalize() == model.ProtocolTCP {
 		if probe := detect.ProbeHTTP(ctx, primary.Address, uint16(port)); probe != nil {
 			report.HTTPProbe = probe
 			report.Facts = append(report.Facts, fmt.Sprintf("HTTP probe returned %s in %s", probe.Status, model.FormatDuration(probe.Latency)))

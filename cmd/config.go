@@ -27,7 +27,7 @@ func runConfig(args []string, stdout, stderr io.Writer) int {
 	case "remove", "rm":
 		return configRemove(args[1:], stdout, stderr)
 	case "path":
-		fmt.Fprintln(stdout, config.Path())
+		_, _ = fmt.Fprintln(stdout, config.Path())
 		return exitcode.Success
 	case "help", "--help", "-h":
 		printConfigUsage(stdout)

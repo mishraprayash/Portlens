@@ -6,7 +6,18 @@ All notable changes to PortLens are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- **HTTP probing is opt-in**: deep inspection no longer sends a `GET /` to the
+  service unless `--probe` is passed.
+- Default version string is `0.2.0`, matching the latest tag.
+- Added `.golangci.yml` and a lint job in CI; removed dead code and fixed
+  unchecked errors it flagged.
+
 ### Fixed
+
+- README and `docs/security.md` no longer claim zero disk footprint; the
+  optional port-group config file is documented.
 
 - **Platform OpenURL now accepts only `http`/`https` URLs**, rejecting other
   schemes and malformed input before invoking the OS browser opener.

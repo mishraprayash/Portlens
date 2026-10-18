@@ -92,7 +92,7 @@ func (r *Renderer) walkTree(node *treeNode, prefix string, isRoot, isLast bool, 
 	}
 	*lines = append(*lines, prefix+connector+label)
 
-	childPrefix := prefix
+	var childPrefix string
 	switch {
 	case isRoot:
 		childPrefix = ""

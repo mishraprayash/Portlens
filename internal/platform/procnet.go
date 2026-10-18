@@ -256,22 +256,6 @@ func nibble(c byte) byte {
 	return d
 }
 
-// appendDecimal writes v as decimal digits into buf, returning the count.
-func appendDecimal(buf []byte, v uint64) int {
-	var tmp [20]byte
-	i := len(tmp)
-	if v == 0 {
-		i--
-		tmp[i] = '0'
-	}
-	for v > 0 {
-		i--
-		tmp[i] = byte('0' + v%10)
-		v /= 10
-	}
-	return copy(buf, tmp[i:])
-}
-
 func decodeAddr(hexStr string) string {
 	return decodeAddrBytes([]byte(hexStr))
 }

@@ -141,18 +141,9 @@ func parseStatRow(data []byte) (statRow, bool) {
 	return row, true
 }
 
-// linuxStartTime converts a process's start ticks (field 22 of stat) plus boot
-// time into a wall-clock start time. Linux schedules in USER_HZ (100) clock
-// ticks per second on essentially all platforms.
-func linuxStartTime(pid int32) (time.Time, bool) {
-	const userHz = 100
-	data, err := os.ReadFile(procDir(pid) + "/stat")
-	if err != nil {
-		return time.Time{}, false
-	}
-	return linuxStartTimeFromStat(data)
-}
-
+// linuxStartTimeFromStat converts a process's start ticks (field 22 of stat)
+// plus boot time into a wall-clock start time. Linux schedules in USER_HZ (100)
+// clock ticks per second on essentially all platforms.
 func linuxStartTimeFromStat(data []byte) (time.Time, bool) {
 	const userHz = 100
 	open := bytes.IndexByte(data, '(')
