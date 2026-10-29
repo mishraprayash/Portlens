@@ -3,7 +3,7 @@ package inspector
 import (
 	"net"
 
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 // riskRank orders risk levels from least to most severe.

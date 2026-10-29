@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 // Connections renders a summary of a process's active connections, grouped by
@@ -49,12 +49,12 @@ func (r *Renderer) Connections(report *model.Report) {
 		if i >= maxRows {
 			break
 		}
-		remote := formatAddr(c.RemoteAddr, c.RemotePort)
+		remote := model.FormatAddr(c.RemoteAddr, c.RemotePort)
 		if c.RemoteAddr == "" || c.RemotePort == 0 {
 			remote = "*"
 		}
 		rows = append(rows, []string{
-			formatAddr(c.LocalAddr, c.LocalPort),
+			model.FormatAddr(c.LocalAddr, c.LocalPort),
 			remote,
 			c.State,
 		})

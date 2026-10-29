@@ -14,7 +14,26 @@ cross-compiling for another platform, verifying the install, and uninstalling.
 
 ---
 
-## Option 1 — Build from source (recommended)
+## Option 0 — Prebuilt binary (no Go required)
+
+Each tagged release publishes static `linux`/`darwin` × `amd64`/`arm64`
+archives plus a `checksums.txt` (SHA-256) on the
+[Releases page](https://github.com/mishraprayash/Portlens/releases).
+
+One-line installer (verifies the checksum before installing):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mishraprayash/Portlens/main/install.sh | sh
+```
+
+Set `PORTLENS_VERSION=v0.3.0` to pin a version and `INSTALL_DIR=$HOME/.local/bin`
+to install without sudo. To do it by hand, download the archive and
+`checksums.txt`, run `shasum -a 256 -c --ignore-missing checksums.txt`, then
+extract `portlens` onto your `PATH`.
+
+---
+
+## Option 1 — Build from source
 
 ### 1. Install Go
 
@@ -47,7 +66,7 @@ Or install the official tarball: <https://go.dev/dl/>.
 ### 2. Clone and install
 
 ```bash
-git clone https://github.com/portlens/portlens.git
+git clone https://github.com/mishraprayash/Portlens.git
 cd portlens
 make install
 ```
@@ -83,7 +102,7 @@ Then open a new terminal (or `source` the file) and verify:
 
 ```bash
 $ portlens --version
-portlens 0.1.0
+portlens 0.3.0
 ```
 
 ---
@@ -132,7 +151,7 @@ Copy the resulting binary to the target and place it on `PATH` (e.g.
 
 ```bash
 $ portlens --version
-portlens 0.1.0
+portlens 0.3.0
 
 $ portlens --help        # shows the command reference
 
@@ -160,7 +179,7 @@ rm -rf "$HOME/.local/share/portlens"                  # Linux
 Prebuilt releases and package managers are on the roadmap but not yet published:
 
 - **Homebrew tap** (macOS) — planned.
-- **`go install github.com/portlens/portlens@latest`** — will work once the
+- **`go install github.com/mishraprayash/Portlens@latest`** — will work once the
   module is published to the Go proxy (requires the same
   `CGO_ENABLED=0` note above).
 - **Distro packages / apt / AUR** — planned.

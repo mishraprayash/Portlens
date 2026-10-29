@@ -13,9 +13,11 @@ never leaks information about your machine.
   browser to a local URL.)
 - **No data exfiltration.** Process names, commands, environment data, and
   working directories never leave your machine.
-- **Completely stateless.** PortLens performs real-time queries and leaves zero
-  disk footprint. No inspection logs, process histories, or socket traces are
-  stored on disk.
+- **No history.** PortLens performs real-time queries. The only file it writes
+  is the optional port-group config (`portlens config`). No inspection logs,
+  process histories, or socket traces are stored on disk.
+- **Probing is opt-in.** PortLens sends an HTTP request to a local service only
+  when `--probe` is given.
 
 ## Secret handling
 

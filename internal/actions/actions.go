@@ -8,10 +8,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
-	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/platform"
+	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/platform"
 )
 
 // ConfirmFunc prompts the user and reports whether to proceed.
@@ -65,6 +66,19 @@ func TreePIDs(tree *model.ProcessTree) []int32 {
 	return out
 }
 
+// treePIDs returns pid and its descendants (deepest first). It always includes
+// pid itself, even when the tree provider is missing, fails, or returns nothing.
+func (m *Manager) treePIDs(ctx context.Context, pid int32) []int32 {
+	if m.Platform != nil && m.Platform.Tree != nil {
+		if tree, err := m.Platform.Tree.Descendants(ctx, pid); err == nil {
+			if pids := TreePIDs(tree); len(pids) > 0 {
+				return pids
+			}
+		}
+	}
+	return []int32{pid}
+}
+
 // Kill terminates the process owning the report's port. When the port belongs
 // to a container, the container is stopped instead of its host-side process
 // (on macOS the host-side "process" is the Docker VM, which must never be
@@ -81,14 +95,11 @@ func (m *Manager) Kill(ctx context.Context, report *model.Report, force bool) er
 	if report.Process == nil {
 		return fmt.Errorf("no owning process to terminate")
 	}
-	pids := []int32{report.Process.PID}
-	if tree, err := m.Platform.Tree.Descendants(ctx, report.Process.PID); err == nil {
-		pids = TreePIDs(tree)
-	}
+	pids := m.treePIDs(ctx, report.Process.PID)
 	if len(pids) == 1 {
-		fmt.Fprintf(m.Out, "Terminating process %d (%s)\n", report.Process.PID, report.Process.Name)
+		_, _ = fmt.Fprintf(m.Out, "Terminating process %d (%s)\n", report.Process.PID, report.Process.Name)
 	} else {
-		fmt.Fprintf(m.Out, "Terminating process %d (%s) and %d descendant(s)\n",
+		_, _ = fmt.Fprintf(m.Out, "Terminating process %d (%s) and %d descendant(s)\n",
 			report.Process.PID, report.Process.Name, len(pids)-1)
 	}
 
@@ -107,23 +118,53 @@ func (m *Manager) Kill(ctx context.Context, report *model.Report, force bool) er
 		return err
 	}
 	if force {
-		fmt.Fprintf(m.Out, "Process %d terminated\n", report.Process.PID)
+		_, _ = fmt.Fprintf(m.Out, "Process %d terminated\n", report.Process.PID)
 	} else {
 		fmt.Fprintf(m.Out, "Process %d exited gracefully\n", report.Process.PID)
 	}
 	return nil
 }
 
+// PlanKill describes what Kill would do for report without signaling or
+// stopping anything. It returns an error in the same cases Kill would refuse.
+func (m *Manager) PlanKill(ctx context.Context, report *model.Report, force bool) (string, error) {
+	if report == nil {
+		return "", fmt.Errorf("no report to act on")
+	}
+	if c := m.lookupContainer(ctx, report); c != nil {
+		if force {
+			return fmt.Sprintf("would force-stop container %s", c.DisplayName()), nil
+		}
+		return fmt.Sprintf("would stop container %s", c.DisplayName()), nil
+	}
+	if report.Process == nil {
+		return "", fmt.Errorf("no owning process to terminate")
+	}
+	if err := checkProtected(report.Process.PID); err != nil {
+		return "", err
+	}
+	sig := "SIGTERM"
+	if force {
+		sig = "SIGKILL"
+	}
+	pids := m.treePIDs(ctx, report.Process.PID)
+	n := 0
+	for _, p := range pids {
+		if checkProtected(p) == nil {
+			n++
+		}
+	}
+	return fmt.Sprintf("would send %s to %d process(es) (root pid %d, %s)", sig, n, report.Process.PID, report.Process.Name), nil
+}
+
 // TerminateTree terminates the process tree rooted at pid without prompting.
 // When force is false it sends SIGTERM, waits up to m.Wait for the root process to exit,
 // and returns nil on success. When force is true it sends SIGKILL.
 func (m *Manager) TerminateTree(ctx context.Context, pid int32, force bool) error {
-	pids := []int32{pid}
-	if m.Platform != nil && m.Platform.Tree != nil {
-		if tree, err := m.Platform.Tree.Descendants(ctx, pid); err == nil {
-			pids = TreePIDs(tree)
-		}
+	if err := checkProtected(pid); err != nil {
+		return err
 	}
+	pids := m.treePIDs(ctx, pid)
 
 	sig := platform.SignalTerm
 	label := "SIGTERM"
@@ -136,6 +177,9 @@ func (m *Manager) TerminateTree(ctx context.Context, pid int32, force bool) erro
 	// Signal deepest-first so children are cleaned up before their parent.
 	var firstErr error
 	for _, p := range pids {
+		if checkProtected(p) != nil {
+			continue // never signal PID 1 or PortLens itself, even as a descendant
+		}
 		if err := m.Platform.Controller.Signal(ctx, p, sig); err != nil {
 			if firstErr == nil {
 				firstErr = err
@@ -166,6 +210,18 @@ func (m *Manager) TerminateTree(ctx context.Context, pid int32, force bool) erro
 	return &ErrStillRunning{PID: pid}
 }
 
+// ErrProtectedProcess is returned when asked to signal a process PortLens must
+// never terminate: PID 1 (or a non-positive PID, which kill(2) treats as a
+// process group) and PortLens itself.
+var ErrProtectedProcess = fmt.Errorf("refusing to signal a protected process")
+
+func checkProtected(pid int32) error {
+	if pid <= 1 || int(pid) == os.Getpid() {
+		return fmt.Errorf("%w (pid %d)", ErrProtectedProcess, pid)
+	}
+	return nil
+}
+
 // lookupContainer resolves the container owning a report's port, preferring the
 // already-attached container and falling back to a fresh runtime lookup so
 // actions never act on stale data.
@@ -191,7 +247,7 @@ func (m *Manager) lookupContainer(ctx context.Context, report *model.Report) *mo
 // confirms first; a force stop mirrors the process force-kill semantics and
 // does not prompt.
 func (m *Manager) killContainer(ctx context.Context, c *model.Container, force bool) error {
-	name := containerActionName(c)
+	name := c.DisplayName()
 	if force {
 		fmt.Fprintf(m.Out, "Force-stopping container %s\n", name)
 		if err := m.Platform.Containers.Kill(ctx, c.ID); err != nil {
@@ -219,18 +275,7 @@ func (m *Manager) killContainer(ctx context.Context, c *model.Container, force b
 
 // containerActionName renders a container name for messages, using the runtime
 // name when available and a short ID otherwise.
-func containerActionName(c *model.Container) string {
-	if c.Name != "" {
-		return c.Name
-	}
-	id := c.ID
-	if len(id) > 12 {
-		id = id[:12]
-	}
-	return id
-}
-
-// Copy sends text to the system clipboard.
+// Copy places text on the system clipboard.
 func (m *Manager) Copy(ctx context.Context, text string) error {
 	return m.Platform.Clipboard.Copy(ctx, text)
 }
