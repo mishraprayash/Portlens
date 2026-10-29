@@ -640,7 +640,7 @@ $ portlens 3<TAB>
 
 ```
 $ portlens doctor
-ok    platform           darwin/arm64, portlens 0.2.0
+ok    platform           darwin/arm64, portlens 0.3.0
 ok    port source        lsof at /usr/sbin/lsof
 ok    listing ports      9 listeners, all owners resolved
 warn  container runtime  socket ... exists but is not reachable
