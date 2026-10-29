@@ -6,9 +6,10 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/platform"
+	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/platform"
 )
 
 type stubController struct {
@@ -182,4 +183,66 @@ func TestWaitForPortRelease(t *testing.T) {
 			t.Fatalf("expected 2 calls to ResolvePort, got %d", resolver.calls)
 		}
 	})
+}
+
+func restartReport() *model.Report {
+	return &model.Report{
+		Port: 3000, Protocol: model.ProtocolTCP,
+		Process: &model.ProcessInfo{PID: 1234, Name: "node", Command: "node server.js",
+			Cmdline: []string{"node", "server.js"}, CWD: "/app"},
+		Ancestors: []*model.ProcessInfo{{Name: "zsh", PID: 100}},
+	}
+}
+
+func TestRestartReportsStarterFailure(t *testing.T) {
+	ctrl := &stubController{alive: map[int32]bool{1234: true}}
+	mgr := NewManager(&platform.Platform{Controller: ctrl}, &bytes.Buffer{},
+		func(string) (bool, error) { return true, nil })
+	boom := errors.New("exec: not found")
+	mgr.Starter = func(context.Context, []string, string) (int, error) { return 0, boom }
+	err := mgr.Restart(context.Background(), restartReport())
+	if !errors.Is(err, boom) {
+		t.Fatalf("err = %v", err)
+	}
+	if ctrl.signaled[1234] != platform.SignalTerm {
+		t.Error("old process should have been stopped before the start attempt")
+	}
+}
+
+func TestRestartDoesNotStartWhenStopFails(t *testing.T) {
+	ctrl := &sticky{} // never exits
+	mgr := NewManager(&platform.Platform{Controller: ctrl}, &bytes.Buffer{},
+		func(string) (bool, error) { return true, nil })
+	mgr.Wait = 150 * time.Millisecond
+	started := false
+	mgr.Starter = func(context.Context, []string, string) (int, error) { started = true; return 1, nil }
+	if err := mgr.Restart(context.Background(), restartReport()); err == nil {
+		t.Fatal("expected stop failure")
+	}
+	if started {
+		t.Error("new process started although the old one is still running")
+	}
+}
+
+func TestRestartAbortedBeforeStopSignalsNothing(t *testing.T) {
+	ctrl := &sticky{}
+	mgr := NewManager(&platform.Platform{Controller: ctrl}, &bytes.Buffer{},
+		func(string) (bool, error) { return false, nil })
+	mgr.Starter = func(context.Context, []string, string) (int, error) { t.Fatal("started"); return 0, nil }
+	if err := mgr.Restart(context.Background(), restartReport()); err == nil {
+		t.Fatal("expected abort")
+	}
+	if len(ctrl.order) != 0 {
+		t.Errorf("signals sent: %v", ctrl.order)
+	}
+}
+
+func TestDefaultProcessStarterRunsDetached(t *testing.T) {
+	pid, err := defaultProcessStarter(context.Background(), []string{"true"}, t.TempDir())
+	if err != nil || pid <= 0 {
+		t.Fatalf("pid %d, err %v", pid, err)
+	}
+	if _, err := defaultProcessStarter(context.Background(), []string{"/definitely/not/a/binary"}, ""); err == nil {
+		t.Error("expected start error for missing binary")
+	}
 }

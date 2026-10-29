@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 func TestContainerIDFromCgroup(t *testing.T) {
@@ -31,6 +31,7 @@ func TestContainerIDFromCgroup(t *testing.T) {
 		{"not in a container", "12:blkio:/", ""},
 		{"empty", "", ""},
 		{"embedded in longer hex", id + "a", ""},
+		{"sha512 128 hex", strings.Repeat("c", 128), ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -280,3 +281,59 @@ func TestDockerHTTPError(t *testing.T) {
 }
 
 var _ ContainerProvider = (*dockerProvider)(nil)
+
+func TestListCachesContainerFetches(t *testing.T) {
+	var requests atomic.Int32
+	sock := startDockerServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, testContainerJSON())
+	}))
+	d := newDockerProvider(sock)
+	base := time.Now()
+	clock := base
+	d.now = func() time.Time { return clock }
+
+	ctx := context.Background()
+	if _, err := d.list(ctx); err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if _, err := d.list(ctx); err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if got := requests.Load(); got != 1 {
+		t.Errorf("daemon requests within TTL = %d, want 1", got)
+	}
+
+	clock = base.Add(containerListTTL + time.Millisecond)
+	if _, err := d.list(ctx); err != nil {
+		t.Fatalf("list after expiry: %v", err)
+	}
+	if got := requests.Load(); got != 2 {
+		t.Errorf("daemon requests after TTL = %d, want 2", got)
+	}
+}
+
+func TestListDoesNotCacheErrors(t *testing.T) {
+	var requests atomic.Int32
+	sock := startDockerServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requests.Add(1) == 1 {
+			http.Error(w, "daemon restarting", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, testContainerJSON())
+	}))
+	d := newDockerProvider(sock)
+
+	ctx := context.Background()
+	if _, err := d.list(ctx); err == nil {
+		t.Fatal("list against failing daemon = nil error, want error")
+	}
+	if _, err := d.list(ctx); err != nil {
+		t.Fatalf("list after recovery: %v", err)
+	}
+	if got := requests.Load(); got != 2 {
+		t.Errorf("daemon requests = %d, want 2 (error not cached)", got)
+	}
+}

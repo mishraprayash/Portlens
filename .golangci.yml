@@ -1,0 +1,16 @@
+version: "2"
+linters:
+  settings:
+    errcheck:
+      # Writes to the CLI output streams are best-effort.
+      exclude-functions: [fmt.Fprint, fmt.Fprintf, fmt.Fprintln]
+    staticcheck:
+      # Style-only suggestions; correctness checks stay enabled.
+      checks: ["all", "-ST*", "-QF1001", "-QF1003"]
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters: [errcheck]
+      # sysctl via raw syscall is intentional until the libSystem path lands.
+      - path: internal/platform/process_darwin\.go
+        text: SA1019

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"os"
 
-	"github.com/portlens/portlens/internal/exitcode"
+	"github.com/mishraprayash/Portlens/internal/exitcode"
 )
 
 var (

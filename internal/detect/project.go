@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 // ProjectDetector discovers project metadata given a working directory.
@@ -40,6 +40,9 @@ func (fsProjectDetector) Detect(ctx context.Context, cwd string) *model.ProjectI
 	}
 	dir := filepath.Clean(cwd)
 	for {
+		if ctx.Err() != nil {
+			return nil
+		}
 		if info := scanProjectDir(dir); info != nil && info.Detected {
 			slog.DebugContext(ctx, "project root detected", "dir", dir, "name", info.Name, "repo", info.GitRepo, "branch", info.GitBranch)
 			return info

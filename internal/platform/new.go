@@ -13,5 +13,7 @@ func New() *Platform {
 		Clipboard:  newClipboardProvider(),
 		Controller: newProcessController(),
 		Containers: newContainerProvider(),
+		OpenURL:    OpenURL,
+		Notify:     Notify,
 	}
 }

@@ -38,10 +38,20 @@ never collects or transmits any data.
 - Go 1.23+ (to build from source)
 - macOS or Linux
 
+### Quick install (prebuilt binary)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mishraprayash/Portlens/main/install.sh | sh
+```
+
+Downloads the latest release for your OS/arch and verifies its SHA-256
+checksum. See [docs/installation.md](docs/installation.md) for pinning a
+version and manual download.
+
 ### Quick install (from source)
 
 ```bash
-git clone https://github.com/portlens/portlens.git
+git clone https://github.com/mishraprayash/Portlens.git
 cd portlens
 make install            # builds with CGO_ENABLED=0, installs to $GOBIN
 ```
@@ -50,7 +60,7 @@ Make sure `$GOBIN` (`~/go/bin`) is on your `PATH`, then:
 
 ```bash
 $ portlens --version
-portlens 0.1.0
+portlens 0.3.0
 ```
 
 ### Other install methods
@@ -162,9 +172,11 @@ portlens open <port>               Open service in your default browser
 portlens tree <port>               Show complete process hierarchy
 portlens conn <port>               Show network connections, grouped & summarized
 portlens watch [port...]           Live-monitor ports; optional --notify
+portlens top, tui                  Full-screen live interactive TUI dashboard
 portlens find <query|pid>          Find ports by process name or PID (--pid)
 portlens next [start]              Find lowest available/free port (default 3000)
 portlens config                    Manage named port groups (@name)
+portlens doctor                    Check which features work on this machine
 portlens completion <shell>        Generate shell autocompletion (bash, zsh, fish)
 portlens 4000-4010                 Scan a range (only in-use ports printed)
 portlens @dev                      Inspect a named group from your config
@@ -180,7 +192,7 @@ also honors `PORTLENS_DEBUG=1`), `--protocol <tcp|udp>`, `--no-color`, `--no-doc
 
 Listing flags: `--sort <port|process|project|runtime>`, `--filter <text>`, `--tcp`.
 
-Watch flags: `--interval <secs>` (default 1), `--notify` (desktop notification on state change).
+Watch flags: `--interval <secs>` (default 1), `--notify` (desktop notification on state change), `--json` (stream `snapshot`/`up`/`down`/`changed` events as JSON lines).
 
 ## 4.1 Usage & use cases
 
@@ -244,8 +256,9 @@ PortLens is **local-first** by design:
 - **No privilege escalation.** If a process requires elevated privileges to
   inspect or signal, PortLens reports the permission problem rather than trying
   to escalate.
-- **Completely stateless.** PortLens performs real-time queries and leaves zero
-  disk footprint. No background daemon, no history files, and no telemetry.
+- **No history, no daemon.** PortLens performs real-time queries. The only file
+  it ever writes is the optional port-group config (`portlens config`); there
+  are no history files, no background daemon, and no telemetry.
 
 ## 7. Architecture overview
 
@@ -262,9 +275,14 @@ internal/platform/   The abstraction layer (interfaces + factories)
                      pbcopy, syscall)
   linux_*.go         Linux implementations (/proc, xclip/wl-copy, syscall)
 internal/inspector/  Orchestrates providers into a Report (+ risk assessment)
+internal/service/    Application service facade (the cmd/tui entry point)
 internal/detect/     Project / runtime / framework detection (filesystem + argv)
 internal/actions/    Kill / restart / open / copy (with confirmation)
 internal/render/     Terminal UI, tables, tree, JSON output
+internal/tui/        Full-screen interactive dashboard (portlens top / tui)
+internal/config/     Named port groups (@name), stored locally
+internal/exitcode/   Process exit codes
+internal/version/    Build version stamp
 tests/               Integration tests using controlled processes
 ```
 
@@ -273,7 +291,7 @@ Key interfaces (see `internal/platform/platform.go`):
 ```
 ProcessInspector, NetworkInspector, PortResolver,
 ProcessTreeProvider, ClipboardProvider, ProjectDetector,
-HistoryStore, ProcessController
+ProcessController
 ```
 
 See [docs/architecture.md](docs/architecture.md) for details.
@@ -290,6 +308,7 @@ See [docs/architecture.md](docs/architecture.md) for details.
 | [docs/detection.md](docs/detection.md)     | Facts vs. inferences; how detection works       |
 | [docs/security.md](docs/security.md)       | Security & privacy model                        |
 | [docs/performance.md](docs/performance.md) | Fast/deep paths, benchmarks, syscall & alloc analysis |
+| [docs/testing.md](docs/testing.md)         | Running the suite, CGO caveat, coverage, race   |
 
 ## 8. Development
 
@@ -298,6 +317,7 @@ make build          # build to ./bin/portlens
 make lint           # gofmt check + go vet
 make test           # run all tests (unit + integration, no cache)
 make check          # lint + test — the same gate CI runs
+make cover          # test suite with an aggregate coverage percentage
 make fmt            # gofmt
 make cross          # verify macOS/Linux cross-compilation
 ```
@@ -321,7 +341,6 @@ toolchains and recent macOS releases. The `Makefile` sets this automatically.
 - **CPU/memory sampling** — optional live sampling in the interactive view.
 - **Profile-aware restarts** — restart using the detected package manager and
   script name rather than the raw command line.
-- **Shell completions** — bash/zsh/fish completion scripts.
 
 ## 10. Contributing
 
