@@ -8,6 +8,8 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Changed
 
+- Extracted the `waitWatchTick` helper in `cmd/watch.go` to flatten the watch
+  loop's tick/cancellation handling.
 - Extracted the `getInUsePorts` helper in `portlens next`.
 
 ## [0.3.0] - 2026-10-19
