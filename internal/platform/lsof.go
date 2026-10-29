@@ -36,12 +36,22 @@ func parseLsofFields(data string) []lsofField {
 		haveSock = false
 	}
 
-	for _, line := range strings.Split(data, "\n") {
+	rest := data
+	for len(rest) > 0 {
+		var line string
+		if idx := strings.IndexByte(rest, '\n'); idx >= 0 {
+			line = rest[:idx]
+			rest = rest[idx+1:]
+		} else {
+			line = rest
+			rest = ""
+		}
 		if line == "" {
 			continue
 		}
 		switch {
 		case strings.HasPrefix(line, "p"):
+			flush()
 			if v, err := strconv.ParseInt(line[1:], 10, 32); err == nil {
 				pid = int32(v)
 			}
@@ -65,7 +75,9 @@ func parseLsofFields(data string) []lsofField {
 // parseSockName splits an lsof socket name into address and port. IPv6
 // addresses are wrapped in brackets by lsof; wildcard is "*".
 func parseSockName(s string) (addr string, port uint16, ok bool) {
-	if s == "" {
+	// "local->remote" names are connected sockets, not listeners; callers that
+	// want connections split on "->" first.
+	if s == "" || strings.Contains(s, "->") {
 		return "", 0, false
 	}
 	if strings.HasPrefix(s, "[") {

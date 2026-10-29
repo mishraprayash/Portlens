@@ -3,7 +3,7 @@ package inspector
 import (
 	"testing"
 
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 func TestLaunchProcessDirectChildOfShell(t *testing.T) {

@@ -6,17 +6,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net"
 	"runtime"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/portlens/portlens/internal/actions"
-	"github.com/portlens/portlens/internal/inspector"
-	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/platform"
+	"github.com/mishraprayash/Portlens/internal/inspector"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 // ProgressFunc reports scan progress in a thread-safe manner.
@@ -25,8 +21,6 @@ type ProgressFunc func(done, total, found int, elapsed time.Duration)
 // PortService defines the business domain facade.
 type PortService struct {
 	inspector inspector.PortInspector
-	platform  *platform.Platform
-	actions   *actions.Manager
 }
 
 // Option configures a PortService.
@@ -39,30 +33,14 @@ func WithInspector(insp inspector.PortInspector) Option {
 	}
 }
 
-// WithPlatform configures the platform provider.
-func WithPlatform(plat *platform.Platform) Option {
-	return func(s *PortService) {
-		s.platform = plat
-	}
-}
-
-// WithActions configures the action manager.
-func WithActions(act *actions.Manager) Option {
-	return func(s *PortService) {
-		s.actions = act
-	}
-}
-
 // New creates a new PortService instance with sensible defaults and functional options.
 func New(opts ...Option) *PortService {
-	plat := platform.New()
-	s := &PortService{
-		platform:  plat,
-		inspector: inspector.New(plat),
-		actions:   actions.NewManager(plat, nil, nil),
-	}
+	s := &PortService{}
 	for _, opt := range opts {
 		opt(s)
+	}
+	if s.inspector == nil {
+		s.inspector = inspector.New(nil)
 	}
 	return s
 }
@@ -99,11 +77,23 @@ func (s *PortService) Inspect(ctx context.Context, port int32, protocol model.Pr
 	return report, nil
 }
 
-// Scan performs parallel port inspection across a collection of ports with live progress reporting.
-func (s *PortService) Scan(ctx context.Context, ports []int32, protocol model.Protocol, onProgress ProgressFunc) ([]*model.Report, error) {
+// ScanResult holds the outcome of a parallel scan: ports confirmed in use,
+// plus any per-port inspection failures — without them a port whose
+// inspection errored would be indistinguishable from an idle port.
+type ScanResult struct {
+	Reports  []*model.Report
+	Failed   int   // ports whose inspection errored
+	FirstErr error // first inspection error, for reporting
+}
+
+// Scan performs parallel port inspection across a collection of ports with
+// live progress reporting. A non-nil error means the scan could not run at
+// all (invalid port, canceled context); per-port failures are reported via
+// ScanResult instead of failing the scan.
+func (s *PortService) Scan(ctx context.Context, ports []int32, protocol model.Protocol, onProgress ProgressFunc) (ScanResult, error) {
 	slog.DebugContext(ctx, "service: scanning ports", "count", len(ports), "protocol", protocol)
 	if len(ports) == 0 {
-		return nil, nil
+		return ScanResult{}, nil
 	}
 
 	start := time.Now()
@@ -133,7 +123,7 @@ func (s *PortService) Scan(ctx context.Context, ports []int32, protocol model.Pr
 
 	for i, p := range ports {
 		if p < 1 || p > 65535 {
-			return nil, fmt.Errorf("%w: %d", model.ErrInvalidPort, p)
+			return ScanResult{}, fmt.Errorf("%w: %d", model.ErrInvalidPort, p)
 		}
 		if activePorts != nil && !activePorts[uint16(p)] {
 			idleCount++
@@ -201,115 +191,22 @@ func (s *PortService) Scan(ctx context.Context, ports []int32, protocol model.Pr
 	}
 
 	if ctx.Err() != nil {
-		return nil, ctx.Err()
+		return ScanResult{}, ctx.Err()
 	}
 
-	var found []*model.Report
-	for _, res := range results {
-		if res.err == nil && res.report != nil && res.report.Status == "listening" {
-			found = append(found, res.report)
+	var res ScanResult
+	for _, r := range results {
+		if r.err != nil {
+			res.Failed++
+			if res.FirstErr == nil {
+				res.FirstErr = r.err
+			}
+			continue
+		}
+		if r.report != nil && r.report.Status == "listening" {
+			res.Reports = append(res.Reports, r.report)
 		}
 	}
 
-	return found, nil
-}
-
-// Kill terminates the process owning the port or specified report.
-func (s *PortService) Kill(ctx context.Context, report *model.Report, force bool) error {
-	if report == nil {
-		return model.ErrPortNotFound
-	}
-	slog.DebugContext(ctx, "service: killing process on port", "port", report.Port, "force", force)
-	return s.actions.Kill(ctx, report, force)
-}
-
-// Restart relaunches the process owning the port or specified report.
-func (s *PortService) Restart(ctx context.Context, report *model.Report) error {
-	if report == nil {
-		return model.ErrPortNotFound
-	}
-	slog.DebugContext(ctx, "service: restarting process on port", "port", report.Port)
-	return s.actions.Restart(ctx, report)
-}
-
-// Open launches the default browser pointing to the service on the port.
-func (s *PortService) Open(ctx context.Context, report *model.Report) error {
-	if report == nil {
-		return model.ErrPortNotFound
-	}
-	slog.DebugContext(ctx, "service: opening port in browser", "port", report.Port)
-	return s.actions.Open(ctx, report)
-}
-
-// Tree resolves the deep report containing process hierarchy for the given port.
-func (s *PortService) Tree(ctx context.Context, port int32) (*model.Report, error) {
-	report, err := s.Inspect(ctx, port, "", inspector.DepthFull)
-	if err != nil {
-		return nil, err
-	}
-	if report.Status != "listening" || report.Process == nil {
-		return report, model.ErrPortNotFound
-	}
-	return report, nil
-}
-
-// Connections retrieves the deep report containing network connections for the given port.
-func (s *PortService) Connections(ctx context.Context, port int32) (*model.Report, error) {
-	report, err := s.Inspect(ctx, port, "", inspector.DepthFull)
-	if err != nil {
-		return nil, err
-	}
-	if report.Status != "listening" || report.Process == nil {
-		return report, model.ErrPortNotFound
-	}
-	return report, nil
-}
-
-// Find resolves ports listening on the host filtered by process name query or PID.
-func (s *PortService) Find(ctx context.Context, query string, pid int) ([]int32, error) {
-	slog.DebugContext(ctx, "service: finding ports", "query", query, "pid", pid)
-	if pid > 0 {
-		entries, err := s.inspector.SearchByPID(ctx, int32(pid))
-		if err != nil {
-			return nil, fmt.Errorf("finding ports for pid %d: %w", pid, err)
-		}
-		var ports []int32
-		for _, e := range entries {
-			ports = append(ports, e.Port)
-		}
-		return ports, nil
-	}
-	if query != "" {
-		entries, err := s.inspector.SearchByName(ctx, query)
-		if err != nil {
-			return nil, fmt.Errorf("finding ports matching %q: %w", query, err)
-		}
-		var ports []int32
-		for _, e := range entries {
-			ports = append(ports, e.Port)
-		}
-		return ports, nil
-	}
-	return nil, fmt.Errorf("%w: query or pid required", model.ErrInvalidArguments)
-}
-
-// NextAvailable finds the lowest unused, bindable port starting from startPort.
-func (s *PortService) NextAvailable(ctx context.Context, startPort int32) (int32, error) {
-	if startPort < 1 || startPort > 65535 {
-		startPort = 3000
-	}
-	slog.DebugContext(ctx, "service: searching next available port", "start_port", startPort)
-
-	for p := startPort; p <= 65535; p++ {
-		if ctx.Err() != nil {
-			return 0, ctx.Err()
-		}
-		// Probe TCP bindability
-		ln, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(int(p)))
-		if err == nil {
-			_ = ln.Close()
-			return p, nil
-		}
-	}
-	return 0, fmt.Errorf("%w: no available ports found above %d", model.ErrPortNotFound, startPort)
+	return res, nil
 }

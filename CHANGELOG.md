@@ -6,36 +6,50 @@ All notable changes to PortLens are documented here. The format is based on
 
 ## [Unreleased]
 
-### Fixed
-
-- **`--restart` now gracefully terminates the existing process first**: Shuts down the running process tree and waits for the port to release before relaunching, eliminating `EADDRINUSE` socket conflicts. Stdio is detached into `/dev/null` so background logs do not corrupt the terminal session.
-- **`LaunchProcess` directly launched by shell**: Fixed detection so that when a process is the immediate child of an interactive shell, PortLens restarts the process itself rather than mistakenly trying to re-execute the parent shell.
-- **Subcommand routing with global flags**: `portlens [flags] config ...` (e.g. `portlens --no-color config list`) now dispatches to the config subcommand instead of erroring with an invalid port.
-- **Git worktrees, submodules, and branch paths**: Supports `.git` files with `gitdir:` indirection, preserves full multi-segment branch names (e.g. `feature/auth/oauth2`), parses SSH remote URLs, and handles detached HEAD states.
-- **Interactive TUI escape sequence drainage & PID verification**: Drains trailing bytes of ANSI escape sequences (e.g. arrow keys) so they do not spill into the shell upon exit, and confirms the target PID is still alive before signaling to prevent killing recycled PIDs.
-- **Watch mode immediate signal cancellation**: Migrated `runWatch` to `signal.NotifyContext` so `Ctrl-C` or `SIGTERM` cancels in-flight inspection passes immediately instead of blocking until the current tick finishes.
-- **Unbounded `lsof` execution timeout**: Added a 10-second safety deadline to macOS `runLsof` when invoked with an unbounded context, preventing indefinite blocking on unresponsive network mounts (NFS/SMB).
-- **Linux `/proc` socket link slice bounds safety**: Added defensive validation for socket symlinks in `/proc/<pid>/fd`, eliminating potential slice out-of-bounds panics on malformed symlinks.
-- **macOS `lsof` exit code 1 handling**: Fixed `runLsof` to treat exit code 1 as successful even when partial output is emitted alongside non-fatal warnings (e.g. unprivileged execution), preventing `portlens list` from failing on unprivileged runner environments.
-- **Non-blocking browser launching on Linux**: Launched browser processes asynchronously via `cmd.Start()`, preventing foreground browser processes from locking the PortLens CLI.
-
 ### Changed
 
-- **Refactored watch command loop**: Extracted `waitWatchTick` helper function to reduce nesting and simplify tick event selection and context cancellation handling in `cmd/watch.go`.
-- **Enterprise-grade Clean Architecture and Functional Options**: Decoupled core business domain from CLI delivery through a new `internal/service.PortService` facade. Refactored `inspector.New` and `render.NewRenderer` to use Functional Options and consumer-defined interfaces (`PortInspector`). Centralized domain sentinel errors in `internal/model/errors.go` and threaded signal context cancellation (`osSignalContext` / `ExecuteContext`) through all I/O and worker pool boundaries.
-- **Standard open-source subcommand CLI architecture**: Elevated primary actions to intuitive, first-class subcommands (`portlens kill`, `portlens list`/`ls`, `portlens inspect`, `portlens watch`, `portlens find`, `portlens tree`, `portlens conn`, `portlens open`, `portlens restart`) while preserving 100% backward compatibility with flag-based invocations (`portlens 3000 --kill`, `portlens 3000 -t`).
-- **Structured and modernized help output**: Redesigned `portlens --help` and added subcommand-specific `--help` usage screens following open-source CLI standards.
-- **Parallel multi-port and range scan inspection**: Replaced sequential port inspection in `scanPorts` with a concurrent worker pool (`min(2*NumCPU, 16)` workers), parallelizing inspection across active ports while maintaining exact input order and thread-safe progress reporting.
-- **Multi-port and range scan bulk pre-filtering**: Scans (`portlens 3000-8000`) now query the host's active listener table once in bulk and filter in memory, reducing 5,000-port scan times from ~42s down to ~20ms by avoiding thousands of redundant `lsof` process spawns on macOS and `/proc` parsing passes on Linux.
-- **Refined exposure risk classification**: Accurately distinguishes private LAN/VPN addresses (RFC 1918 / RFC 4193 / link-local) from public internet-routable WAN interfaces.
+- Extracted the `waitWatchTick` helper in `cmd/watch.go` to flatten the watch
+  loop's tick/cancellation handling.
 
-### Removed
+## [0.3.0] - 2026-10-19
 
-- **Removed `--log <file>`**: Removed internal stdout-teeing flag in favor of standard Unix redirection and pipes (`portlens 3000 > out.txt`, `portlens 3000 | tee out.txt`), simplifying flag handling and adhering to Unix philosophy.
-- **Removed local observation history (`--history`, `--no-record`, `internal/history`)**: Removed disk-based invocation logging, making PortLens completely stateless and zero-footprint, eliminating disk write overhead during scans, and removing privacy concerns around saving command arguments to disk.
+> `v0.2.0` was tagged without a changelog section, so everything since `0.1.0`
+> is recorded here.
 
 ### Added
 
+- Test coverage for the kill/restart paths (`internal/actions`: tree ordering,
+  decline/abort, force, still-running, signal errors, starter failures,
+  protected PIDs) and for `internal/inspector` (full/fast reports, unknown or
+  exited owners, listing, search by name/PID, summaries).
+
+- **`portlens doctor`** reports what works on this machine: port enumeration
+  (and listeners with unknown owners), clipboard, browser opener,
+  notifications, container runtime reachability, config validity, and root
+  privileges. `--json` supported; exits 1 only when a core check fails.
+- **`watch --json`** streams newline-delimited JSON events: one `snapshot`,
+  then `up` / `down` / `changed` with `time`, `target` and `detail`. Human
+  frames are suppressed.
+
+- **`--project <name>`** selects every listening port whose detected project
+  matches (like `--name`/`--pid`), e.g. `portlens kill --project orbit`.
+- **`--dry-run`** with `--kill` prints what would be signaled (or which
+  container would be stopped) without changing anything.
+
+- **Release automation**: `.goreleaser.yaml` and a tag-triggered
+  `release.yml` workflow publish static linux/darwin (amd64, arm64) archives
+  with SHA-256 `checksums.txt` to GitHub Releases, after running the test suite.
+- `install.sh`: one-line installer that downloads the right archive and
+  verifies its checksum.
+- `portlens --version` now reports the module version for
+  `go install ...@vX.Y.Z` builds (unstamped local builds report `dev`).
+
+
+- **Testing guide (`docs/testing.md`)**: documents the `CGO_ENABLED=0`
+  requirement (a bare `go test ./...` fails on macOS), the coverage and race
+  targets, test layout rules, and the cross-compile matrix. CONTRIBUTING's
+  testing section now links to it and warns about the same trap.
+- **Full-Screen Interactive TUI Dashboard (`portlens top` / `portlens tui`)**: Added a zero-dependency, double-buffered full-screen terminal dashboard built directly on `golang.org/x/term` and standard ANSI escape sequences (`\x1b[?1049h`). Features split-pane navigation with real-time port selection, live search/filtering (`/`), instant tab switching (`1` Overview, `2`/`t` Process Tree, `3`/`n` Connections), safe in-place action triggers with confirmation modals (`k` graceful kill, `f` force kill, `r` restart, `o` browser open, `c`/`u` clipboard copy), background polling, responsive layout resizing on `SIGWINCH`, and guaranteed fail-safe terminal cleanup on any exit path.
 - **Shell autocompletion generator (`portlens completion <bash|zsh|fish>`)**: Generates dynamic shell autocompletion for bash, zsh, and fish that completes subcommands, flags, and currently active listening ports with their process names.
 - **HTTP health & HTML title probing (`--probe` / `-p`)**: Lightweight HTTP probing with a 300ms timeout extracts HTTP status, response latency, Server header, and HTML `<title>` to immediately identify the web application running behind generic process names.
 - **Process Memory RSS display**: Surfaced native process memory usage (formatted as human-friendly RSS units e.g. `128 MB`, `1.4 GB`) in both compact summary and full verbose reports.
@@ -73,16 +87,83 @@ All notable changes to PortLens are documented here. The format is based on
 
 ### Changed
 
+- **HTTP probing is opt-in**: deep inspection no longer sends a `GET /` to the
+  service unless `--probe` is passed.
+- Default version string is `0.2.0`, matching the latest tag.
+- Added `.golangci.yml` and a lint job in CI; removed dead code and fixed
+  unchecked errors it flagged.
+
+
+- **Browser and notification side effects are injectable**: `platform.Platform`
+  now carries `OpenURL`/`Notify` function fields (defaulted by `New()`, with
+  nil-safe `OpenInBrowser`/`PostNotification` methods), and the `open` action,
+  TUI open key, and `watch --notify` all route through them — so tests and
+  embedders can capture or stub side effects instead of shelling out to the OS.
+- **Hot-path caching and single-flight background work**: the Docker
+  container list is shared across every lookup within a one-second window
+  (one daemon round trip per scan instead of one per port/PID/report);
+  project detection is memoized per working directory for five seconds,
+  including negative results; HTTP probes share one transport instead of
+  allocating one per port; the Linux inode map is built outside its lock so
+  concurrent resolvers do not queue behind a `/proc` walk; and the TUI's
+  list/report refreshes are single-flight, coalescing ticks and keystrokes
+  into one queued follow-up instead of stacking concurrent port scans. ANSI
+  stripping skips the regexp for strings without an escape byte.
+- **TUI filter keypresses use the run context**: report refetches triggered
+  while typing in the filter bar are canceled with the session instead of
+  running under `context.Background()`.
+- **`service.Scan` returns a `ScanResult`**: found reports now travel with a
+  failure count and first error (`Failed`, `FirstErr`), so callers can warn
+  about ports they could not inspect instead of dropping them silently.
+- **Subcommand dispatch de-duplicated**: the eleven copies of the per-command
+  `--help` scan, the port-target pre-checks, and the action-flag injection
+  now flow through shared `wantsHelp`/`runSimple` helpers, and `config`
+  load/save failures go through `loadConfig`/`saveConfig`. Behavior and
+  messages are unchanged; new subcommands need a one-line declaration.
+- **CLI error paths share one `fail` helper**: every error message in `cmd`
+  is written and its exit code returned from a single call site, so message
+  and code cannot drift apart; `model.MapExitCode` now has unit coverage of
+  every branch in the `docs/exit-codes.md` table.
+- **Layer cleanup and dead-code removal**: deleted code that had zero
+  callers — seven uncalled `PortService` methods (`Kill`, `Restart`, `Open`,
+  `Tree`, `Connections`, `Find`, `NextAvailable`; the live logic lives in
+  `cmd` and `actions`), `NetworkInspector.ListenersForPID` and both platform
+  implementations, and a dozen unused helpers/options across `render`,
+  `inspector`, `cmd`, and `tui`.
+- **One container display name everywhere**: `model.Container.ShortID` and
+  `DisplayName` replace local copies of the name-or-truncated-ID logic in the
+  list table, report, summary, and kill/restart messages.
+- **TUI actions report their outcome**: browser-open and clipboard copies in
+  the TUI now run through `actions.Manager` like the CLI does, so the
+  "may not be HTTP" warning and "Opening ..." feedback surface in the status
+  bar instead of being dropped.
+- **Shared scan pipeline and action runner in `cmd`**: table and JSON scan
+  modes share one `scanAll` pipeline, kill/restart/open share `runAction`
+  (single place mapping action errors to messages and exit codes), and
+  `newService` reuses `newInspector` instead of duplicating platform wiring.
+- **`make check` now matches the CI gate**: it runs gofmt, vet, build, the full
+  test suite, and the four-target cross-compile matrix — the same checks CI
+  runs. `make cover` (new) prints an aggregate coverage percentage, and CI
+  reports coverage on the Linux job.
+- **Docs refreshed for the post-refactor architecture**: the data flow in
+  `docs/architecture.md` now routes through `service.PortService`; the project
+  layout blocks list `internal/tui`; the removed `HistoryStore` interface and
+  the shipped shell-completion roadmap item were dropped; and `CHANGELOG.md`'s
+  duplicate `[Unreleased]` sections were merged (contradictory history/`--log`
+  entries pruned).
+- **Enterprise-grade Clean Architecture and Functional Options**: Decoupled core business domain from CLI delivery through a new `internal/service.PortService` facade. Refactored `inspector.New` and `render.NewRenderer` to use Functional Options and consumer-defined interfaces (`PortInspector`). Centralized domain sentinel errors in `internal/model/errors.go` and threaded signal context cancellation (`osSignalContext` / `ExecuteContext`) through all I/O and worker pool boundaries.
+- **Standard open-source subcommand CLI architecture**: Elevated primary actions to intuitive, first-class subcommands (`portlens kill`, `portlens list`/`ls`, `portlens inspect`, `portlens watch`, `portlens find`, `portlens tree`, `portlens conn`, `portlens open`, `portlens restart`) while preserving 100% backward compatibility with flag-based invocations (`portlens 3000 --kill`, `portlens 3000 -t`).
+- **Structured and modernized help output**: Redesigned `portlens --help` and added subcommand-specific `--help` usage screens following open-source CLI standards.
+- **Parallel multi-port and range scan inspection**: Replaced sequential port inspection in `scanPorts` with a concurrent worker pool (`min(2*NumCPU, 16)` workers), parallelizing inspection across active ports while maintaining exact input order and thread-safe progress reporting.
+- **Multi-port and range scan bulk pre-filtering**: Scans (`portlens 3000-8000`) now query the host's active listener table once in bulk and filter in memory, reducing 5,000-port scan times from ~42s down to ~20ms by avoiding thousands of redundant `lsof` process spawns on macOS and `/proc` parsing passes on Linux.
+- **Refined exposure risk classification**: Accurately distinguishes private LAN/VPN addresses (RFC 1918 / RFC 4193 / link-local) from public internet-routable WAN interfaces.
+
 - **Removed gopsutil and embedded SQLite.** Process metadata is now read
   natively on both platforms — `sysctl` + the raw `__sysctl` syscall + libproc
   (`proc_pidpath`/`proc_pidinfo`) on macOS, byte-oriented `/proc` on Linux —
   with no external commands and no hidden `ps` spawns (previously gopsutil ran
   `ps` twice per lookup on macOS). The binary shrank **9.3 MB → 5.9 MB** and
   `go.mod` went from ~19 modules to 3 (`purego`, `x/sys`, `x/term`).
-- **History is now an owner-only (0600) JSONL log** with atomic `O_APPEND`
-  appends instead of an embedded SQLite database, cutting a large dependency
-  and its per-invocation open cost. The old `history.db` is left untouched;
-  delete it once you no longer need it.
 - **The macOS listing uses one lsof call** (`-FpctnT`, TCP LISTEN + UDP in a
   single spawn, protocol recovered from the `TST=` field) instead of two,
   halving the listing's external-process cost.
@@ -107,8 +188,8 @@ All notable changes to PortLens are documented here. The format is based on
   and `--pid`/`--name`) now read the process table once per invocation — a
   single `sysctl` on macOS, one `/proc` scan on Linux — instead of enumerating
   the process table repeatedly via gopsutil. Deep inspection dropped from
-  ≈70ms to ≈32ms with ≈15x fewer allocations. gopsutil remains only for
-  per-process metadata, and the fast path (`InfoBasic`) no longer spawns `ps`.
+  ≈70ms to ≈32ms with ≈15x fewer allocations. The fast path (`InfoBasic`)
+  no longer spawns `ps`.
 - **Multi-port `--json`** now uses the fast depth, so each array entry carries
   the essentials (port, protocol, status, address, service, process, origin,
   project, exposure, container) and omits the process tree and network
@@ -117,11 +198,6 @@ All notable changes to PortLens are documented here. The format is based on
   an array (idle ports are omitted, matching scan mode) and shows the same
   scan progress/ETA/summary on stderr, so stdout stays a pure JSON payload
   ready for `jq` or a file.
-- `--log <file>` now works with **every** command (single port, listing, scan,
-  JSON, actions) instead of only scan mode: it captures the command's stdout
-  to the file. Progress/diagnostics (stderr) are never written, output is
-  plain (no color), and interactive mode is disabled. It cannot be combined
-  with `--watch`.
 - Multi-port inspection (scan mode, JSON) shares one inspection loop, progress
   reporter, and exit-code policy via `scanPorts`, so the commands stay
   consistent and free of duplicated logic.
@@ -136,6 +212,132 @@ All notable changes to PortLens are documented here. The format is based on
 - `portlens <port>` now shows a compact summary by default; use `--verbose`
   (or `-v`) for the full detailed report. `-v` is no longer a `--version`
   alias (`--version` remains).
+
+### Fixed
+
+- **Kill/restart always signal the target PID**: if the process-tree provider
+  returned no tree (without an error), the target itself was skipped. The
+  target is now always included.
+
+- **No ANSI escapes in piped output**: color is applied only when stdout is a
+  terminal, and `NO_COLOR` is honored. Previously `portlens | grep` and
+  `portlens > file` were full of escape codes.
+- **Outbound UDP sockets are no longer listed as listeners** on macOS
+  (`local->remote` lsof names were mis-parsed into a bogus address).
+- **Kill/restart refuse protected processes**: PID <= 1 and PortLens itself
+  are never signaled, even as descendants of the target.
+
+- README and `docs/security.md` no longer claim zero disk footprint; the
+  optional port-group config file is documented.
+
+- **Platform OpenURL now accepts only `http`/`https` URLs**, rejecting other
+  schemes and malformed input before invoking the OS browser opener.
+- **Darwin username cache no longer holds the mutex during UID lookups**,
+  reducing lock contention while resolving process owners.
+
+- **Linux: a server that just started is still attributed to its process**:
+  single-port resolution rebuilds the inode→PID map once when a listening
+  row comes back without an owner, instead of answering from a cache built
+  before that socket existed. Previously `inspect`/`kill` on a freshly
+  started process could report no owning process (`kill` then failed with
+  "no owning process to terminate"), which is what made the Linux
+  `TestKillLiveServer` integration test fail.
+- **Module path matches the canonical repository**: `go.mod` and every import
+  now declare `github.com/mishraprayash/Portlens` (previously
+  `github.com/portlens/portlens`, which does not exist), so `go install
+  github.com/mishraprayash/Portlens@latest` and the documented clone URL work.
+- **Subcommands no longer mistake flag values for port targets**: `portlens
+  kill --filter node`, `tree --sort process`, `inspect --protocol udp`, and
+  similar invocations now fail with exit code 2 and a usage message instead of
+  printing the default listing and exiting 0 without acting.
+- **Action flags without a port target fail fast**: `portlens --kill`,
+  `--tree`, `--restart`, `--open`, and `--connections` without a port,
+  `--all`, `--pid`, or `--name` now return exit code 2 instead of silently
+  degrading to the full listing.
+- **`--sort` key validation**: an unknown `--sort` value (e.g. `--sort pid`)
+  is rejected with exit code 2 instead of being silently ignored and falling
+  back to port order.
+- **`next --protocol` validation**: an unknown protocol now fails with exit
+  code 2 instead of silently falling back to TCP.
+- **`top` reports unknown flags and stray arguments**: typos such as
+  `portlens top --filter x` fail with exit code 2 instead of being dropped,
+  and a missing `--interval` value is an error rather than silently using the
+  default.
+- **Permission errors exit with code 4**: signalling a process owned by
+  another user (EPERM) now exits 4 as `docs/exit-codes.md` promises — the
+  platform and model `ErrPermissionDenied` are a single sentinel, so
+  `model.MapExitCode` recognizes it. Previously it fell through to exit 1.
+- **IPv6 addresses are bracketed in every human-facing view**: the TUI
+  overview, TUI connections table, and inspector facts now render
+  `[::1]:5432` via the shared `model.FormatAddr` instead of `::1:5432`.
+  JSON output still carries the raw address.
+- **One filter predicate for the table and the TUI**: `--filter` and the TUI's
+  `/` filter now both use `model.PortEntry.Matches`, a case-insensitive
+  substring match over port, process, service, project, runtime, address,
+  status, origin, protocol, and container fields (queries are trimmed of
+  surrounding whitespace). Previously the two implementations matched
+  different field sets — e.g. `--filter listening` did not work in the TUI
+  and `--filter tcp` did not work in the table.
+- **Watch mode on Linux sees processes started after launch**: the shared
+  socket-inode→PID cache expires after one second instead of being built
+  once per invocation, so long-running `--watch` sessions attribute new
+  processes correctly (single-shot commands still scan at most once).
+- **Shell completion cannot hang**: the dynamic `--_complete_ports` listener
+  scan is bounded by a 10-second deadline derived from the caller's
+  context; a canceled or expired context yields no completions and still
+  exits 0.
+- **`--watch` rejects action flags**: `portlens watch --kill 3000` (or
+  `--watch --tree`, `-w -k`, ...) now fails with exit 2 and
+  `--watch cannot be combined with --kill, --restart, --open, --tree, or
+  --connections` instead of silently starting the monitor and ignoring the
+  action.
+- **`parseLsofFields` multi-process socket attribution**: Fixed a critical bug in `lsof` field parsing where `flush()` was not called upon encountering a new PID line, causing the trailing socket of any process to be misattributed to the subsequent process.
+- **Detached process termination on exit in `--restart`**: Replaced `exec.CommandContext` with `exec.Command` in `defaultProcessStarter` so that Go's runtime context monitor does not terminate the restarted detached process when PortLens completes execution.
+- **Interactive mode nil pointer dereference panic**: Guarded against nil `report.Process` when pressing `'c'` to copy PID, preventing panics on unprivileged or system listeners.
+- **IPv6 HTTP endpoint probing (`::1`)**: Used `net.JoinHostPort` to properly bracket IPv6 hosts in HTTP probe requests and enabled `DisableKeepAlives` on probe transports to prevent socket descriptor leaks.
+- **`mDNSResponder` origin identification and Linux `/home/` support**: Lowercased `"mdnsresponder"` in `systemProcessNames` to match case-folded process names, and added `"/home/"` to `userPathPrefixes` for Linux user binary detection.
+- **`find` subcommand `--pid=` and `--name=` flag support**: Added support for inline `--flag=value` syntax in `portlens find`.
+- **UDP container matching in port listings**: Relaxed protocol filtering in `attachContainers` so UDP-published container services are properly mapped to their container metadata in listings.
+- **Cgroup scanner false-positive matching on long hex strings**: Fixed `scanContainerID` offset tracking so that 128-hex tokens (such as SHA-512 hashes) are not partially matched as 64-hex container IDs.
+- **Performance optimizations in process inspection and rendering**: Eliminated redundant `/proc/<pid>/stat` reads on Linux, duplicate `darwinArgs` syscalls on macOS, duplicate dependency instantiation in `service.New`, shared the Linux socket inode cache between resolvers, and replaced string concatenation churn in `kv` rendering and list filtering with efficient implementations.
+- **`--restart` now gracefully terminates the existing process first**: Shuts down the running process tree and waits for the port to release before relaunching, eliminating `EADDRINUSE` socket conflicts. Stdio is detached into `/dev/null` so background logs do not corrupt the terminal session.
+- **`LaunchProcess` directly launched by shell**: Fixed detection so that when a process is the immediate child of an interactive shell, PortLens restarts the process itself rather than mistakenly trying to re-execute the parent shell.
+- **Subcommand routing with global flags**: `portlens [flags] config ...` (e.g. `portlens --no-color config list`) now dispatches to the config subcommand instead of erroring with an invalid port.
+- **Git worktrees, submodules, and branch paths**: Supports `.git` files with `gitdir:` indirection, preserves full multi-segment branch names (e.g. `feature/auth/oauth2`), parses SSH remote URLs, and handles detached HEAD states.
+- **Interactive TUI escape sequence drainage & PID verification**: Drains trailing bytes of ANSI escape sequences (e.g. arrow keys) so they do not spill into the shell upon exit, and confirms the target PID is still alive before signaling to prevent killing recycled PIDs.
+- **Watch mode immediate signal cancellation**: Migrated `runWatch` to `signal.NotifyContext` so `Ctrl-C` or `SIGTERM` cancels in-flight inspection passes immediately instead of blocking until the current tick finishes.
+- **Unbounded `lsof` execution timeout**: Added a 10-second safety deadline to macOS `runLsof` when invoked with an unbounded context, preventing indefinite blocking on unresponsive network mounts (NFS/SMB).
+- **Linux `/proc` socket link slice bounds safety**: Added defensive validation for socket symlinks in `/proc/<pid>/fd`, eliminating potential slice out-of-bounds panics on malformed symlinks.
+- **macOS `lsof` exit code 1 handling**: Fixed `runLsof` to treat exit code 1 as successful even when partial output is emitted alongside non-fatal warnings (e.g. unprivileged execution), preventing `portlens list` from failing on unprivileged runner environments.
+- **Non-blocking browser launching on Linux**: Launched browser processes asynchronously via `cmd.Start()`, preventing foreground browser processes from locking the PortLens CLI.
+- **Process-table snapshot no longer frozen for the process lifetime**: the
+  hierarchy cache behind `tree`, `connections`, and the TUI's kill/restart
+  actions is refreshed every second, so long-lived sessions see children
+  spawned after startup and never follow recycled PIDs; a failed enumeration
+  is not cached, so the next call retries.
+- **`scan` reports inspection failures**: a port whose inspection errors is
+  counted and surfaced as `portlens: warning: N of M ports could not be
+  inspected: ...` on stderr instead of silently appearing idle; partial
+  failures still exit 0.
+- **`next` and searches honor cancellation**: the next-port loop stops on a
+  canceled context instead of probing up to 65535, and `find --name`/`--pid`
+  plus project detection return early when the context is canceled.
+- **Shell completion scripts no longer drift from the CLI**: bash, zsh, and
+  fish scripts are generated from the subcommand registry and a single flag
+  table (asserted by tests), instead of three hand-maintained copies. The
+  `top`/`tui` command was missing from all three scripts, and `-t`, `-n`,
+  `--interval`, `--pid`, `--name`, `--protocol`, `--sort`, and `--filter`
+  were missing from some of them.
+
+### Removed
+
+- **Removed eight undocumented command aliases**: `info` and `show`
+  (`inspect`), `stop` and `term` (`kill`), `net` (`conn`), `search` (`find`),
+  `free` (`next`), and `dashboard` (`top`) were hidden duplicate entry points
+  absent from `--help`, the docs, and the shell completions. The documented
+  aliases `ls`, `connections`, and `tui` remain.
+- **Removed `--log <file>`**: Removed internal stdout-teeing flag in favor of standard Unix redirection and pipes (`portlens 3000 > out.txt`, `portlens 3000 | tee out.txt`), simplifying flag handling and adhering to Unix philosophy.
+- **Removed local observation history (`--history`, `--no-record`, `internal/history`)**: Removed disk-based invocation logging, making PortLens completely stateless and zero-footprint, eliminating disk write overhead during scans, and removing privacy concerns around saving command arguments to disk.
 
 ## [0.1.0] - 2026-08-27
 

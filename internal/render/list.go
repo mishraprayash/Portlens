@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/portlens/portlens/internal/detect"
-	"github.com/portlens/portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/detect"
+	"github.com/mishraprayash/Portlens/internal/model"
 )
 
 // ListOptions controls the port listing table.
@@ -24,11 +24,8 @@ func (r *Renderer) List(entries []model.PortEntry, opts ListOptions) {
 		})
 	}
 	if opts.Filter != "" {
-		f := strings.ToLower(opts.Filter)
 		entries = filterEntries(entries, func(e model.PortEntry) bool {
-			hay := strings.ToLower(fmt.Sprintf("%d %s %s %s %s %s %s %s %s",
-				e.Port, e.Process, e.Project, e.Runtime, e.Address, e.Status, e.Service, e.Origin, containerFilterText(e.Container)))
-			return strings.Contains(hay, f)
+			return e.Matches(opts.Filter)
 		})
 	}
 
@@ -83,7 +80,7 @@ func (r *Renderer) List(entries []model.PortEntry, opts ListOptions) {
 		if hasContainer {
 			row = append(row, listContainerCell(e.Container))
 		}
-		row = append(row, svc, proj, rt, string(e.Protocol.Normalize()), formatAddr(e.Address, uint16(e.Port)), e.Status, origin)
+		row = append(row, svc, proj, rt, string(e.Protocol.Normalize()), model.FormatAddr(e.Address, uint16(e.Port)), e.Status, origin)
 		cols = append(cols, row)
 	}
 	r.writeln(r.table(headers, cols))
@@ -95,20 +92,10 @@ func listContainerCell(c *model.Container) string {
 	if c == nil {
 		return "-"
 	}
-	if c.Name != "" {
-		return c.Name
+	if c.Name == "" && c.ID == "" {
+		return "-"
 	}
-	if c.ID != "" {
-		return shortID(c.ID)
-	}
-	return "-"
-}
-
-func containerFilterText(c *model.Container) string {
-	if c == nil {
-		return ""
-	}
-	return c.Name + " " + c.Image + " " + c.ComposeProject + " " + c.ComposeService
+	return c.DisplayName()
 }
 
 func filterEntries(in []model.PortEntry, keep func(model.PortEntry) bool) []model.PortEntry {

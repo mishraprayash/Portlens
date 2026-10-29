@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,11 +13,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/portlens/portlens/internal/exitcode"
-	"github.com/portlens/portlens/internal/inspector"
-	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/platform"
-	"github.com/portlens/portlens/internal/render"
+	"github.com/mishraprayash/Portlens/internal/exitcode"
+	"github.com/mishraprayash/Portlens/internal/inspector"
+	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/platform"
+	"github.com/mishraprayash/Portlens/internal/render"
 )
 
 // watchSnap captures the observed state of the watched targets at one point in
@@ -37,10 +38,19 @@ func runWatch(ctx context.Context, stdout, stderr io.Writer, opts *options) int 
 	if interval <= 0 {
 		interval = 1
 	}
-	interactive := isTerminal(stdout)
+	// --json turns watch into an event stream (one JSON object per line) and
+	// suppresses the human-readable frames entirely.
+	jsonMode := opts.jsonOut
+	out := stdout
+	if jsonMode {
+		out = io.Discard
+	}
+	interactive := !jsonMode && isTerminal(stdout)
 
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	plat := platform.New()
 
 	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	defer ticker.Stop()
@@ -57,9 +67,9 @@ func runWatch(ctx context.Context, stdout, stderr io.Writer, opts *options) int 
 		if interactive {
 			clearScreen(stdout)
 		}
-		fmt.Fprintf(stdout, "%s — updated %s\n\n", watchTargetLabel(opts), time.Now().Format("15:04:05"))
+		_, _ = fmt.Fprintf(out, "%s — updated %s\n\n", watchTargetLabel(opts), time.Now().Format("15:04:05"))
 
-		cur, err := renderWatchTick(ctx, stdout, stderr, opts)
+		cur, err := renderWatchTick(ctx, out, stderr, opts)
 		if ctx.Err() != nil {
 			if interactive {
 				fmt.Fprintln(stdout)
@@ -78,8 +88,17 @@ func runWatch(ctx context.Context, stdout, stderr io.Writer, opts *options) int 
 
 		// The first tick only establishes a baseline; notifications are posted
 		// when a later tick detects an actual change.
+		if jsonMode {
+			if first {
+				emitWatchEvent(stdout, watchEvent{Event: "snapshot", Targets: cur})
+			} else {
+				for _, c := range diffWatch(prev, cur) {
+					emitWatchEvent(stdout, watchEvent{Event: c.kind, Target: c.target, Detail: c.detail})
+				}
+			}
+		}
 		if opts.notify && !first {
-			notifyChanges(ctx, diffWatch(prev, cur))
+			notifyChanges(plat, ctx, diffWatch(prev, cur))
 		}
 		prev = cur
 		first = false
@@ -118,7 +137,9 @@ func renderWatchTick(ctx context.Context, stdout, stderr io.Writer, opts *option
 	if len(opts.ports) == 0 {
 		entries, err := insp.List(ctx)
 		if err != nil {
-			fmt.Fprintf(stderr, "portlens: %v\n", err)
+			if ctx.Err() == nil {
+				_, _ = fmt.Fprintf(stderr, "portlens: %v\n", err)
+			}
 			return nil, err
 		}
 		r.List(entries, render.ListOptions{SortBy: opts.sortBy, Filter: opts.filter, OnlyTCP: opts.onlyTCP})
@@ -141,7 +162,9 @@ func renderWatchTick(ctx context.Context, stdout, stderr io.Writer, opts *option
 				s[watchPortKey(p)] = "down"
 				continue
 			}
-			fmt.Fprintf(stderr, "portlens: %v\n", err)
+			if ctx.Err() == nil {
+				_, _ = fmt.Fprintf(stderr, "portlens: %v\n", err)
+			}
 			s[watchPortKey(p)] = "error"
 			continue
 		}
@@ -195,7 +218,7 @@ func isDown(v string) bool {
 	return strings.HasPrefix(v, "down")
 }
 
-func notifyChanges(ctx context.Context, changes []watchChange) {
+func notifyChanges(plat *platform.Platform, ctx context.Context, changes []watchChange) {
 	for _, c := range changes {
 		title := "PortLens"
 		switch c.kind {
@@ -204,7 +227,7 @@ func notifyChanges(ctx context.Context, changes []watchChange) {
 		case "down":
 			title = "PortLens: down"
 		}
-		_ = platform.Notify(ctx, title, changeText(c))
+		_ = plat.PostNotification(ctx, title, changeText(c))
 	}
 }
 
@@ -229,6 +252,26 @@ func watchTargetLabel(opts *options) string {
 func watchPortKey(port int32) string { return fmt.Sprintf("Port %d", port) }
 func watchListKey(e model.PortEntry) string {
 	return fmt.Sprintf("Port %d (%s)", e.Port, e.Protocol.Normalize())
+}
+
+// watchEvent is one line of `watch --json` output. "snapshot" is emitted once
+// with the initial state of every target; "up", "down" and "changed" follow
+// whenever a later tick differs from the previous one.
+type watchEvent struct {
+	Time    string            `json:"time"`
+	Event   string            `json:"event"`
+	Target  string            `json:"target,omitempty"`
+	Detail  string            `json:"detail,omitempty"`
+	Targets map[string]string `json:"targets,omitempty"`
+}
+
+func emitWatchEvent(w io.Writer, e watchEvent) {
+	e.Time = time.Now().UTC().Format(time.RFC3339)
+	b, err := json.Marshal(e)
+	if err != nil {
+		return
+	}
+	_, _ = fmt.Fprintf(w, "%s\n", b)
 }
 
 func clearScreen(w io.Writer) {

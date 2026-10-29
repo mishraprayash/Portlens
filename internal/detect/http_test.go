@@ -44,3 +44,11 @@ func TestProbeHTTPUnreachable(t *testing.T) {
 		t.Errorf("expected nil probe for unreachable port, got %+v", probe)
 	}
 }
+
+func TestProbeHTTPIPv6(t *testing.T) {
+	// Probing ::1 on an unreachable port should not panic or fail with a URL parse error
+	probe := ProbeHTTP(context.Background(), "::1", 64998)
+	if probe != nil {
+		t.Errorf("expected nil probe, got %+v", probe)
+	}
+}

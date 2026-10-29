@@ -25,10 +25,19 @@ COMMANDS
   tree <port>              Display process ancestor and descendant hierarchy
   conn, connections <port> Show active network connections for the process
   watch [port...]          Live-monitor port states with desktop notifications
+  top, tui                 Full-screen live interactive dashboard
   find <query>             Find ports by process name/command or PID (--pid)
   next [start]             Find the lowest available/free port (default 3000)
   config                   Manage named port groups (@name)
+  doctor                   Check which features work on this machine
   completion <shell>       Generate shell autocompletion (bash, zsh, fish)
+
+TARGETING FLAGS (kill and other actions)
+      --all             Every listening port
+      --pid <n>         Ports owned by process <n>
+      --name <s>        Ports owned by processes matching <s>
+      --project <s>     Ports owned by processes in project <s>
+      --dry-run         With --kill: show what would be terminated; change nothing
 
 GENERAL FLAGS
   -v, --verbose     Full detailed report instead of compact summary
@@ -45,7 +54,7 @@ GENERAL FLAGS
 
 LISTING & FILTER FLAGS
       --sort <key>  Sort listing by: port, process, project, runtime
-      --filter <s>  Filter listing by substring (matches process, service, project)
+      --filter <s>  Filter listing by substring across all fields
       --tcp         Only show TCP listeners
 
 WATCH FLAGS
@@ -99,11 +108,15 @@ func printKillUsage(w io.Writer) {
 USAGE
   portlens kill <port...> [flags]
   portlens kill --all [flags]
+  portlens kill --name <name> | --project <project> [--dry-run]
 
 FLAGS
   -f, --force       Force immediate termination (SIGKILL)
   -y, --yes         Skip interactive confirmation prompt
       --all         Terminate all listening processes
+      --name <s>    Terminate processes whose name/command matches <s>
+      --project <s> Terminate processes belonging to project <s>
+      --dry-run     Show what would be terminated; change nothing
   -v, --verbose     Show detailed report before terminating
   -h, --help        Show this help
 `)
@@ -157,6 +170,23 @@ FLAGS
 `)
 }
 
+func printDoctorUsage(w io.Writer) {
+	fmt.Fprint(w, `portlens doctor — Check which PortLens features work on this machine
+
+USAGE
+  portlens doctor [flags]
+
+Reports port enumeration, clipboard, browser, notification and container
+runtime support, config validity, and privileges. Exits 1 only if a core check
+fails.
+
+FLAGS
+  -j, --json        Output the checks as a JSON array
+      --no-color    Disable colored output
+  -h, --help        Show this help
+`)
+}
+
 func printWatchUsage(w io.Writer) {
 	fmt.Fprint(w, `portlens watch — Live-monitor port states with desktop notifications
 
@@ -166,6 +196,7 @@ USAGE
 FLAGS
       --interval <s> Poll interval in seconds (default: 1)
       --notify       Desktop notification on port state change
+  -j, --json         Stream events as JSON lines (snapshot, then up/down/changed)
   -v, --verbose      Detailed report for watched ports
       --no-color     Disable colored output
   -h, --help         Show this help
@@ -187,5 +218,37 @@ FLAGS
   -j, --json        Output pure JSON
   -v, --verbose     Full detailed report
   -h, --help        Show this help
+`)
+}
+
+func printTopUsage(w io.Writer) {
+	fmt.Fprint(w, `portlens top — Full-screen live interactive dashboard
+
+USAGE
+  portlens top [flags]
+  portlens tui [flags]
+
+FLAGS
+  -i, --interval <sec>  Refresh interval in seconds (default: 2)
+      --tcp             Only show TCP listeners
+  -h, --help            Show this help
+
+KEYBINDINGS
+  ↑, k / ↓, j           Navigate ports up / down
+  PgUp / PgDn           Scroll one page up / down
+  Home, g / End, G      Jump to first / last port
+  /                     Search & filter listening ports in real time
+  k                     Gracefully terminate process (SIGTERM)
+  f                     Force terminate process (SIGKILL)
+  r                     Restart process using detected launch command
+  o                     Open service in default browser
+  c                     Copy PID to system clipboard
+  u                     Copy local URL (http://localhost:<port>) to clipboard
+  1                     Switch to Overview tab
+  2, t                  Switch to Process Tree tab
+  3, n                  Switch to Connections tab
+  ?                     Show help overlay
+  Esc                   Clear filter or dismiss modal
+  q, Ctrl+C             Quit dashboard
 `)
 }

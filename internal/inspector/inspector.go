@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portlens/portlens/internal/detect"
-	"github.com/portlens/portlens/internal/model"
-	"github.com/portlens/portlens/internal/platform"
+	"github.com/mishraprayash/Portlens/internal/detect"
+	"github.com/mishraprayash/Portlens/internal/model"
+	"github.com/mishraprayash/Portlens/internal/platform"
 )
 
 // ErrPortNotFound is returned when nothing is listening on the requested port.
@@ -57,24 +57,10 @@ func WithPlatform(p *platform.Platform) Option {
 	}
 }
 
-// WithProjectDetector configures the heuristic project detector.
-func WithProjectDetector(d detect.ProjectDetector) Option {
-	return func(i *Inspector) {
-		i.Projects = d
-	}
-}
-
 // WithProbe enables or disables HTTP endpoint probing.
 func WithProbe(enable bool) Option {
 	return func(i *Inspector) {
 		i.EnableProbe = enable
-	}
-}
-
-// WithTimeFunc configures the clock function used for timestamps.
-func WithTimeFunc(now func() time.Time) Option {
-	return func(i *Inspector) {
-		i.Now = now
 	}
 }
 
@@ -85,7 +71,7 @@ func New(p *platform.Platform, opts ...Option) *Inspector {
 	}
 	insp := &Inspector{
 		Platform: p,
-		Projects: detect.NewProjectDetector(),
+		Projects: detect.Memoize(detect.NewProjectDetector()),
 		Now:      time.Now,
 	}
 	for _, opt := range opts {
@@ -126,7 +112,7 @@ func (i *Inspector) InspectDepth(ctx context.Context, port int32, protocol model
 		// process, or permission limits). Report what we know.
 		report.Exposure = assessExposure(listeners)
 		report.Facts = append(report.Facts,
-			fmt.Sprintf("Port %d is bound to %s:%d", port, displayAddr(primary.Address), port))
+			fmt.Sprintf("Port %d is bound to %s", port, model.FormatAddr(displayAddr(primary.Address), uint16(port))))
 		report.Inferences = append(report.Inferences,
 			"Owner could not be determined (may require elevated privileges)")
 		i.attachContainer(ctx, report)
@@ -189,8 +175,9 @@ func (i *Inspector) InspectDepth(ctx context.Context, port int32, protocol model
 		i.interpret(report)
 	}
 
-	// Lightweight HTTP service probing when enabled or during deep inspection
-	if (i.EnableProbe || depth == DepthFull) && primary.Protocol.Normalize() == model.ProtocolTCP {
+	// HTTP probing sends a real request to the service, so it only runs when
+	// explicitly enabled (--probe).
+	if i.EnableProbe && primary.Protocol.Normalize() == model.ProtocolTCP {
 		if probe := detect.ProbeHTTP(ctx, primary.Address, uint16(port)); probe != nil {
 			report.HTTPProbe = probe
 			report.Facts = append(report.Facts, fmt.Sprintf("HTTP probe returned %s in %s", probe.Status, model.FormatDuration(probe.Latency)))
@@ -301,7 +288,7 @@ func (i *Inspector) attachContainers(ctx context.Context, entries []model.PortEn
 	for _, e := range entries {
 		ports = append(ports, uint16(e.Port))
 	}
-	byPort, err := i.Platform.Containers.FindByPorts(ctx, ports, model.ProtocolTCP)
+	byPort, err := i.Platform.Containers.FindByPorts(ctx, ports, "")
 	if err != nil {
 		return
 	}
