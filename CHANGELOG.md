@@ -6,6 +6,10 @@ All notable changes to PortLens are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- Extracted the `getInUsePorts` helper in `portlens next`.
+
 ## [0.3.0] - 2026-10-19
 
 > `v0.2.0` was tagged without a changelog section, so everything since `0.1.0`
